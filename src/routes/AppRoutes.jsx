@@ -1,63 +1,75 @@
-import { Routes, Route } from "react-router-dom";
-import Login from "../pages/Login";
+import { useState } from "react";
+import { Routes, Route, Navigate } from "react-router-dom";
+import Sidebar from "../components/Sidebar";
+import Header from "../components/Navbar";
+
+// Pages
 import Dashboard from "../pages/Dashboard";
 import Users from "../pages/Users";
 import Orders from "../pages/Orders";
 import Riders from "../pages/Riders";
 import Payments from "../pages/Payments";
-import Sidebar from "../components/Sidebar";
-import Navbar from "../components/Navbar";
+import Vehicles from "../pages/Vehicles";
+import Categories from "../pages/Categories";
+import ZoneSetup from "../pages/ZoneSetup";
+import Pricing from "../pages/Pricing";
+import Transactions from "../pages/Transactions";
+import Reports from "../pages/Reports";
+import Promotions from "../pages/Promotions";
+import Notifications from "../pages/Notifications";
+import Support from "../pages/Support";
+import CMS from "../pages/CMS";
+import Settings from "../pages/Settings";
+import Login from "../pages/Login";
 
 const AppRoutes = () => {
-  const isLoggedIn = localStorage.getItem("token");
+  const [collapsed, setCollapsed] = useState(false);
+  const isLoggedIn = true; // Hardcoded for demo/preview as per task requirements
 
-  // if (!isLoggedIn) {
-  //   return (
-  //     <Routes>
-  //       <Route path="*" element={<Login />} />
-  //     </Routes>
-  //   );
-  // }
+  if (!isLoggedIn) {
+    return (
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="*" element={<Navigate to="/login" />} />
+      </Routes>
+    );
+  }
 
   return (
-    <div
-      className="d-flex position-relative"
-      style={{
-        backgroundImage:
-          "url('https://images.unsplash.com/photo-1515378791036-0648a3ef77b2?auto=format&fit=crop&w=1920&q=80')",
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        minHeight: "100vh",
-        color: "#111827",
-      }}
-    >
-      <div
+    <div className="d-flex min-vh-100 position-relative bg-light">
+      <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} />
+      <main
+        className={`main-content flex-grow-1 p-0 ${collapsed ? 'expanded' : ''}`}
         style={{
-          position: "absolute",
-          inset: 0,
-          background: "rgba(15, 23, 42, 0.35)",
-          pointerEvents: "none",
-        }}
-      />
-      <Sidebar />
-      <div
-        className="flex-grow-1 position-relative"
-        style={{
-          backgroundColor: "rgba(248,249,250,0.95)",
-          backdropFilter: "blur(8px)",
-          minHeight: "100vh",
+          marginLeft: collapsed ? '80px' : '260px',
+          transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          minWidth: 0 // Prevent flex overflow
         }}
       >
-        <Navbar />
-        <Routes>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/users" element={<Users />} />
-          <Route path="/orders" element={<Orders />} />
-          <Route path="/riders" element={<Riders />} />
-          <Route path="/payments" element={<Payments />} />
-          <Route path="*" element={<Dashboard />} />
-        </Routes>
-      </div>
+        <Header collapsed={collapsed} setCollapsed={setCollapsed} />
+        <div className="p-3 p-md-4 overflow-hidden">
+          <Routes>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/users" element={<Users />} />
+            <Route path="/orders" element={<Orders />} />
+            <Route path="/riders" element={<Riders />} />
+            <Route path="/payments" element={<Payments />} />
+            <Route path="/vehicles" element={<Vehicles />} />
+            <Route path="/categories" element={<Categories />} />
+            <Route path="/zone-setup" element={<ZoneSetup />} />
+            <Route path="/pricing" element={<Pricing />} />
+            <Route path="/transactions" element={<Transactions />} />
+            <Route path="/reports" element={<Reports />} />
+            <Route path="/promotions" element={<Promotions />} />
+            <Route path="/notifications" element={<Notifications />} />
+            <Route path="/support" element={<Support />} />
+            <Route path="/content" element={<CMS />} />
+            <Route path="/settings" element={<Settings />} />
+
+            <Route path="*" element={<Navigate to="/dashboard" />} />
+          </Routes>
+        </div>
+      </main>
     </div>
   );
 };
