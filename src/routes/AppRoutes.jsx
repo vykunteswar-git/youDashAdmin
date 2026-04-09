@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import Sidebar from "../components/Sidebar";
 import Header from "../components/Navbar";
 
@@ -22,55 +23,73 @@ import CMS from "../pages/CMS";
 import Settings from "../pages/Settings";
 import Login from "../pages/Login";
 
-const AppRoutes = () => {
-  const [collapsed, setCollapsed] = useState(false);
-  const isLoggedIn = true; // Hardcoded for demo/preview as per task requirements
-
-  if (!isLoggedIn) {
-    return (
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="*" element={<Navigate to="/login" />} />
-      </Routes>
-    );
-  }
-
+function AppShell({ collapsed, setCollapsed }) {
   return (
     <div className="d-flex min-vh-100 position-relative bg-light">
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} />
       <main
-        className={`main-content flex-grow-1 p-0 ${collapsed ? 'expanded' : ''}`}
+        className={`main-content flex-grow-1 p-0 ${
+          collapsed ? "expanded" : ""
+        }`}
         style={{
-          marginLeft: collapsed ? '80px' : '260px',
-          transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          minWidth: 0 // Prevent flex overflow
+          marginLeft: collapsed ? "80px" : "260px",
+          transition: "margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+          minWidth: 0, // Prevent flex overflow
         }}
       >
         <Header collapsed={collapsed} setCollapsed={setCollapsed} />
         <div className="p-3 p-md-4 overflow-hidden">
-          <Routes>
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/users" element={<Users />} />
-            <Route path="/orders" element={<Orders />} />
-            <Route path="/riders" element={<Riders />} />
-            <Route path="/payments" element={<Payments />} />
-            <Route path="/vehicles" element={<Vehicles />} />
-            <Route path="/categories" element={<Categories />} />
-            <Route path="/zone-setup" element={<ZoneSetup />} />
-            <Route path="/pricing" element={<Pricing />} />
-            <Route path="/transactions" element={<Transactions />} />
-            <Route path="/reports" element={<Reports />} />
-            <Route path="/promotions" element={<Promotions />} />
-            <Route path="/notifications" element={<Notifications />} />
-            <Route path="/support" element={<Support />} />
-            <Route path="/content" element={<CMS />} />
-            <Route path="/settings" element={<Settings />} />
-
-            <Route path="*" element={<Navigate to="/dashboard" />} />
-          </Routes>
+          <Outlet />
         </div>
       </main>
     </div>
+  );
+}
+
+const AppRoutes = () => {
+  const [collapsed, setCollapsed] = useState(false);
+  const { isLoggedIn } = useAuth();
+
+  return (
+    <Routes>
+      <Route
+        path="/login"
+        element={isLoggedIn ? <Navigate to="/dashboard" replace /> : <Login />}
+      />
+
+      <Route
+        path="/"
+        element={<Navigate to={isLoggedIn ? "/dashboard" : "/login"} replace />}
+      />
+
+      <Route
+        element={
+          !isLoggedIn ? (
+            <Navigate to="/login" replace />
+          ) : (
+            <AppShell collapsed={collapsed} setCollapsed={setCollapsed} />
+          )
+        }
+      >
+        <Route path="dashboard" element={<Dashboard />} />
+        <Route path="users" element={<Users />} />
+        <Route path="orders" element={<Orders />} />
+        <Route path="riders" element={<Riders />} />
+        <Route path="payments" element={<Payments />} />
+        <Route path="vehicles" element={<Vehicles />} />
+        <Route path="categories" element={<Categories />} />
+        <Route path="zone-setup" element={<ZoneSetup />} />
+        <Route path="pricing" element={<Pricing />} />
+        <Route path="transactions" element={<Transactions />} />
+        <Route path="reports" element={<Reports />} />
+        <Route path="promotions" element={<Promotions />} />
+        <Route path="notifications" element={<Notifications />} />
+        <Route path="support" element={<Support />} />
+        <Route path="content" element={<CMS />} />
+        <Route path="settings" element={<Settings />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Route>
+    </Routes>
   );
 };
 

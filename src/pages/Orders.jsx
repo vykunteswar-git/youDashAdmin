@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Search,
   MoreVertical,
@@ -14,12 +14,158 @@ import {
   X,
   User,
   Phone,
-  CreditCard
+  CreditCard,
+  SlidersHorizontal,
+  CheckSquare,
+  Square,
+  ChevronDown
 } from "lucide-react";
 
+// ─── Filter Panel Component ───────────────────────────────────────────────────
+const FilterPanel = ({ filters, setFilters, onClose }) => {
+  const STATUSES = ["All", "Active", "Pending", "Delivered", "Cancelled"];
+  const TYPES = ["Express", "Standard", "Insurance"];
+  const RIDERS = ["Any", "Assigned", "Unassigned"];
+
+  const toggleStatus = (s) => {
+    if (s === "All") { setFilters(f => ({ ...f, statuses: ["All"] })); return; }
+    setFilters(f => {
+      const cur = f.statuses.filter(x => x !== "All");
+      const next = cur.includes(s) ? cur.filter(x => x !== s) : [...cur, s];
+      return { ...f, statuses: next.length ? next : ["All"] };
+    });
+  };
+
+  const toggleType = (t) =>
+    setFilters(f => ({
+      ...f,
+      types: f.types.includes(t) ? f.types.filter(x => x !== t) : [...f.types, t]
+    }));
+
+  const Check = ({ active, label, onClick }) => (
+    <button
+      onClick={onClick}
+      className="d-flex align-items-center gap-2 btn btn-sm text-start w-100 rounded-3 px-2 py-2"
+      style={{ background: active ? "#FEF2F2" : "transparent", border: "none" }}
+    >
+      {active
+        ? <CheckSquare size={16} style={{ color: "#E51818" }} />
+        : <Square size={16} className="text-muted" />}
+      <span style={{ fontSize: 13, fontWeight: active ? 700 : 500, color: active ? "#E51818" : "#374151" }}>{label}</span>
+    </button>
+  );
+
+  return (
+    <div
+      className="position-absolute bg-white rounded-4 border shadow"
+      style={{ top: "calc(100% + 8px)", right: 0, width: 320, zIndex: 500, overflow: "hidden" }}
+    >
+      {/* Header */}
+      <div className="d-flex justify-content-between align-items-center px-4 py-3 border-bottom">
+        <div className="d-flex align-items-center gap-2">
+          <SlidersHorizontal size={16} style={{ color: "#E51818" }} />
+          <span className="fw-bold" style={{ fontSize: 14 }}>Filter Orders</span>
+        </div>
+        <div className="d-flex gap-2 align-items-center">
+          <button className="btn btn-link p-0 text-muted" style={{ fontSize: 12 }}
+            onClick={() => setFilters({ statuses: ["All"], types: [], rider: "Any" })}>
+            Clear all
+          </button>
+          <button className="btn btn-sm p-1" onClick={onClose}
+            style={{ background: "#F1F5F9", borderRadius: 8, border: "none" }}>
+            <X size={14} />
+          </button>
+        </div>
+      </div>
+
+      <div className="p-3 d-flex flex-column gap-3">
+        {/* Order Status */}
+        <div>
+          <p className="fw-bold mb-2" style={{ fontSize: 11, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1 }}>Order Status</p>
+          <div className="d-flex flex-wrap gap-1">
+            {STATUSES.map(s => (
+              <button
+                key={s}
+                onClick={() => toggleStatus(s)}
+                className="btn btn-sm rounded-pill"
+                style={{
+                  fontSize: 12, fontWeight: 600, padding: "4px 14px",
+                  background: filters.statuses.includes(s) ? "#E51818" : "#F1F5F9",
+                  color: filters.statuses.includes(s) ? "white" : "#64748B",
+                  border: "none", transition: "all 0.15s"
+                }}
+              >{s}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Divider */}
+        <hr className="my-0" />
+
+        {/* Service Type */}
+        <div>
+          <p className="fw-bold mb-2" style={{ fontSize: 11, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1 }}>Service Type</p>
+          {TYPES.map(t => (
+            <Check key={t} active={filters.types.includes(t)} label={t} onClick={() => toggleType(t)} />
+          ))}
+        </div>
+
+        {/* Divider */}
+        <hr className="my-0" />
+
+        {/* Rider Assignment */}
+        <div>
+          <p className="fw-bold mb-2" style={{ fontSize: 11, color: "#94A3B8", textTransform: "uppercase", letterSpacing: 1 }}>Rider Assignment</p>
+          <div className="d-flex gap-2">
+            {RIDERS.map(r => (
+              <button
+                key={r}
+                onClick={() => setFilters(f => ({ ...f, rider: r }))}
+                className="btn btn-sm rounded-pill flex-grow-1"
+                style={{
+                  fontSize: 12, fontWeight: 600,
+                  background: filters.rider === r ? "#E51818" : "#F1F5F9",
+                  color: filters.rider === r ? "white" : "#64748B",
+                  border: "none", transition: "all 0.15s"
+                }}
+              >{r}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Apply Button */}
+        <button
+          className="btn w-100 fw-bold text-white"
+          onClick={onClose}
+          style={{ background: "linear-gradient(135deg,#E51818,#c41414)", borderRadius: 10, fontSize: 14, padding: "9px", border: "none" }}
+        >
+          Apply Filters
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ─── Orders Component ─────────────────────────────────────────────────────────
 const Orders = () => {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("All");
+  const [showFilter, setShowFilter] = useState(false);
+  const [filters, setFilters] = useState({ statuses: ["All"], types: [], rider: "Any" });
+  const filterRef = useRef(null);
+
+  // Close panel on outside click
+  useEffect(() => {
+    const handler = (e) => { if (filterRef.current && !filterRef.current.contains(e.target)) setShowFilter(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // Sync tab bar → filters
+  const handleTabClick = (tab) => {
+    setActiveTab(tab);
+    setFilters(f => ({ ...f, statuses: [tab] }));
+  };
   const [selectedOrder, setSelectedOrder] = useState(null);
 
   const [orders, setOrders] = useState([
@@ -58,10 +204,37 @@ const Orders = () => {
   const tabs = ["All", "Active", "Pending", "Delivered", "Cancelled"];
 
   const filteredOrders = orders.filter(order => {
-    const matchesSearch = order.id.toLowerCase().includes(search.toLowerCase()) || order.user.toLowerCase().includes(search.toLowerCase());
-    const matchesTab = activeTab === "All" || order.status === activeTab;
-    return matchesSearch && matchesTab;
+    const matchesSearch = order.id.toLowerCase().includes(search.toLowerCase()) ||
+      order.user.toLowerCase().includes(search.toLowerCase());
+    const matchesStatus = filters.statuses.includes("All") || filters.statuses.includes(order.status);
+    const matchesType = filters.types.length === 0 || filters.types.includes(order.type);
+    const matchesRider = filters.rider === "Any"
+      ? true
+      : filters.rider === "Assigned"
+        ? order.rider !== "Not Assigned"
+        : order.rider === "Not Assigned";
+    return matchesSearch && matchesStatus && matchesType && matchesRider;
   });
+
+  // Active filter chips (for display below search bar)
+  const activeFilterChips = [
+    ...(filters.statuses.includes("All") ? [] : filters.statuses.map(s => ({ label: `Status: ${s}`, key: "status", val: s }))),
+    ...(filters.types.map(t => ({ label: `Type: ${t}`, key: "type", val: t }))),
+    ...(filters.rider !== "Any" ? [{ label: `Rider: ${filters.rider}`, key: "rider", val: filters.rider }] : []),
+  ];
+
+  const removeChip = (chip) => {
+    if (chip.key === "status") {
+      const next = filters.statuses.filter(s => s !== chip.val);
+      setFilters(f => ({ ...f, statuses: next.length ? next : ["All"] }));
+    } else if (chip.key === "type") {
+      setFilters(f => ({ ...f, types: f.types.filter(t => t !== chip.val) }));
+    } else if (chip.key === "rider") {
+      setFilters(f => ({ ...f, rider: "Any" }));
+    }
+  };
+
+  const activeFilterCount = activeFilterChips.length;
 
   return (
     <>
@@ -87,37 +260,111 @@ const Orders = () => {
         </div>
 
         {/* Tabs Row */}
-        <div className="d-flex gap-3 mb-4 overflow-auto pb-2 custom-scrollbar">
-          {tabs.map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`btn border-0 px-4 py-2 small rounded-pill transition-all ${activeTab === tab ? 'bg-primary-red text-white' : 'bg-white text-muted shadow-sm'}`}
-              style={{ backgroundColor: activeTab === tab ? '#E51818' : '#FFFFFF', minWidth: '100px' }}
-            >
-              {tab}
-            </button>
-          ))}
+        <div className="d-flex gap-2 mb-4 overflow-auto pb-2" style={{ scrollbarWidth: "none" }}>
+          {tabs.map((tab) => {
+            const isActive = filters.statuses.includes(tab) && (tab === "All" ? filters.statuses.length === 1 || filters.statuses.includes("All") : true) ||
+              (activeTab === tab && filters.statuses.includes("All") && tab === "All");
+            const counts = tab === "All" ? orders.length : orders.filter(o => o.status === tab).length;
+            return (
+              <button
+                key={tab}
+                onClick={() => handleTabClick(tab)}
+                className="btn border-0 px-4 py-2 small rounded-pill d-flex align-items-center gap-2 flex-shrink-0 transition-all"
+                style={{
+                  backgroundColor: (filters.statuses.includes(tab) || (tab === "All" && filters.statuses.includes("All"))) ? '#E51818' : '#FFFFFF',
+                  color: (filters.statuses.includes(tab) || (tab === "All" && filters.statuses.includes("All"))) ? 'white' : '#64748B',
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
+                  minWidth: 90
+                }}
+              >
+                {tab}
+                <span
+                  className="rounded-pill px-2 py-0"
+                  style={{
+                    fontSize: 10, fontWeight: 700,
+                    background: (filters.statuses.includes(tab) || (tab === "All" && filters.statuses.includes("All"))) ? "rgba(255,255,255,0.3)" : "#F1F5F9",
+                    color: (filters.statuses.includes(tab) || (tab === "All" && filters.statuses.includes("All"))) ? "white" : "#94A3B8"
+                  }}
+                >{counts}</span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Search and Filters */}
-        <div className="dashboard-card mb-4 border-0">
+        <div className="dashboard-card mb-3 border-0">
           <div className="d-flex flex-column flex-md-row gap-3">
             <div className="search-container flex-grow-1">
               <Search size={18} className="text-muted" />
               <input
                 type="text"
-                placeholder="Search by Order ID or User name..."
+                placeholder="Search by Order ID or customer name…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="form-control bg-light border-0 ps-5 py-2"
                 style={{ borderRadius: '10px' }}
               />
             </div>
-            <button className="btn btn-light px-4 d-flex align-items-center gap-2 border-0 fw-bold text-muted" style={{ borderRadius: '10px' }}>
-              <Filter size={18} /> <span>Filters</span>
-            </button>
+
+            {/* Filter Button + Dropdown Panel */}
+            <div className="position-relative flex-shrink-0" ref={filterRef}>
+              <button
+                onClick={() => setShowFilter(v => !v)}
+                className="btn d-flex align-items-center gap-2 fw-bold h-100 px-4"
+                style={{
+                  borderRadius: 10,
+                  background: showFilter || activeFilterCount > 0 ? "#FEF2F2" : "#F1F5F9",
+                  color: showFilter || activeFilterCount > 0 ? "#E51818" : "#64748B",
+                  border: showFilter || activeFilterCount > 0 ? "1.5px solid #FCA5A5" : "1.5px solid transparent",
+                  transition: "all 0.2s"
+                }}
+              >
+                <SlidersHorizontal size={16} />
+                <span>Filters</span>
+                {activeFilterCount > 0 && (
+                  <span
+                    className="rounded-pill px-2 py-0"
+                    style={{ background: "#E51818", color: "white", fontSize: 11, fontWeight: 700 }}
+                  >{activeFilterCount}</span>
+                )}
+                <ChevronDown size={14} style={{ opacity: 0.6, transform: showFilter ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }} />
+              </button>
+
+              {showFilter && (
+                <FilterPanel
+                  filters={filters}
+                  setFilters={setFilters}
+                  onClose={() => setShowFilter(false)}
+                />
+              )}
+            </div>
           </div>
+
+          {/* Active Filter Chips */}
+          {activeFilterChips.length > 0 && (
+            <div className="d-flex flex-wrap gap-2 mt-3 pt-3 border-top">
+              <span className="text-muted" style={{ fontSize: 12, fontWeight: 600, alignSelf: "center" }}>Active filters:</span>
+              {activeFilterChips.map((chip, i) => (
+                <span
+                  key={i}
+                  className="d-flex align-items-center gap-1 rounded-pill px-3 py-1"
+                  style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", fontSize: 12, fontWeight: 600, color: "#E51818" }}
+                >
+                  {chip.label}
+                  <button
+                    onClick={() => removeChip(chip)}
+                    className="btn p-0 ms-1 d-flex"
+                    style={{ border: "none", background: "transparent", color: "#E51818", lineHeight: 1 }}
+                  ><X size={12} /></button>
+                </span>
+              ))}
+              <button
+                onClick={() => { setFilters({ statuses: ["All"], types: [], rider: "Any" }); setActiveTab("All"); }}
+                className="btn btn-link p-0 text-muted"
+                style={{ fontSize: 12, fontWeight: 600, textDecoration: "none" }}
+              >Clear all ×</button>
+            </div>
+          )}
         </div>
 
         {/* Orders Table */}

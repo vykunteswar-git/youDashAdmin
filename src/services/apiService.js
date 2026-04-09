@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_BASE_URL = "http://localhost:8080/api"; // Change this to your backend URL
+const API_BASE_URL = "http://10.238.191.72:8080"; // Change this to your backend URL
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -16,7 +16,8 @@ api.interceptors.request.use((config) => {
 });
 
 export const authService = {
-  login: (credentials) => api.post("/auth/login", credentials),
+  login: ({ email, password }) =>
+    api.post("/admin/login", { email, password }),
 };
 
 export const userService = {
@@ -39,6 +40,18 @@ export const riderService = {
 
 export const paymentService = {
   getPayments: () => api.get("/payments"),
+};
+
+export const vehicleService = {
+  getVehicles: () => api.get("/admin/vehicles"),
+  createVehicle: (payload) => api.post("/admin/vehicles", payload),
+  updateVehicle: (id, payload) => api.put(`/admin/vehicles/${id}`, payload),
+};
+
+export const categoryService = {
+  getCategories: () => api.get("/admin/categories"),
+  createCategory: (payload) => api.post("/admin/categories", payload),
+  updateCategory: (id, payload) => api.put(`/admin/categories/${id}`, payload),
 };
 
 export default api;

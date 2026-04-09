@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import {
   LayoutDashboard,
   Users,
@@ -24,6 +25,7 @@ import {
 
 const Sidebar = ({ collapsed, setCollapsed }) => {
   const navigate = useNavigate();
+  const { notifyAuthChanged } = useAuth();
 
   const menuGroups = [
     {
@@ -75,8 +77,14 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
   ];
 
   const handleLogout = () => {
+    const ok = window.confirm(
+      "Are you sure you want to log out? You will need to sign in again."
+    );
+    if (!ok) return;
     localStorage.removeItem("token");
-    navigate("/login");
+    localStorage.removeItem("adminAuthenticated");
+    notifyAuthChanged();
+    navigate("/login", { replace: true });
   };
 
   return (
