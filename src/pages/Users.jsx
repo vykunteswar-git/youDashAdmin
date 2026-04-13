@@ -1,97 +1,52 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Search, MoreVertical, Edit, Trash2, Eye, Mail, Phone, UserPlus,
   ShieldOff, KeyRound, X, MapPin, Package, CreditCard, Clock,
   ChevronRight, ArrowUpRight, ArrowDownLeft, Calendar, User,
   CheckCircle2, XCircle, AlertCircle, Wallet, Star
 } from "lucide-react";
+import { userService, unwrapList } from "../services/apiService";
 
-/* ─── Mock Data ─────────────────────────────────────────────────────── */
-const allUsers = [
-  {
-    id: 1, name: "Gowtham Akhil", email: "gowtham@example.com",
-    phone: "+91 98765 43210", city: "Hyderabad", status: "Active",
-    joined: "Oct 12, 2024", lastSeen: "Today, 3:20 PM",
-    wallet: 320, totalOrders: 3, totalSpend: 1420, rating: 4.8,
-    avatar: "GA"
-  },
-  {
-    id: 2, name: "Jane Smith", email: "jane@example.com",
-    phone: "+91 98765 43211", city: "Chennai", status: "Active",
-    joined: "Nov 5, 2024", lastSeen: "Yesterday, 11:00 AM",
-    wallet: 0, totalOrders: 0, totalSpend: 0, rating: null,
-    avatar: "JS"
-  },
-  {
-    id: 3, name: "Mike Johnson", email: "mike@example.com",
-    phone: "+91 98765 43212", city: "Delhi", status: "Inactive",
-    joined: "Dec 1, 2024", lastSeen: "Dec 10, 2024",
-    wallet: 50, totalOrders: 2, totalSpend: 1050, rating: 3.9,
-    avatar: "MJ"
-  },
-  {
-    id: 4, name: "Emily Davis", email: "emily@example.com",
-    phone: "+91 98765 43213", city: "Bangalore", status: "Active",
-    joined: "Jan 8, 2025", lastSeen: "Today, 10:45 AM",
-    wallet: 780, totalOrders: 5, totalSpend: 3940, rating: 4.6,
-    avatar: "ED"
-  },
-  {
-    id: 5, name: "Chris Brown", email: "chris@example.com",
-    phone: "+91 98765 43214", city: "Mumbai", status: "Pending",
-    joined: "Feb 14, 2025", lastSeen: "Feb 15, 2025",
-    wallet: 0, totalOrders: 1, totalSpend: 190, rating: null,
-    avatar: "CB"
-  },
-];
+/** Maps UserResponseDTO into the shape used by this page (orders/wallet still placeholders until APIs exist). */
+function normalizeApiUser(u) {
+  const first = String(u?.firstName ?? "").trim();
+  const last = String(u?.lastName ?? "").trim();
+  const name = [first, last].filter(Boolean).join(" ") || "—";
+  const avatar = (() => {
+    if (first && last) return `${first[0]}${last[0]}`.toUpperCase();
+    const one = first || last || "";
+    if (one.length >= 2) return one.slice(0, 2).toUpperCase();
+    if (one.length === 1) return `${one[0]}${one[0]}`.toUpperCase();
+    const e = String(u?.email ?? "").trim();
+    if (e.length >= 2) return e.slice(0, 2).toUpperCase();
+    return "?";
+  })();
+  const active = Boolean(u?.active);
+  const profileCompleted = Boolean(u?.profileCompleted);
+  let status = "Inactive";
+  if (active && profileCompleted) status = "Active";
+  else if (active && !profileCompleted) status = "Pending";
 
-const ordersMap = {
-  1: [
-    { id: "ORD-4521", type: "Express", status: "Delivered", pick: "Hitech City, Hyderabad", drop: "Koramangala, Bangalore", date: "Oct 20, 2024", amount: 450, rider: "Rahul Kumar" },
-    { id: "ORD-4522", type: "Standard", status: "Active", pick: "Secunderabad, HYD", drop: "T. Nagar, Chennai", date: "Oct 28, 2024", amount: 320, rider: "Ajay Singh" },
-    { id: "ORD-4523", type: "Insurance", status: "Pending", pick: "Banjara Hills, HYD", drop: "Jubilee Hills, HYD", date: "Nov 1, 2024", amount: 650, rider: "Unassigned" },
-  ],
-  3: [
-    { id: "ORD-3001", type: "Insurance", status: "Pending", pick: "Connaught Place, Delhi", drop: "Pune, Maharashtra", date: "Oct 22, 2024", amount: 850, rider: "Unassigned" },
-    { id: "ORD-3002", type: "Express", status: "Cancelled", pick: "Karol Bagh, Delhi", drop: "Agra, UP", date: "Oct 25, 2024", amount: 200, rider: "Unassigned" },
-  ],
-  4: [
-    { id: "ORD-4001", type: "Express", status: "Delivered", pick: "Indiranagar, Bangalore", drop: "MG Road, Kochi", date: "Oct 18, 2024", amount: 480, rider: "Suresh Rao" },
-    { id: "ORD-4002", type: "Standard", status: "Delivered", pick: "Whitefield, Bangalore", drop: "Trivandrum, Kerala", date: "Oct 20, 2024", amount: 560, rider: "Suresh Rao" },
-    { id: "ORD-4003", type: "Express", status: "Delivered", pick: "HSR Layout, Bangalore", drop: "Ernakulam, Kerala", date: "Nov 2, 2024", amount: 960, rider: "Kiran Raj" },
-    { id: "ORD-4004", type: "Standard", status: "Cancelled", pick: "Electronic City, BLR", drop: "Mysore, Karnataka", date: "Nov 8, 2024", amount: 780, rider: "Unassigned" },
-    { id: "ORD-4005", type: "Insurance", status: "Delivered", pick: "BTM Layout, Bangalore", drop: "Calicut, Kerala", date: "Nov 14, 2024", amount: 1160, rider: "Kiran Raj" },
-  ],
-  5: [
-    { id: "ORD-5001", type: "Standard", status: "Delivered", pick: "Bandra, Mumbai", drop: "Pune, Maharashtra", date: "Feb 14, 2025", amount: 190, rider: "Manish Verma" },
-  ],
-};
+  return {
+    id: u.id,
+    name,
+    email: u.email ?? "",
+    phone: u.phoneNumber ?? "",
+    city: "—",
+    status,
+    joined: "—",
+    lastSeen: "—",
+    wallet: 0,
+    totalOrders: 0,
+    totalSpend: 0,
+    rating: null,
+    avatar,
+    profileCompleted,
+  };
+}
 
-const transactionsMap = {
-  1: [
-    { id: "TXN-001", desc: "Order Payment", ref: "ORD-4521", method: "UPI", amount: -450, date: "Oct 20, 2024", status: "Success" },
-    { id: "TXN-002", desc: "Wallet Top-Up", ref: "—", method: "Debit Card", amount: +500, date: "Oct 19, 2024", status: "Success" },
-    { id: "TXN-003", desc: "Order Payment", ref: "ORD-4522", method: "Wallet", amount: -320, date: "Oct 28, 2024", status: "Success" },
-    { id: "TXN-004", desc: "Refund", ref: "ORD-4520", method: "UPI", amount: +200, date: "Nov 2, 2024", status: "Processed" },
-    { id: "TXN-005", desc: "Order Payment", ref: "ORD-4523", method: "UPI", amount: -650, date: "Nov 1, 2024", status: "Pending" },
-  ],
-  3: [
-    { id: "TXN-010", desc: "Order Payment", ref: "ORD-3001", method: "COD", amount: -850, date: "Oct 22, 2024", status: "Pending" },
-    { id: "TXN-011", desc: "Refund", ref: "ORD-3002", method: "UPI", amount: +200, date: "Oct 26, 2024", status: "Processed" },
-  ],
-  4: [
-    { id: "TXN-020", desc: "Order Payment", ref: "ORD-4001", method: "UPI", amount: -480, date: "Oct 18, 2024", status: "Success" },
-    { id: "TXN-021", desc: "Wallet Top-Up", ref: "—", method: "Debit Card", amount: +1000, date: "Oct 19, 2024", status: "Success" },
-    { id: "TXN-022", desc: "Order Payment", ref: "ORD-4002", method: "Wallet", amount: -560, date: "Oct 20, 2024", status: "Success" },
-    { id: "TXN-023", desc: "Order Payment", ref: "ORD-4003", method: "UPI", amount: -960, date: "Nov 2, 2024", status: "Success" },
-    { id: "TXN-024", desc: "Refund", ref: "ORD-4004", method: "Original", amount: +780, date: "Nov 9, 2024", status: "Processed" },
-    { id: "TXN-025", desc: "Order Payment", ref: "ORD-4005", method: "UPI", amount: -1160, date: "Nov 14, 2024", status: "Success" },
-    { id: "TXN-026", desc: "Wallet Top-Up", ref: "—", method: "Credit Card", amount: +500, date: "Nov 15, 2024", status: "Success" },
-  ],
-  5: [
-    { id: "TXN-030", desc: "Order Payment", ref: "ORD-5001", method: "COD", amount: -190, date: "Feb 14, 2025", status: "Success" },
-  ],
-};
+const ordersMap = {};
+const transactionsMap = {};
 
 /* ─── Helpers ────────────────────────────────────────────────────────── */
 const statusBadge = {
@@ -125,7 +80,9 @@ const Badge = ({ label, map }) => {
 const Users = () => {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("All");
-  const [users, setUsers] = useState(allUsers);
+  const [users, setUsers] = useState([]);
+  const [listLoading, setListLoading] = useState(true);
+  const [listError, setListError] = useState("");
 
   const [selectedUser, setSelectedUser] = useState(null);
   const [detailTab, setDetailTab] = useState("Orders");
@@ -145,12 +102,39 @@ const Users = () => {
   };
   const openProfile = (user) => { setSelectedUser(user); setDetailTab("Orders"); setSelectedOrder(null); };
 
+  const loadUsers = useCallback(async () => {
+    setListLoading(true);
+    setListError("");
+    try {
+      const res = await userService.getUsers();
+      const raw = unwrapList(res);
+      setUsers(raw.map(normalizeApiUser));
+    } catch (e) {
+      const msg =
+        e?.response?.data?.message || e?.message || "Failed to load users.";
+      setListError(msg);
+      setUsers([]);
+    } finally {
+      setListLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
+
   /* filtered list */
   const tabs = ["All", "Active", "Inactive", "Pending", "Banned"];
-  const filtered = users.filter(u =>
-    (u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase())) &&
-    (activeTab === "All" || u.status === activeTab)
-  );
+  const q = search.trim().toLowerCase();
+  const filtered = users.filter((u) => {
+    const matchSearch =
+      !q ||
+      u.name.toLowerCase().includes(q) ||
+      u.email.toLowerCase().includes(q) ||
+      String(u.phone).toLowerCase().includes(q);
+    const matchTab = activeTab === "All" || u.status === activeTab;
+    return matchSearch && matchTab;
+  });
 
   const userOrders = selectedUser ? (ordersMap[selectedUser.id] || []) : [];
   const userTxns = selectedUser ? (transactionsMap[selectedUser.id] || []) : [];
@@ -163,7 +147,9 @@ const Users = () => {
         <div className="d-flex justify-content-between align-items-center mb-4">
           <div>
             <h2 className="fw-bold mb-1">User Management</h2>
-            <p className="text-muted small mb-0">{users.length} registered users across all roles</p>
+            <p className="text-muted small mb-0">
+              {listLoading ? "Loading users…" : `${users.length} registered users`}
+            </p>
           </div>
           <button className="btn d-flex align-items-center gap-2 px-4 py-2 fw-bold text-white" style={{ backgroundColor: "#E51818", borderRadius: "10px" }}>
             <UserPlus size={16} /> Add User
@@ -190,6 +176,15 @@ const Users = () => {
           </div>
         </div>
 
+        {listError ? (
+          <div className="alert alert-danger mb-4 d-flex align-items-center justify-content-between gap-3" role="alert">
+            <span>{listError}</span>
+            <button type="button" className="btn btn-sm btn-outline-danger" onClick={loadUsers}>
+              Retry
+            </button>
+          </div>
+        ) : null}
+
         {/* Table */}
         <div className="dashboard-card p-0 overflow-hidden border-0 shadow-sm">
           <div className="table-responsive">
@@ -206,7 +201,20 @@ const Users = () => {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(user => (
+                {listLoading ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-5 text-muted small">
+                      Loading users…
+                    </td>
+                  </tr>
+                ) : filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-5 text-muted small">
+                      {users.length === 0 ? "No users found." : "No users match your filters."}
+                    </td>
+                  </tr>
+                ) : null}
+                {!listLoading && filtered.map(user => (
                   <tr key={user.id} className="align-middle" style={{ cursor: "pointer" }} onClick={() => openProfile(user)}>
                     <td className="px-4 py-3 border-0">
                       <div className="d-flex align-items-center gap-3">

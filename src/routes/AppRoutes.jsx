@@ -11,9 +11,12 @@ import Orders from "../pages/Orders";
 import Riders from "../pages/Riders";
 import Payments from "../pages/Payments";
 import Vehicles from "../pages/Vehicles";
-import Categories from "../pages/Categories";
-import ZoneSetup from "../pages/ZoneSetup";
 import Pricing from "../pages/Pricing";
+import DeliveryFee from "../pages/DeliveryFee";
+import Zones from "../pages/Zones";
+import Hubs from "../pages/Hubs";
+import HubRoutes from "../pages/HubRoutes";
+import Categories from "../pages/Categories";
 import Transactions from "../pages/Transactions";
 import Reports from "../pages/Reports";
 import Promotions from "../pages/Promotions";
@@ -77,9 +80,12 @@ const AppRoutes = () => {
         <Route path="riders" element={<Riders />} />
         <Route path="payments" element={<Payments />} />
         <Route path="vehicles" element={<Vehicles />} />
+        <Route path="zones" element={<Zones />} />
+        <Route path="hubs" element={<Hubs />} />
+        <Route path="hub-routes" element={<HubRoutes />} />
         <Route path="categories" element={<Categories />} />
-        <Route path="zone-setup" element={<ZoneSetup />} />
         <Route path="pricing" element={<Pricing />} />
+        <Route path="delivery-fee" element={<DeliveryFee />} />
         <Route path="transactions" element={<Transactions />} />
         <Route path="reports" element={<Reports />} />
         <Route path="promotions" element={<Promotions />} />

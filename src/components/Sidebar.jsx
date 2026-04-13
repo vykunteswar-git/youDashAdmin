@@ -6,10 +6,7 @@ import {
   Users,
   Bike,
   Truck,
-  ListTree,
   Package,
-  Map,
-  DollarSign,
   CreditCard,
   History,
   Bell,
@@ -20,7 +17,12 @@ import {
   ChevronRight,
   LogOut,
   BarChart3,
-  Ticket
+  Ticket,
+  MapPin,
+  Warehouse,
+  Waypoints,
+  SlidersHorizontal,
+  Tags,
 } from "lucide-react";
 
 const Sidebar = ({ collapsed, setCollapsed }) => {
@@ -36,24 +38,21 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       ]
     },
     {
-      title: "Operations",
-      items: [
-        { path: "/zone-setup", label: "Zone Setup", icon: Map },
-      ]
-    },
-    {
       title: "Management",
       items: [
         { path: "/users", label: "Users", icon: Users },
         { path: "/riders", label: "Riders", icon: Bike },
         { path: "/vehicles", label: "Vehicles", icon: Truck },
-        { path: "/categories", label: "Categories", icon: ListTree },
+        { path: "/zones", label: "Zones", icon: MapPin },
+        { path: "/hubs", label: "Hubs", icon: Warehouse },
+        { path: "/hub-routes", label: "Hub routes", icon: Waypoints },
+        { path: "/categories", label: "Package categories", icon: Tags },
       ]
     },
     {
       title: "Finance",
       items: [
-        { path: "/pricing", label: "Pricing", icon: DollarSign },
+        { path: "/delivery-fee", label: "App config", icon: SlidersHorizontal },
         { path: "/payments", label: "Payments", icon: CreditCard },
         { path: "/reports", label: "Reports & Analytics", icon: BarChart3 },
         { path: "/promotions", label: "Coupons & Offers", icon: Ticket },
@@ -82,6 +81,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
     );
     if (!ok) return;
     localStorage.removeItem("token");
+    localStorage.removeItem("accessToken");
     localStorage.removeItem("adminAuthenticated");
     notifyAuthChanged();
     navigate("/login", { replace: true });

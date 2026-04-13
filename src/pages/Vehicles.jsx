@@ -11,8 +11,8 @@ import {
   X,
   Image,
 } from "lucide-react";
-import { vehicleService } from "../services/apiService";
-import { uploadImageToCloudinary } from "../services/cloudinaryUpload";
+import { vehicleService, unwrapList } from "../services/apiService";
+  import { uploadImageToCloudinary } from "../services/cloudinaryUpload";
 
 function pickIcon(name) {
   const n = (name || "").toLowerCase();
@@ -135,7 +135,7 @@ const Vehicles = () => {
         }
         return;
       }
-      const list = Array.isArray(body?.data) ? body.data : [];
+      const list = unwrapList(res);
       setVehicles(list.map(normalizeApiVehicle));
       if (!silent) setError(null);
     } catch (e) {
@@ -184,10 +184,30 @@ const Vehicles = () => {
     setRetainedImageUrl(null);
   };
 
-  const toggleVehicle = (id) => {
-    setVehicles((prev) =>
-      prev.map((v) => (v.id === id ? { ...v, isActive: !v.isActive } : v))
-    );
+  const toggleVehicle = async (id) => {
+    const v = vehicles.find((x) => x.id === id);
+    if (!v) return;
+    const nextActive = !v.isActive;
+    try {
+      await vehicleService.updateVehicle(id, {
+        name: v.name,
+        pricePerKm: v.pricePerKm ?? 0,
+        baseFare: v.baseFare ?? 0,
+        minimumKm: v.minimumKm ?? 0,
+        maxWeight: v.maxWeight ?? 0,
+        imageUrl: v.imageUrl || "",
+        isActive: nextActive,
+      });
+      setVehicles((prev) =>
+        prev.map((x) => (x.id === id ? { ...x, isActive: nextActive } : x))
+      );
+    } catch (e) {
+      window.alert(
+        e?.response?.data?.message ||
+          e?.message ||
+          "Could not update vehicle status."
+      );
+    }
   };
 
   const handleAddOpen = () => {
@@ -290,7 +310,6 @@ const Vehicles = () => {
       const editId =
         editingVehicleId != null ? Number(editingVehicleId) : null;
       const payload = {
-        id: editId != null ? editId : 0,
         name: newVehicle.name.trim(),
         pricePerKm,
         baseFare,
@@ -519,16 +538,26 @@ const Vehicles = () => {
 
       {isModalOpen && (
         <div
-          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center p-3"
+          className="position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-start p-3 py-4"
           style={{
             zIndex: 1050,
+            overflowY: "auto",
+            WebkitOverflowScrolling: "touch",
             backgroundColor: "rgba(0,0,0,0.5)",
             backdropFilter: "blur(4px)",
           }}
+          role="dialog"
+          aria-modal="true"
         >
           <div
-            className="bg-white rounded-4 p-4 shadow-lg fade-in position-relative"
-            style={{ width: "100%", maxWidth: "500px", maxHeight: "90vh", overflowY: "auto" }}
+            className="bg-white rounded-4 shadow-lg fade-in position-relative w-100"
+            style={{
+              maxWidth: "500px",
+              maxHeight: "min(92vh, calc(100dvh - 32px))",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
           >
             {saveSubmitting ? (
               <div
@@ -547,7 +576,7 @@ const Vehicles = () => {
               </div>
             ) : null}
 
-            <div className="d-flex justify-content-between align-items-center mb-4">
+            <div className="d-flex justify-content-between align-items-center p-4 pb-0 flex-shrink-0">
               <h4 className="fw-bold mb-0">
                 {editingVehicleId != null ? "Edit Vehicle Details" : "Add New Vehicle"}
               </h4>
@@ -561,6 +590,7 @@ const Vehicles = () => {
               </button>
             </div>
 
+            <div className="px-4 pt-3 flex-grow-1 overflow-auto" style={{ minHeight: 0 }}>
             {saveError ? (
               <div className="alert alert-danger small py-2 mb-3" role="alert">
                 {saveError}
@@ -740,8 +770,9 @@ const Vehicles = () => {
                 </div>
               </div>
             </div>
+            </div>
 
-            <div className="d-flex gap-3 mt-4">
+            <div className="d-flex gap-3 p-4 pt-3 border-top bg-light flex-shrink-0 rounded-bottom-4">
               <button
                 type="button"
                 className="btn btn-light flex-grow-1 py-3 fw-bold rounded-3"

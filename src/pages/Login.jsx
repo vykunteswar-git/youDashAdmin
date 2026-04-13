@@ -5,13 +5,30 @@ import { authService } from "../services/apiService";
 import logo from "../assets/logo.png";
 
 function getTokenFromLoginResponse(data) {
-  if (!data || typeof data !== "object") return null;
+  if (data == null) return null;
+  if (typeof data === "string") {
+    const s = data.trim();
+    return s.length > 0 ? s : null;
+  }
+  if (typeof data !== "object") return null;
+
+  const pick = (obj) => {
+    if (obj == null || typeof obj !== "object") return null;
+    const v =
+      obj.token ??
+      obj.accessToken ??
+      obj.access_token ??
+      obj.jwt ??
+      obj.bearerToken ??
+      obj.authorization;
+    return typeof v === "string" && v.trim() ? v.trim() : null;
+  };
+
   return (
-    data.token ??
-    data.accessToken ??
-    data.access_token ??
-    data.data?.token ??
-    data.data?.accessToken ??
+    pick(data) ??
+    pick(data.data) ??
+    (typeof data.data === "string" && data.data.trim() ? data.data.trim() : null) ??
+    pick(data.result) ??
     null
   );
 }
@@ -89,10 +106,15 @@ const Login = () => {
       const token = getTokenFromLoginResponse(payload);
       if (token) {
         localStorage.setItem("token", token);
+        localStorage.removeItem("accessToken");
         localStorage.removeItem("adminAuthenticated");
       } else {
         localStorage.removeItem("token");
+        localStorage.removeItem("accessToken");
         localStorage.setItem("adminAuthenticated", "1");
+        showSnackbar(
+          "Sign-in succeeded but no auth token was found in the response. Protected APIs will return 401 until the server returns a JWT."
+        );
       }
       notifyAuthChanged();
       navigate("/dashboard", { replace: true });
