@@ -11,10 +11,25 @@ import {
     Search,
     ChevronRight,
     Clock,
-    UserPlus
+    UserPlus,
+    FlaskConical,
 } from "lucide-react";
+import {
+    notificationAdminService,
+    readApiMessage,
+    isApiFailureBody,
+    getAxiosErrorMessage,
+} from "../services/apiService";
 
 const Notifications = () => {
+    const [pushToken, setPushToken] = useState("");
+    const [pushTitle, setPushTitle] = useState("");
+    const [pushBody, setPushBody] = useState("");
+    const [pushType, setPushType] = useState("");
+    const [pushDataJson, setPushDataJson] = useState("");
+    const [pushSubmitting, setPushSubmitting] = useState(false);
+    const [pushFeedback, setPushFeedback] = useState({ type: "", text: "" });
+
     const [target, setTarget] = useState("All Users");
     const [message, setMessage] = useState("");
     const [isSending, setIsSending] = useState(false);
@@ -27,6 +42,76 @@ const Notifications = () => {
             setMessage("");
             alert(`Notification sent to ${target}!`);
         }, 1500);
+    };
+
+    const parseDataStringMap = (raw) => {
+        const s = String(raw || "").trim();
+        if (!s) return undefined;
+        let obj;
+        try {
+            obj = JSON.parse(s);
+        } catch {
+            throw new Error("Data must be valid JSON object (string keys and string values).");
+        }
+        if (obj === null || typeof obj !== "object" || Array.isArray(obj)) {
+            throw new Error("Data must be a JSON object, not an array.");
+        }
+        const out = {};
+        for (const [k, v] of Object.entries(obj)) {
+            out[k] = typeof v === "string" ? v : String(v);
+        }
+        return out;
+    };
+
+    const handlePushTest = async () => {
+        setPushFeedback({ type: "", text: "" });
+        const token = pushToken.trim();
+        if (!token) {
+            setPushFeedback({ type: "danger", text: "Device FCM token is required." });
+            return;
+        }
+        let data;
+        try {
+            data = parseDataStringMap(pushDataJson);
+        } catch (err) {
+            setPushFeedback({
+                type: "danger",
+                text: err?.message || "Invalid data JSON.",
+            });
+            return;
+        }
+        const payload = { token };
+        const t = pushTitle.trim();
+        const b = pushBody.trim();
+        const ty = pushType.trim();
+        if (t) payload.title = t;
+        if (b) payload.body = b;
+        if (ty) payload.type = ty;
+        if (data) payload.data = data;
+
+        setPushSubmitting(true);
+        try {
+            const response = await notificationAdminService.testPush(payload);
+            const body = response.data;
+            if (isApiFailureBody(body)) {
+                setPushFeedback({
+                    type: "danger",
+                    text: readApiMessage(body) || "Push test failed.",
+                });
+                return;
+            }
+            setPushFeedback({
+                type: "success",
+                text: readApiMessage(body) || "Test push accepted.",
+            });
+        } catch (e) {
+            setPushFeedback({
+                type: "danger",
+                text: getAxiosErrorMessage(e, "Push test failed."),
+            });
+        } finally {
+            setPushSubmitting(false);
+        }
     };
 
     const history = [
@@ -46,6 +131,118 @@ const Notifications = () => {
                 <button className="btn btn-primary-red d-flex align-items-center gap-2 px-4 shadow-sm" style={{ backgroundColor: '#E51818', color: 'white', borderRadius: '10px' }}>
                     <UserPlus size={18} /> <span>Audience Segments</span>
                 </button>
+            </div>
+
+            <div className="dashboard-card border-0 shadow-sm mb-4">
+                <div className="d-flex align-items-start gap-3 mb-3">
+                    <div
+                        className="rounded-3 p-2 d-flex align-items-center justify-content-center flex-shrink-0"
+                        style={{ background: "rgba(229, 24, 24, 0.08)" }}
+                    >
+                        <FlaskConical size={22} style={{ color: "#E51818" }} />
+                    </div>
+                    <div className="flex-grow-1 min-w-0">
+                        <h5 className="fw-bold mb-1">Admin: push test</h5>
+                        <p className="text-muted small mb-0">
+                            <code className="small">POST /admin/notifications/test</code> — send a one-off test to a device{" "}
+                            <code className="small">token</code> (FCM). Optional <code className="small">title</code>,{" "}
+                            <code className="small">body</code>, <code className="small">type</code>,{" "}
+                            <code className="small">data</code> (JSON object with string values).
+                        </p>
+                    </div>
+                </div>
+                {pushFeedback.text ? (
+                    <div
+                        className={`alert ${pushFeedback.type === "success" ? "alert-success" : "alert-danger"} rounded-4 border-0 mb-3`}
+                    >
+                        {pushFeedback.text}
+                    </div>
+                ) : null}
+                <div className="row g-3">
+                    <div className="col-12">
+                        <label className="form-label small text-muted fw-bold mb-1">Device token *</label>
+                        <textarea
+                            className="form-control bg-light border-0 small font-monospace"
+                            rows={2}
+                            placeholder="FCM registration token"
+                            value={pushToken}
+                            onChange={(e) => {
+                                setPushFeedback({ type: "", text: "" });
+                                setPushToken(e.target.value);
+                            }}
+                            style={{ borderRadius: "10px" }}
+                        />
+                    </div>
+                    <div className="col-12 col-md-4">
+                        <label className="form-label small text-muted fw-bold mb-1">Title</label>
+                        <input
+                            type="text"
+                            className="form-control bg-light border-0 py-2"
+                            value={pushTitle}
+                            onChange={(e) => {
+                                setPushFeedback({ type: "", text: "" });
+                                setPushTitle(e.target.value);
+                            }}
+                            style={{ borderRadius: "10px" }}
+                        />
+                    </div>
+                    <div className="col-12 col-md-4">
+                        <label className="form-label small text-muted fw-bold mb-1">Body</label>
+                        <input
+                            type="text"
+                            className="form-control bg-light border-0 py-2"
+                            value={pushBody}
+                            onChange={(e) => {
+                                setPushFeedback({ type: "", text: "" });
+                                setPushBody(e.target.value);
+                            }}
+                            style={{ borderRadius: "10px" }}
+                        />
+                    </div>
+                    <div className="col-12 col-md-4">
+                        <label className="form-label small text-muted fw-bold mb-1">Type</label>
+                        <input
+                            type="text"
+                            className="form-control bg-light border-0 py-2"
+                            value={pushType}
+                            onChange={(e) => {
+                                setPushFeedback({ type: "", text: "" });
+                                setPushType(e.target.value);
+                            }}
+                            style={{ borderRadius: "10px" }}
+                        />
+                    </div>
+                    <div className="col-12">
+                        <label className="form-label small text-muted fw-bold mb-1">Data (optional JSON)</label>
+                        <textarea
+                            className="form-control bg-light border-0 small font-monospace"
+                            rows={2}
+                            placeholder='e.g. {"orderId":"123","screen":"TRACK"}'
+                            value={pushDataJson}
+                            onChange={(e) => {
+                                setPushFeedback({ type: "", text: "" });
+                                setPushDataJson(e.target.value);
+                            }}
+                            style={{ borderRadius: "10px" }}
+                        />
+                    </div>
+                    <div className="col-12 d-flex justify-content-end">
+                        <button
+                            type="button"
+                            className="btn d-flex align-items-center gap-2 px-4 text-white border-0 shadow-sm rounded-3"
+                            style={{ backgroundColor: "#E51818" }}
+                            disabled={pushSubmitting}
+                            onClick={handlePushTest}
+                        >
+                            {pushSubmitting ? (
+                                <span className="spinner-border spinner-border-sm" />
+                            ) : (
+                                <Send size={18} />
+                            )}
+                            Send test push
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <div className="row g-4">

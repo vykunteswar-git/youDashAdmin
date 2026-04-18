@@ -3,28 +3,46 @@ import {
   useCallback,
   useContext,
   useMemo,
-  useState,
+  useSyncExternalStore,
 } from "react";
 
 const AuthContext = createContext(null);
 
-function readLoggedIn() {
+/** Matches apiService: token, accessToken, or legacy adminAuthenticated flag */
+export function readLoggedIn() {
   return Boolean(
-    localStorage.getItem("token") || localStorage.getItem("adminAuthenticated")
+    localStorage.getItem("token")?.trim() ||
+      localStorage.getItem("accessToken")?.trim() ||
+      localStorage.getItem("adminAuthenticated")
   );
 }
 
+const authListeners = new Set();
+
+function subscribeAuth(onStoreChange) {
+  authListeners.add(onStoreChange);
+  return () => {
+    authListeners.delete(onStoreChange);
+  };
+}
+
+/** Notify all `useSyncExternalStore` subscribers (synchronous with React’s rules). */
+function emitAuthChange() {
+  for (const fn of authListeners) {
+    fn();
+  }
+}
+
 export function AuthProvider({ children }) {
-  const [version, setVersion] = useState(0);
+  const isLoggedIn = useSyncExternalStore(
+    subscribeAuth,
+    readLoggedIn,
+    readLoggedIn
+  );
 
   const notifyAuthChanged = useCallback(() => {
-    setVersion((v) => v + 1);
+    emitAuthChange();
   }, []);
-
-  const isLoggedIn = useMemo(() => {
-    void version;
-    return readLoggedIn();
-  }, [version]);
 
   const value = useMemo(
     () => ({ isLoggedIn, notifyAuthChanged }),

@@ -117,7 +117,11 @@ const Login = () => {
         );
       }
       notifyAuthChanged();
-      navigate("/dashboard", { replace: true });
+      // Defer navigation so useSyncExternalStore + route guards see updated localStorage
+      // before /dashboard is evaluated (avoids bounce back to /login).
+      window.setTimeout(() => {
+        navigate("/dashboard", { replace: true });
+      }, 0);
     } catch (error) {
       showSnackbar(getErrorMessage(error));
     } finally {

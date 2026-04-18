@@ -1,6 +1,10 @@
 import axios from "axios";
 
-const API_BASE_URL = "http://62.72.58.46:8080"; // Change this to your backend URL
+const API_BASE_URL =
+  (typeof import.meta !== "undefined" &&
+    import.meta.env?.VITE_API_BASE_URL &&
+    String(import.meta.env.VITE_API_BASE_URL).trim()) ||
+  "http://62.72.58.46:8080";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -21,6 +25,58 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+let authRedirectScheduled = false;
+
+api.interceptors.response.use(
+  (res) => res,
+  (error) => {
+    const status = error?.response?.status;
+    const url = String(error?.config?.url || "");
+    if (
+      (status === 401 || status === 403) &&
+      !url.includes("/admin/login") &&
+      typeof window !== "undefined"
+    ) {
+      if (!authRedirectScheduled && !window.location.pathname.endsWith("/login")) {
+        authRedirectScheduled = true;
+        localStorage.removeItem("token");
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("adminAuthenticated");
+        window.location.replace("/login");
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+/** Message from Spring ApiResponse-style body */
+export function readApiMessage(data) {
+  if (!data || typeof data !== "object") return "";
+  const m = data.message;
+  return typeof m === "string" && m.trim() ? m.trim() : "";
+}
+
+export function isApiFailureBody(data) {
+  return Boolean(data && typeof data === "object" && data.success === false);
+}
+
+export function getAxiosErrorMessage(error, fallback = "Request failed.") {
+  const d = error?.response?.data;
+  if (typeof d === "string" && d.trim()) return d.trim();
+  if (d && typeof d === "object") {
+    const fromApi = readApiMessage(d);
+    if (fromApi) return fromApi;
+    return (
+      d.error ??
+      d.detail ??
+      (Array.isArray(d.errors) ? d.errors.join(", ") : null) ??
+      error?.message ??
+      fallback
+    );
+  }
+  return error?.message || fallback;
+}
 
 /** Spring may return a bare array or { data: [...] } */
 export function unwrapList(res) {
@@ -122,6 +178,23 @@ export const riderService = {
     api.post(`/admin/riders/${encodeURIComponent(String(id))}/approve`),
   rejectRider: (id) =>
     api.post(`/admin/riders/${encodeURIComponent(String(id))}/reject`),
+};
+
+/** TestPushRequestDTO: token; optional title, body, type, data (map string → string) */
+export const notificationAdminService = {
+  testPush: (payload) => api.post("/admin/notifications/test", payload),
+};
+
+/** RiderCommissionConfigDTO — GET returns ApiResponse wrapper */
+export const commissionService = {
+  getConfig: () => api.get("/admin/commission/config"),
+  saveConfig: (payload) => api.post("/admin/commission/config", payload),
+};
+
+/** AdminCodSettleRequestDTO; AdminWithdrawalApproveDTO */
+export const walletAdminService = {
+  codSettle: (payload) => api.post("/admin/cod/settle", payload),
+  approveWithdrawal: (payload) => api.post("/admin/withdraw/approve", payload),
 };
 
 export default api;

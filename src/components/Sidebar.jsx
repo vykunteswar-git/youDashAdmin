@@ -23,6 +23,8 @@ import {
   Waypoints,
   SlidersHorizontal,
   Tags,
+  Percent,
+  Wallet,
 } from "lucide-react";
 
 const Sidebar = ({ collapsed, setCollapsed }) => {
@@ -53,6 +55,8 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       title: "Finance",
       items: [
         { path: "/delivery-fee", label: "App config", icon: SlidersHorizontal },
+        { path: "/rider-commission", label: "Rider commission", icon: Percent },
+        { path: "/wallet-admin", label: "Wallet & settlements", icon: Wallet },
         { path: "/payments", label: "Payments", icon: CreditCard },
         { path: "/reports", label: "Reports & Analytics", icon: BarChart3 },
         { path: "/promotions", label: "Coupons & Offers", icon: Ticket },
@@ -84,7 +88,10 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
     localStorage.removeItem("accessToken");
     localStorage.removeItem("adminAuthenticated");
     notifyAuthChanged();
-    navigate("/login", { replace: true });
+    // Defer so isLoggedIn is false before /login is matched (avoids <Navigate to="/dashboard" />).
+    window.setTimeout(() => {
+      navigate("/login", { replace: true });
+    }, 0);
   };
 
   return (
