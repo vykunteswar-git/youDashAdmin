@@ -14,7 +14,7 @@ const Header = ({ setCollapsed, collapsed }) => {
   const criticalCount = incidents.filter(i => i.severity === 'critical' || i.severity === 'warning').length;
 
   return (
-    <header className="glass-header header-shadow px-4 py-2 d-flex align-items-center justify-content-between border-bottom position-relative" style={{ zIndex: 200 }}>
+    <header className="glass-header header-shadow px-4 py-2 d-flex align-items-center justify-content-between border-bottom position-relative bg-white" style={{ zIndex: 100 }}>
       <div className="d-flex align-items-center gap-3">
         <button className="btn btn-link text-dark p-0 d-lg-none" onClick={() => setCollapsed(!collapsed)}>
           <Menu size={20} />

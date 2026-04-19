@@ -11,6 +11,8 @@ import {
     ChevronDown
 } from "lucide-react";
 
+/* TODO(Backend): No /admin/... reports or export endpoints on deployed OpenAPI; charts and tables are mock. Wire when matching admin APIs exist. */
+
 const Reports = () => {
     const [reportType, setReportType] = useState("Revenue"); // Revenue, Orders, Riders, Zones
     const [timeRange, setTimeRange] = useState("This Week"); // Today, This Week, This Month

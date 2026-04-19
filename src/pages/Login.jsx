@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import {
+  Package,
+  Lock,
+  Mail,
+  Shield,
+  Truck,
+  BarChart3,
+  Sparkles,
+} from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { authService } from "../services/apiService";
 import logo from "../assets/logo.png";
@@ -27,7 +36,9 @@ function getTokenFromLoginResponse(data) {
   return (
     pick(data) ??
     pick(data.data) ??
-    (typeof data.data === "string" && data.data.trim() ? data.data.trim() : null) ??
+    (typeof data.data === "string" && data.data.trim()
+      ? data.data.trim()
+      : null) ??
     pick(data.result) ??
     null
   );
@@ -37,7 +48,11 @@ function getErrorMessage(error) {
   const d = error?.response?.data;
   if (typeof d === "string") return d;
   if (d && typeof d === "object") {
-    if (d.success === false && typeof d.message === "string" && d.message.trim()) {
+    if (
+      d.success === false &&
+      typeof d.message === "string" &&
+      d.message.trim()
+    ) {
       return d.message.trim();
     }
     return (
@@ -113,12 +128,10 @@ const Login = () => {
         localStorage.removeItem("accessToken");
         localStorage.setItem("adminAuthenticated", "1");
         showSnackbar(
-          "Sign-in succeeded but no auth token was found in the response. Protected APIs will return 401 until the server returns a JWT."
+          "Sign-in succeeded but no auth token was found in the response. Protected APIs will return 401 until the server returns a JWT.",
         );
       }
       notifyAuthChanged();
-      // Defer navigation so useSyncExternalStore + route guards see updated localStorage
-      // before /dashboard is evaluated (avoids bounce back to /login).
       window.setTimeout(() => {
         navigate("/dashboard", { replace: true });
       }, 0);
@@ -130,325 +143,302 @@ const Login = () => {
   };
 
   return (
-    <div
-      className="position-relative d-flex justify-content-center align-items-center min-vh-100 py-4 px-3"
-      style={{
-        background: "linear-gradient(135deg, #071b3f 0%, #0f4c81 100%)",
-      }}
-    >
-      <div
-        className="card shadow-lg border-0 overflow-hidden w-100"
+    <div className="min-vh-100 d-flex flex-column flex-lg-row overflow-hidden">
+      {/* Brand column — desktop */}
+      <aside
+        className="d-none d-lg-flex flex-column justify-content-between position-relative text-white px-5 py-5"
         style={{
-          background: "rgba(255,255,255,0.96)",
-          backdropFilter: "blur(12px)",
-          borderRadius: "24px",
-          maxWidth: "980px",
+          flex: "0 0 44%",
+          maxWidth: 560,
+          minHeight: "100vh",
+          background:
+            "linear-gradient(165deg, #0f172a 0%, #1e293b 42%, #0c1222 100%)",
         }}
       >
-        <div className="row g-0">
-          <div
-            className="col-12 col-lg-6 d-none d-lg-flex position-relative"
-            style={{
-              background:
-                "linear-gradient(135deg, rgba(7,27,63,1) 0%, rgba(15,76,129,1) 70%, rgba(0,180,216,0.9) 140%)",
-              minHeight: "560px",
-            }}
-          >
-            <div className="p-5 text-white w-100">
-              <div className="d-flex align-items-center gap-3 mb-4">
-                <div
-                  className="rounded-3 d-flex align-items-center justify-content-center"
-                  style={{
-                    width: "48px",
-                    height: "48px",
-                    background: "rgba(255,255,255,0.14)",
-                    border: "1px solid rgba(255,255,255,0.18)",
-                    backdropFilter: "blur(8px)",
-                  }}
-                >
-                  <img
-                    src={logo}
-                    alt="YouDash Express"
-                    style={{
-                      width: "28px",
-                      height: "28px",
-                      objectFit: "contain",
-                    }}
-                  />
-                </div>
-                <div>
-                  <div className="fw-bold" style={{ letterSpacing: "0.3px" }}>
-                    YouDash Express
-                  </div>
-                  <div style={{ opacity: 0.85, fontSize: "0.95rem" }}>
-                    Admin Console
-                  </div>
-                </div>
-              </div>
+        <div
+          className="position-absolute inset-0 opacity-25"
+          style={{
+            inset: 0,
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.06'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+            pointerEvents: "none",
+          }}
+          aria-hidden
+        />
+        <div
+          className="position-absolute rounded-circle opacity-40"
+          style={{
+            width: 320,
+            height: 320,
+            background: "#E51818",
+            filter: "blur(80px)",
+            top: "-10%",
+            right: "-20%",
+            pointerEvents: "none",
+          }}
+          aria-hidden
+        />
 
-              <h2 className="fw-bold mb-3" style={{ lineHeight: 1.15 }}>
-                Manage deliveries, riders, and payments—securely.
-              </h2>
-              <p className="mb-4" style={{ opacity: 0.9 }}>
-                Sign in to access operations dashboards, order monitoring, and
-                reporting.
-              </p>
-
-              <div
-                className="rounded-4 p-4"
-                style={{
-                  background: "rgba(255,255,255,0.10)",
-                  border: "1px solid rgba(255,255,255,0.14)",
-                  backdropFilter: "blur(10px)",
-                }}
-              >
-                <svg
-                  viewBox="0 0 520 280"
-                  width="100%"
-                  height="220"
-                  preserveAspectRatio="xMidYMid meet"
-                  aria-hidden="true"
-                >
-                  <defs>
-                    <linearGradient id="ydWave" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stopColor="rgba(255,255,255,0.95)" />
-                      <stop offset="100%" stopColor="rgba(255,255,255,0.55)" />
-                    </linearGradient>
-                    <linearGradient id="ydAccent" x1="0" y1="1" x2="1" y2="0">
-                      <stop offset="0%" stopColor="rgba(0,180,216,0.95)" />
-                      <stop offset="100%" stopColor="rgba(0,123,255,0.90)" />
-                    </linearGradient>
-                    <filter id="softShadow" x="-10%" y="-10%" width="120%" height="120%">
-                      <feDropShadow
-                        dx="0"
-                        dy="12"
-                        stdDeviation="14"
-                        floodColor="rgba(0,0,0,0.28)"
-                      />
-                    </filter>
-                  </defs>
-
-                  <path
-                    d="M0,175 C70,120 140,210 210,165 C280,120 350,210 420,165 C470,132 495,140 520,150 L520,280 L0,280 Z"
-                    fill="rgba(255,255,255,0.10)"
-                  />
-                  <path
-                    d="M0,150 C80,95 160,195 240,145 C320,95 400,190 520,120 L520,280 L0,280 Z"
-                    fill="rgba(255,255,255,0.08)"
-                  />
-
-                  <g filter="url(#softShadow)">
-                    <rect
-                      x="56"
-                      y="48"
-                      width="408"
-                      height="156"
-                      rx="18"
-                      fill="rgba(255,255,255,0.16)"
-                      stroke="rgba(255,255,255,0.22)"
-                    />
-                    <rect
-                      x="84"
-                      y="78"
-                      width="240"
-                      height="10"
-                      rx="5"
-                      fill="url(#ydWave)"
-                      opacity="0.85"
-                    />
-                    <rect
-                      x="84"
-                      y="104"
-                      width="320"
-                      height="10"
-                      rx="5"
-                      fill="rgba(255,255,255,0.55)"
-                      opacity="0.55"
-                    />
-                    <rect
-                      x="84"
-                      y="130"
-                      width="288"
-                      height="10"
-                      rx="5"
-                      fill="rgba(255,255,255,0.55)"
-                      opacity="0.45"
-                    />
-                    <rect
-                      x="84"
-                      y="156"
-                      width="210"
-                      height="10"
-                      rx="5"
-                      fill="rgba(255,255,255,0.55)"
-                      opacity="0.35"
-                    />
-                    <circle cx="418" cy="104" r="20" fill="url(#ydAccent)" opacity="0.95" />
-                    <circle cx="448" cy="144" r="10" fill="rgba(255,255,255,0.75)" opacity="0.6" />
-                  </g>
-                </svg>
-
-                <div className="d-flex gap-3 flex-wrap">
-                  <span
-                    className="badge rounded-pill"
-                    style={{
-                      background: "rgba(255,255,255,0.14)",
-                      border: "1px solid rgba(255,255,255,0.18)",
-                      padding: "10px 12px",
-                    }}
-                  >
-                    Real-time tracking
-                  </span>
-                  <span
-                    className="badge rounded-pill"
-                    style={{
-                      background: "rgba(255,255,255,0.14)",
-                      border: "1px solid rgba(255,255,255,0.18)",
-                      padding: "10px 12px",
-                    }}
-                  >
-                    Role-based access
-                  </span>
-                  <span
-                    className="badge rounded-pill"
-                    style={{
-                      background: "rgba(255,255,255,0.14)",
-                      border: "1px solid rgba(255,255,255,0.18)",
-                      padding: "10px 12px",
-                    }}
-                  >
-                    Reports & analytics
-                  </span>
-                </div>
+        <div className="position-relative" style={{ zIndex: 1 }}>
+          <div className="d-flex align-items-center gap-3 mb-5">
+            <div
+              className="rounded-3 d-flex align-items-center justify-content-center shadow-lg"
+              style={{
+                width: 56,
+                height: 56,
+                background: "linear-gradient(135deg, #E51818 0%, #b91212 100%)",
+                boxShadow: "0 12px 32px rgba(229, 24, 24, 0.45)",
+              }}
+            >
+              <Package className="text-white" size={28} strokeWidth={2} />
+            </div>
+            <div>
+              <div className="fw-bold fs-3 tracking-tight">YouDash</div>
+              <div className="small text-white opacity-75 d-flex align-items-center gap-1">
+                <Sparkles size={14} className="text-warning" />
+                Admin console
               </div>
             </div>
           </div>
 
-          <div className="col-12 col-lg-6">
-            <div className="p-4 p-sm-5">
-              <div className="d-flex align-items-center gap-3 mb-4 d-lg-none">
-                <div
-                  className="rounded-3 d-flex align-items-center justify-content-center"
-                  style={{
-                    width: "48px",
-                    height: "48px",
-                    background: "rgba(7,27,63,0.08)",
-                    border: "1px solid rgba(7,27,63,0.10)",
-                  }}
-                >
-                  <img
-                    src={logo}
-                    alt="YouDash Express"
-                    style={{ width: "28px", height: "28px", objectFit: "contain" }}
-                  />
-                </div>
-                <div>
-                  <div className="fw-bold text-dark">YouDash Express</div>
-                  <div className="text-muted">Admin Console</div>
-                </div>
-              </div>
+          <h2
+            className="fw-bold display-6 mb-3"
+            style={{ lineHeight: 1.15, letterSpacing: "-0.02em" }}
+          >
+            Run operations with clarity.
+          </h2>
+          <p
+            className="text-white opacity-75 lead mb-5"
+            style={{ fontSize: "1.05rem" }}
+          >
+            Live orders, fleet, payouts, and promos — one secure workspace for
+            your team.
+          </p>
 
-              <h3 className="fw-bold text-dark mb-1">Sign in</h3>
-              <p className="text-muted mb-4">
-                Enter your email and password to continue.
-              </p>
-
-              <form onSubmit={handleSubmit}>
-                <div className="mb-3">
-                  <label className="form-label fw-semibold">Email</label>
-                  <input
-                    type="email"
-                    className="form-control form-control-lg"
-                    name="email"
-                    value={credentials.email}
-                    onChange={handleChange}
-                    placeholder="you@company.com"
-                    required
-                    autoComplete="email"
-                    style={{
-                      borderRadius: "12px",
-                      border: "2px solid #e9ecef",
-                      transition: "border-color 0.2s ease, box-shadow 0.2s ease",
-                    }}
-                    onFocus={(e) => {
-                      e.target.style.borderColor = "#0d6efd";
-                      e.target.style.boxShadow = "0 0 0 0.25rem rgba(13,110,253,0.15)";
-                    }}
-                    onBlur={(e) => {
-                      e.target.style.borderColor = "#e9ecef";
-                      e.target.style.boxShadow = "none";
-                    }}
-                  />
-                </div>
-
-                <div className="mb-3">
-                  <label className="form-label fw-semibold">Password</label>
-                  <input
-                    type="password"
-                    className="form-control form-control-lg"
-                    name="password"
-                    value={credentials.password}
-                    onChange={handleChange}
-                    placeholder="Enter password"
-                    required
-                    autoComplete="current-password"
-                    style={{
-                      borderRadius: "12px",
-                      border: "2px solid #e9ecef",
-                      transition: "border-color 0.2s ease, box-shadow 0.2s ease",
-                    }}
-                    onFocus={(e) => {
-                      e.target.style.borderColor = "#0d6efd";
-                      e.target.style.boxShadow = "0 0 0 0.25rem rgba(13,110,253,0.15)";
-                    }}
-                    onBlur={(e) => {
-                      e.target.style.borderColor = "#e9ecef";
-                      e.target.style.boxShadow = "none";
-                    }}
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="btn btn-primary w-100 btn-lg fw-bold mt-2"
-                  disabled={submitting}
-                  style={{
-                    borderRadius: "12px",
-                    paddingTop: "12px",
-                    paddingBottom: "12px",
-                    transition: "transform 0.15s ease, box-shadow 0.15s ease",
-                    boxShadow: "0 10px 24px rgba(13,110,253,0.22)",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (submitting) return;
-                    e.currentTarget.style.transform = "translateY(-1px)";
-                    e.currentTarget.style.boxShadow = "0 14px 30px rgba(13,110,253,0.28)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = "translateY(0)";
-                    e.currentTarget.style.boxShadow = "0 10px 24px rgba(13,110,253,0.22)";
-                  }}
-                >
-                  {submitting ? "Signing in…" : "Sign in"}
-                </button>
-
-                <div className="text-center mt-4">
-                  <small className="text-muted">
-                    By continuing, you agree to keep your credentials secure.
-                  </small>
-                </div>
-              </form>
+          <div className="d-flex flex-column gap-3">
+            <div
+              className="d-flex align-items-center gap-2 px-3 py-2 rounded-3 small fw-semibold text-white opacity-90"
+              style={{ background: "rgba(255,255,255,0.06)" }}
+            >
+              <Truck
+                size={18}
+                className="flex-shrink-0"
+                style={{ color: "#fb7185" }}
+              />
+              Dispatch &amp; rider coverage
+            </div>
+            <div
+              className="d-flex align-items-center gap-2 px-3 py-2 rounded-3 small fw-semibold text-white opacity-90"
+              style={{ background: "rgba(255,255,255,0.06)" }}
+            >
+              <BarChart3
+                size={18}
+                className="flex-shrink-0"
+                style={{ color: "#38bdf8" }}
+              />
+              Revenue, SLAs, and reports
+            </div>
+            <div
+              className="d-flex align-items-center gap-2 px-3 py-2 rounded-3 small fw-semibold text-white opacity-90"
+              style={{ background: "rgba(255,255,255,0.06)" }}
+            >
+              <Shield
+                size={18}
+                className="flex-shrink-0"
+                style={{ color: "#4ade80" }}
+              />
+              Role-based access &amp; audit-ready
             </div>
           </div>
         </div>
-      </div>
+
+        <div
+          className="position-relative small text-white opacity-75"
+          style={{ zIndex: 1 }}
+        >
+          <div className="d-flex align-items-center gap-2 mb-2">
+            <img
+              src={logo}
+              alt="YouDash Express"
+              style={{ height: 28, opacity: 0.9 }}
+            />
+            <span>YouDash Express</span>
+          </div>
+          <span className="opacity-75">
+            © {new Date().getFullYear()} · Internal use only
+          </span>
+        </div>
+      </aside>
+
+      {/* Form area — slate + red wash (ties to left panel, softer than flat white) */}
+      <main
+        className="yd-login-shell flex-grow-1 d-flex flex-column min-vh-100 position-relative"
+        style={{
+          background:
+            "radial-gradient(ellipse 100% 85% at 0% 25%, rgba(229, 24, 24, 0.14), transparent 52%), radial-gradient(ellipse 90% 75% at 100% 0%, rgba(15, 23, 42, 0.11), transparent 50%), radial-gradient(ellipse 75% 55% at 70% 100%, rgba(30, 41, 59, 0.09), transparent 50%), linear-gradient(158deg, #e2e8f0 0%, #e8edf4 28%, #f1f5f9 58%, #f8fafc 100%)",
+        }}
+      >
+        {/* Mobile brand strip */}
+        <div
+          className="d-lg-none d-flex align-items-center gap-3 px-4 py-3 border-bottom shadow-sm"
+          style={{ backgroundColor: "#0f172a" }}
+        >
+          <div
+            className="rounded-3 d-flex align-items-center justify-content-center"
+            style={{ backgroundColor: "#E51818", width: 40, height: 40 }}
+          >
+            <Package className="text-white" size={20} />
+          </div>
+          <div className="text-white">
+            <div className="fw-bold">YouDash</div>
+            <div className="small text-white opacity-75">Admin</div>
+          </div>
+        </div>
+
+        <div className="flex-grow-1 d-flex align-items-center justify-content-center p-3 p-md-4 py-lg-5">
+          <div className="w-100" style={{ maxWidth: 420 }}>
+            <div
+              className="rounded-4 position-relative overflow-hidden"
+              style={{
+                background:
+                  "linear-gradient(180deg, rgba(255,255,255,0.94) 0%, #ffffff 45%, #f8fafc 100%)",
+                border: "1px solid rgba(15, 23, 42, 0.08)",
+                boxShadow:
+                  "0 4px 6px -1px rgba(15, 23, 42, 0.06), 0 24px 48px -12px rgba(15, 23, 42, 0.14), inset 0 1px 0 rgba(255,255,255,0.85)",
+              }}
+            >
+              <div
+                className="position-absolute top-0 start-0 end-0"
+                style={{
+                  height: 4,
+                  background: "linear-gradient(90deg, #E51818, #f97316)",
+                }}
+                aria-hidden
+              />
+              <div className="p-4 p-md-5 pt-4">
+                <p
+                  className="text-uppercase small fw-bold text-danger mb-1 letter-spacing-wide"
+                  style={{ fontSize: "11px", letterSpacing: "0.12em" }}
+                >
+                  Welcome back
+                </p>
+                <h1 className="fw-bold text-dark mb-2 h2">
+                  Sign in to continue
+                </h1>
+                <p className="text-muted mb-4 pb-2 border-bottom small">
+                  Enter the credentials You will land on the dashboard.
+                </p>
+
+                <form onSubmit={handleSubmit}>
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold small text-secondary mb-1">
+                      Work email
+                    </label>
+                    <div className="position-relative">
+                      <Mail
+                        size={18}
+                        className="position-absolute text-muted"
+                        style={{
+                          left: 16,
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          pointerEvents: "none",
+                        }}
+                      />
+                      <input
+                        type="email"
+                        name="email"
+                        value={credentials.email}
+                        onChange={handleChange}
+                        placeholder="name@company.com"
+                        required
+                        autoComplete="email"
+                        className="form-control py-3 ps-5 rounded-3 yd-login-input"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mb-4">
+                    <label className="form-label fw-semibold small text-secondary mb-1">
+                      Password
+                    </label>
+                    <div className="position-relative">
+                      <Lock
+                        size={18}
+                        className="position-absolute text-muted"
+                        style={{
+                          left: 16,
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          pointerEvents: "none",
+                        }}
+                      />
+                      <input
+                        type="password"
+                        name="password"
+                        value={credentials.password}
+                        onChange={handleChange}
+                        placeholder="••••••••"
+                        required
+                        autoComplete="current-password"
+                        className="form-control py-3 ps-5 rounded-3 yd-login-input"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="btn w-100 fw-bold text-white border-0 rounded-3 py-3 position-relative overflow-hidden"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, #E51818 0%, #c41414 100%)",
+                      boxShadow: "0 10px 28px rgba(229, 24, 24, 0.35)",
+                      transition: "transform 0.15s ease, box-shadow 0.15s ease",
+                    }}
+                    disabled={submitting}
+                    onMouseEnter={(e) => {
+                      if (submitting) return;
+                      e.currentTarget.style.transform = "translateY(-1px)";
+                      e.currentTarget.style.boxShadow =
+                        "0 14px 36px rgba(229, 24, 24, 0.4)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = "none";
+                      e.currentTarget.style.boxShadow =
+                        "0 10px 28px rgba(229, 24, 24, 0.35)";
+                    }}
+                  >
+                    {submitting ? (
+                      <>
+                        <span
+                          className="spinner-border spinner-border-sm me-2"
+                          role="status"
+                        />
+                        Signing in…
+                      </>
+                    ) : (
+                      "Sign in"
+                    )}
+                  </button>
+
+                  <p className="text-center text-muted small mt-4 mb-0 px-1">
+                    Protected session · JWT from your Spring admin API ·{" "}
+                    <span className="text-secondary">
+                      keep this device trusted
+                    </span>
+                  </p>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
 
       {snackbar.open ? (
         <div
           className="position-fixed start-50 translate-middle-x px-3"
           style={{
             bottom: "24px",
-            zIndex: 1080,
+            zIndex: 13000,
             maxWidth: "min(420px, calc(100% - 24px))",
           }}
           aria-live="assertive"
@@ -457,7 +447,7 @@ const Login = () => {
             role="alert"
             className="rounded-3 shadow-lg border-0 px-4 py-3 text-white"
             style={{
-              background: "linear-gradient(135deg, #c0392b 0%, #e74c3c 100%)",
+              background: "linear-gradient(135deg, #b91c1c 0%, #E51818 100%)",
             }}
           >
             <div className="d-flex align-items-start gap-2">
@@ -470,7 +460,8 @@ const Login = () => {
                 className="btn btn-link btn-sm text-white text-decoration-none p-0 ms-auto flex-shrink-0"
                 style={{ lineHeight: 1 }}
                 onClick={() => {
-                  if (snackbarTimerRef.current) clearTimeout(snackbarTimerRef.current);
+                  if (snackbarTimerRef.current)
+                    clearTimeout(snackbarTimerRef.current);
                   setSnackbar({ open: false, message: "" });
                 }}
               >

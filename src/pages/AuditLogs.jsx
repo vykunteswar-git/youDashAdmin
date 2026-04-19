@@ -13,6 +13,9 @@ import {
     CreditCard
 } from "lucide-react";
 
+/* TODO(Backend): No /admin/... audit-log endpoints on deployed OpenAPI; log rows are mock. Wire when matching admin APIs exist. */
+
+
 const actionTypeConfig = {
     "Order Override": { icon: Package, color: "#E51818", bg: "#fef2f2" },
     "Rider Suspended": { icon: Bike, color: "#F59E0B", bg: "#fffbeb" },

@@ -14,6 +14,8 @@ import {
     Plus
 } from "lucide-react";
 
+/* TODO(Backend): No /admin/... live-map or fleet-tracking endpoints on deployed OpenAPI; map markers are mock. Wire when matching admin APIs exist (maps stay separate from Spring Axios). */
+
 const LiveTracking = () => {
     const [activeTab, setActiveTab] = useState("Riders");
     const [search, setSearch] = useState("");

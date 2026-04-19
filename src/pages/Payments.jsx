@@ -10,6 +10,8 @@ import {
   AlertTriangle
 } from "lucide-react";
 
+/* TODO(Backend): No /admin/... payment-settings or gateway list endpoints on deployed OpenAPI; UI is local-only. Wire when matching admin APIs exist. */
+
 const Payments = () => {
   const [configs, setConfigs] = useState({
     masterOnlineSwitch: true, // Emergency switch

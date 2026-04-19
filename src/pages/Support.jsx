@@ -15,6 +15,8 @@ import {
     ArrowRight
 } from "lucide-react";
 
+/* TODO(Backend): No /admin/... support or ticket endpoints on deployed OpenAPI; tickets are mock. Wire when matching admin APIs exist. */
+
 const Support = () => {
     const [activeTicket, setActiveTicket] = useState(null);
     const [search, setSearch] = useState("");

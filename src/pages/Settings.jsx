@@ -27,6 +27,8 @@ import {
     AlertTriangle
 } from "lucide-react";
 
+/* TODO(Backend): No /admin/... business-settings or CMS-style endpoints on deployed OpenAPI; all tabs are mock/local. Wire when matching admin APIs exist. */
+
 const TABS = [
     { id: "business", label: "Business Info", icon: Building2 },
     { id: "payment", label: "Payment", icon: CreditCard },

@@ -201,3 +201,37 @@ body {
 .header-shadow {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
+
+/* App shell: .sidebar is z-index 1000; header uses inline ~200. Portaled admin modals must sit above both. */
+.yd-admin-modal-layer {
+    z-index: 12000;
+}
+
+/* Login — visible borders on both fields; Chrome autofill no longer “flattens” email */
+.yd-login-shell .yd-login-input.form-control {
+    background-color: #f1f5f9;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+.yd-login-shell .yd-login-input.form-control:focus {
+    background-color: #fff;
+    border-color: rgba(229, 24, 24, 0.45);
+    box-shadow: 0 0 0 3px rgba(229, 24, 24, 0.12);
+    outline: none;
+}
+
+.yd-login-shell input.yd-login-input:-webkit-autofill,
+.yd-login-shell input.yd-login-input:-webkit-autofill:hover {
+    -webkit-text-fill-color: #111827;
+    caret-color: #111827;
+    border: 1px solid rgba(15, 23, 42, 0.12) !important;
+    box-shadow: 0 0 0 1000px #f1f5f9 inset, 0 1px 2px rgba(15, 23, 42, 0.05) !important;
+    transition: background-color 50000s ease-out;
+}
+
+.yd-login-shell input.yd-login-input:-webkit-autofill:focus {
+    -webkit-text-fill-color: #111827;
+    border-color: rgba(229, 24, 24, 0.45) !important;
+    box-shadow: 0 0 0 1000px #fff inset, 0 0 0 3px rgba(229, 24, 24, 0.12) !important;
+}

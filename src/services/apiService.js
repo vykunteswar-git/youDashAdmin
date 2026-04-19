@@ -197,4 +197,15 @@ export const walletAdminService = {
   approveWithdrawal: (payload) => api.post("/admin/withdraw/approve", payload),
 };
 
+/** Admin coupon DTO: code, title, description, discountType PERCENT|FLAT, discountValue, optional caps & ISO validFrom/validTo, serviceMode, active */
+export const couponAdminService = {
+  list: () => api.get("/admin/coupons"),
+  create: (payload) => api.post("/admin/coupons", payload),
+  update: (id, payload) =>
+    api.put(
+      `/admin/coupons/${encodeURIComponent(String(id))}`,
+      payload
+    ),
+};
+
 export default api;

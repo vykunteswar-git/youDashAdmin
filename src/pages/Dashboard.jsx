@@ -16,6 +16,8 @@ import {
   DollarSign
 } from "lucide-react";
 
+/* TODO(Backend): Deployed OpenAPI has no /admin/... dashboard or analytics aggregate endpoints; KPIs and feeds are mock. Integrate when Spring exposes matching admin APIs (apiService + unwrap helpers). */
+
 const Dashboard = () => {
   const [period, setPeriod] = useState("Today");
 

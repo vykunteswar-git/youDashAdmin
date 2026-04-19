@@ -15,6 +15,8 @@ import {
     Briefcase
 } from "lucide-react";
 
+/* TODO(Backend): No /admin/... transaction or ledger list endpoints on deployed OpenAPI; table data is mock. Wire when matching admin APIs exist. */
+
 const Transactions = () => {
     const [search, setSearch] = useState("");
     const [activeTab, setActiveTab] = useState("All");

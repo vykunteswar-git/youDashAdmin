@@ -16,6 +16,8 @@ import {
     ArrowRight
 } from "lucide-react";
 
+/* TODO(Backend): No /admin/... CMS or content endpoints on deployed OpenAPI; content list is mock. Wire when matching admin APIs exist. */
+
 const CMS = () => {
     const [banners, setBanners] = useState([
         { id: 1, title: "Diwali Fest 🪔", type: "Hero Banner", status: "Active", start: "Oct 20", end: "Oct 25", link: "/promos/fest" },
