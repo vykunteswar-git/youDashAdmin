@@ -173,6 +173,10 @@ export const orderService = {
 
 export const riderService = {
   getPendingRiders: () => api.get("/admin/riders/pending"),
+  listByStatus: (status) =>
+    api.get("/admin/riders", {
+      params: status ? { status } : undefined,
+    }),
   getAvailableRiders: () => api.post("/admin/riders/available"),
   approveRider: (id) =>
     api.post(`/admin/riders/${encodeURIComponent(String(id))}/approve`),
@@ -182,6 +186,8 @@ export const riderService = {
 
 /** TestPushRequestDTO: token; optional title, body, type, data (map string → string) */
 export const notificationAdminService = {
+  listFcmTargets: () => api.get("/admin/fcm-test/targets"),
+  sendFcmTest: (payload) => api.post("/admin/fcm-test/send", payload),
   testPush: (payload) => api.post("/admin/notifications/test", payload),
 };
 
@@ -194,6 +200,10 @@ export const commissionService = {
 /** AdminCodSettleRequestDTO; AdminWithdrawalApproveDTO */
 export const walletAdminService = {
   codSettle: (payload) => api.post("/admin/cod/settle", payload),
+  listWithdrawalRequests: (params) =>
+    api.get("/admin/withdraw/requests", {
+      params,
+    }),
   approveWithdrawal: (payload) => api.post("/admin/withdraw/approve", payload),
 };
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
     Bell,
     Send,
@@ -16,12 +16,18 @@ import {
 } from "lucide-react";
 import {
     notificationAdminService,
+    unwrapList,
     readApiMessage,
     isApiFailureBody,
     getAxiosErrorMessage,
 } from "../services/apiService";
 
 const Notifications = () => {
+    const [targetsLoading, setTargetsLoading] = useState(true);
+    const [targetsError, setTargetsError] = useState("");
+    const [fcmTargets, setFcmTargets] = useState([]);
+    const [selectedTargetId, setSelectedTargetId] = useState("");
+
     const [pushToken, setPushToken] = useState("");
     const [pushTitle, setPushTitle] = useState("");
     const [pushBody, setPushBody] = useState("");
@@ -33,6 +39,41 @@ const Notifications = () => {
     const [target, setTarget] = useState("All Users");
     const [message, setMessage] = useState("");
     const [isSending, setIsSending] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+        const loadTargets = async () => {
+            setTargetsLoading(true);
+            setTargetsError("");
+            try {
+                const res = await notificationAdminService.listFcmTargets();
+                const raw = res?.data;
+                if (isApiFailureBody(raw)) {
+                    throw new Error(readApiMessage(raw) || "Failed to load FCM targets.");
+                }
+                const list = unwrapList(res);
+                if (!cancelled) {
+                    setFcmTargets(list);
+                }
+            } catch (e) {
+                if (!cancelled) {
+                    setTargetsError(getAxiosErrorMessage(e, "Unable to load FCM targets."));
+                    setFcmTargets([]);
+                }
+            } finally {
+                if (!cancelled) setTargetsLoading(false);
+            }
+        };
+        loadTargets();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    const selectedTarget = useMemo(
+        () => fcmTargets.find((x) => String(x.id) === String(selectedTargetId)),
+        [fcmTargets, selectedTargetId]
+    );
 
     const handleSend = () => {
         if (!message) return alert("Please enter a message!");
@@ -65,7 +106,8 @@ const Notifications = () => {
 
     const handlePushTest = async () => {
         setPushFeedback({ type: "", text: "" });
-        const token = pushToken.trim();
+        const token =
+            selectedTarget?.fcmToken?.trim() || pushToken.trim();
         if (!token) {
             setPushFeedback({ type: "danger", text: "Device FCM token is required." });
             return;
@@ -91,7 +133,18 @@ const Notifications = () => {
 
         setPushSubmitting(true);
         try {
-            const response = await notificationAdminService.testPush(payload);
+            let response;
+            try {
+                // Preferred backend path per current OpenAPI
+                response = await notificationAdminService.sendFcmTest({
+                    fcmToken: token,
+                    title: t || "YouDash test notification",
+                    body: b || "Test push from admin panel",
+                });
+            } catch (primaryErr) {
+                // Backward compatibility with old endpoint
+                response = await notificationAdminService.testPush(payload);
+            }
             const body = response.data;
             if (isApiFailureBody(body)) {
                 setPushFeedback({
@@ -144,10 +197,9 @@ const Notifications = () => {
                     <div className="flex-grow-1 min-w-0">
                         <h5 className="fw-bold mb-1">Admin: push test</h5>
                         <p className="text-muted small mb-0">
-                            <code className="small">POST /admin/notifications/test</code> — send a one-off test to a device{" "}
-                            <code className="small">token</code> (FCM). Optional <code className="small">title</code>,{" "}
-                            <code className="small">body</code>, <code className="small">type</code>,{" "}
-                            <code className="small">data</code> (JSON object with string values).
+                            <code className="small">GET /admin/fcm-test/targets</code> ·{" "}
+                            <code className="small">POST /admin/fcm-test/send</code> (with backward fallback to{" "}
+                            <code className="small">/admin/notifications/test</code>).
                         </p>
                     </div>
                 </div>
@@ -158,7 +210,54 @@ const Notifications = () => {
                         {pushFeedback.text}
                     </div>
                 ) : null}
+                {targetsError ? (
+                    <div className="alert alert-warning rounded-4 border-0 mb-3">
+                        {targetsError}
+                    </div>
+                ) : null}
                 <div className="row g-3">
+                    <div className="col-12 col-md-5">
+                        <label className="form-label small text-muted fw-bold mb-1">
+                            Select target (optional)
+                        </label>
+                        <select
+                            className="form-select bg-light border-0 py-2"
+                            style={{ borderRadius: "10px" }}
+                            value={selectedTargetId}
+                            onChange={(e) => {
+                                setPushFeedback({ type: "", text: "" });
+                                setSelectedTargetId(e.target.value);
+                            }}
+                            disabled={targetsLoading}
+                        >
+                            <option value="">Manual token</option>
+                            {fcmTargets.map((tgt) => (
+                                <option
+                                    key={tgt.id}
+                                    value={String(tgt.id)}
+                                    disabled={!tgt.hasFcmToken}
+                                >
+                                    {tgt.name || tgt.type || `Target ${tgt.id}`}{" "}
+                                    {tgt.phone ? `(${tgt.phone})` : ""}
+                                    {tgt.hasFcmToken ? "" : " — no token"}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="col-12 col-md-7">
+                        <label className="form-label small text-muted fw-bold mb-1">Resolved token</label>
+                        <input
+                            type="text"
+                            className="form-control bg-light border-0 py-2 font-monospace"
+                            style={{ borderRadius: "10px" }}
+                            readOnly
+                            value={
+                                selectedTarget?.fcmToken
+                                    ? `${selectedTarget.fcmToken.slice(0, 14)}…${selectedTarget.fcmToken.slice(-8)}`
+                                    : "No target selected"
+                            }
+                        />
+                    </div>
                     <div className="col-12">
                         <label className="form-label small text-muted fw-bold mb-1">Device token *</label>
                         <textarea
@@ -170,6 +269,7 @@ const Notifications = () => {
                                 setPushFeedback({ type: "", text: "" });
                                 setPushToken(e.target.value);
                             }}
+                            disabled={Boolean(selectedTarget?.fcmToken)}
                             style={{ borderRadius: "10px" }}
                         />
                     </div>
