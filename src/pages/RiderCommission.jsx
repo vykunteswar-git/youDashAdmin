@@ -1,13 +1,13 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Save,
   RotateCcw,
   Pencil,
   Percent,
   Banknote,
-  TrendingUp,
-  Route,
   Wallet,
+  Calculator,
+  Info,
 } from "lucide-react";
 import {
   commissionService,
@@ -26,6 +26,27 @@ const emptyForm = () => ({
   perKmRate: "",
 });
 
+const percentFields = [
+  {
+    key: "onlineCommissionPercent",
+    label: "Online commission %",
+    hint: "Applied to online-paid orders",
+    icon: Percent,
+  },
+  {
+    key: "codCashCommissionPercent",
+    label: "COD cash commission %",
+    hint: "Applied to COD paid by cash",
+    icon: Banknote,
+  },
+  {
+    key: "codQrCommissionPercent",
+    label: "COD QR commission %",
+    hint: "Applied to COD paid by QR",
+    icon: Wallet,
+  },
+];
+
 function mapFromApi(cfg) {
   if (!cfg || typeof cfg !== "object") return emptyForm();
   return {
@@ -38,6 +59,20 @@ function mapFromApi(cfg) {
   };
 }
 
+function parseNum(v) {
+  const n = Number(String(v).trim());
+  return Number.isFinite(n) ? n : 0;
+}
+
+function getPercentValidationError(v) {
+  const s = String(v).trim();
+  if (!s) return "Required.";
+  const n = Number(s);
+  if (!Number.isFinite(n)) return "Must be a valid number.";
+  if (n < 0 || n > 100) return "Must be between 0 and 100.";
+  return "";
+}
+
 const RiderCommission = () => {
   const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(true);
@@ -45,6 +80,8 @@ const RiderCommission = () => {
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
+  const [sampleOrderAmount, setSampleOrderAmount] = useState("100");
+  const [fieldErrors, setFieldErrors] = useState({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -59,6 +96,7 @@ const RiderCommission = () => {
       }
       const cfg = unwrapEntity(res);
       setForm(mapFromApi(cfg));
+      setFieldErrors({});
     } catch (e) {
       setLoadError(getAxiosErrorMessage(e, "Failed to load commission config."));
     } finally {
@@ -73,11 +111,9 @@ const RiderCommission = () => {
   const handleChange = (field) => (e) => {
     const v = e.target.value;
     setForm((f) => ({ ...f, [field]: v }));
-  };
-
-  const parseNum = (s) => {
-    const n = Number(String(s).trim());
-    return Number.isFinite(n) ? n : 0;
+    if (percentFields.some((x) => x.key === field)) {
+      setFieldErrors((prev) => ({ ...prev, [field]: getPercentValidationError(v) }));
+    }
   };
 
   const handleSave = async () => {
@@ -85,6 +121,17 @@ const RiderCommission = () => {
       setIsEditing(true);
       return;
     }
+    const nextErrors = {};
+    for (const f of percentFields) {
+      const err = getPercentValidationError(form[f.key]);
+      if (err) nextErrors[f.key] = err;
+    }
+    setFieldErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) {
+      setLoadError("Please fix validation errors before saving.");
+      return;
+    }
+
     setSaving(true);
     setLoadError("");
     setSuccessMsg("");
@@ -123,53 +170,40 @@ const RiderCommission = () => {
       return;
     setIsEditing(false);
     setSuccessMsg("");
+    setFieldErrors({});
     load();
   };
 
-  const fields = [
-    {
-      key: "onlineCommissionPercent",
-      label: "Online commission",
-      suffix: "%",
-      icon: Percent,
-      hint: "Commission on online-paid orders",
-    },
-    {
-      key: "codCashCommissionPercent",
-      label: "COD cash commission",
-      suffix: "%",
-      icon: Banknote,
-      hint: "Commission when COD is settled as cash",
-    },
-    {
-      key: "codQrCommissionPercent",
-      label: "COD QR commission",
-      suffix: "%",
-      icon: Wallet,
-      hint: "Commission when COD is paid via QR",
-    },
-    {
-      key: "peakSurgeBonusFlat",
-      label: "Peak surge bonus (flat)",
-      suffix: "₹",
-      icon: TrendingUp,
-      hint: "Flat bonus during peak / surge",
-    },
-    {
-      key: "baseFee",
-      label: "Base fee",
-      suffix: "₹",
-      icon: Banknote,
-      hint: "Fixed base component for rider payout",
-    },
-    {
-      key: "perKmRate",
-      label: "Per km rate",
-      suffix: "₹/km",
-      icon: Route,
-      hint: "Distance-based component",
-    },
-  ];
+  const previewBaseAmount = useMemo(() => {
+    const n = Number(String(sampleOrderAmount).trim());
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  }, [sampleOrderAmount]);
+
+  const previewRows = useMemo(
+    () =>
+      [
+        { key: "onlineCommissionPercent", label: "Online" },
+        { key: "codCashCommissionPercent", label: "COD cash" },
+        { key: "codQrCommissionPercent", label: "COD QR" },
+      ].map((x) => {
+        const percent = Math.max(0, Math.min(100, parseNum(form[x.key])));
+        const appCommission = (previewBaseAmount * percent) / 100;
+        const riderEarning = previewBaseAmount - appCommission;
+        return {
+          ...x,
+          percent,
+          appCommission,
+          riderEarning,
+        };
+      }),
+    [form, previewBaseAmount]
+  );
+
+  const formatMoney = (v) =>
+    new Intl.NumberFormat("en-IN", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(v);
 
   return (
     <div className="container-fluid fade-in" style={{ maxWidth: 960 }}>
@@ -177,6 +211,12 @@ const RiderCommission = () => {
         <div>
           <h2 className="fw-bold mb-1">Rider commission</h2>
           <p className="text-muted small mb-0">
+            Percentage-based payout split:{" "}
+            <code className="small">commissionAmount = orderAmount × (commission% / 100)</code>
+            {" · "}
+            <code className="small">riderEarning = orderAmount - commissionAmount</code>
+          </p>
+          <p className="text-muted small mb-0 mt-1">
             <code className="small">GET /admin/commission/config</code> ·{" "}
             <code className="small">POST /admin/commission/config</code>
           </p>
@@ -234,42 +274,169 @@ const RiderCommission = () => {
           <p className="text-muted small mb-0">Loading commission config…</p>
         </div>
       ) : (
-        <div className="row g-3 g-md-4">
-          {fields.map(({ key, label, suffix, icon: Icon, hint }) => (
-            <div key={key} className="col-12 col-md-6">
-              <div className="dashboard-card border-0 h-100 shadow-sm">
-                <div className="d-flex align-items-start gap-3 mb-2">
-                  <div
-                    className="rounded-3 p-2 d-flex align-items-center justify-content-center flex-shrink-0"
-                    style={{ background: "rgba(229, 24, 24, 0.08)" }}
-                  >
-                    <Icon size={20} style={{ color: "#E51818" }} />
-                  </div>
-                  <div className="flex-grow-1 min-w-0">
-                    <label className="form-label fw-semibold mb-0 d-block">
-                      {label}
-                    </label>
-                    <p className="text-muted small mb-2 mb-md-3">{hint}</p>
-                    <div className="input-group">
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        className="form-control border-0 bg-light rounded-start-3 py-2"
-                        value={form[key]}
-                        onChange={handleChange(key)}
-                        disabled={!isEditing}
-                      />
-                      <span className="input-group-text border-0 bg-light text-muted small rounded-end-3">
-                        {suffix}
-                      </span>
+        <>
+          <div className="row g-3 g-md-4 mb-1">
+            {percentFields.map(({ key, label, icon: Icon, hint }) => {
+              const percent = parseNum(form[key]);
+              const riderShare = 100 - percent;
+              const isValid = !fieldErrors[key];
+              return (
+                <div key={key} className="col-12 col-md-6">
+                  <div className="dashboard-card border-0 h-100 shadow-sm">
+                    <div className="d-flex align-items-start gap-3 mb-2">
+                      <div
+                        className="rounded-3 p-2 d-flex align-items-center justify-content-center flex-shrink-0"
+                        style={{ background: "rgba(229, 24, 24, 0.08)" }}
+                      >
+                        <Icon size={20} style={{ color: "#E51818" }} />
+                      </div>
+                      <div className="flex-grow-1 min-w-0">
+                        <label className="form-label fw-semibold mb-0 d-block">
+                          {label}
+                        </label>
+                        <p className="text-muted small mb-2 mb-md-3">{hint}</p>
+                        <div className="input-group">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            className={`form-control border-0 bg-light rounded-start-3 py-2 ${
+                              fieldErrors[key] ? "is-invalid" : ""
+                            }`}
+                            value={form[key]}
+                            onChange={handleChange(key)}
+                            disabled={!isEditing}
+                          />
+                          <span className="input-group-text border-0 bg-light text-muted small rounded-end-3">
+                            %
+                          </span>
+                        </div>
+                        {fieldErrors[key] ? (
+                          <div className="text-danger small mt-2">{fieldErrors[key]}</div>
+                        ) : null}
+                        {isValid ? (
+                          <div className="small text-muted mt-2">
+                            Rider share = 100 - commission % ={" "}
+                            <span className="fw-semibold">
+                              {Number.isFinite(riderShare) ? riderShare.toFixed(2) : "0.00"}%
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                 </div>
+              );
+            })}
+          </div>
+
+          <div className="dashboard-card border-0 shadow-sm mt-3">
+            <div className="d-flex align-items-start gap-3 mb-3">
+              <div
+                className="rounded-3 p-2 d-flex align-items-center justify-content-center flex-shrink-0"
+                style={{ background: "rgba(229, 24, 24, 0.08)" }}
+              >
+                <Calculator size={20} style={{ color: "#E51818" }} />
+              </div>
+              <div className="flex-grow-1">
+                <h5 className="fw-bold mb-1">Payout preview calculator</h5>
+                <p className="text-muted small mb-0">
+                  Enter a sample order amount to preview app commission and rider earning
+                  for each payment mode.
+                </p>
               </div>
             </div>
-          ))}
-        </div>
+            <div className="row g-3 align-items-end">
+              <div className="col-12 col-md-4">
+                <label className="form-label fw-semibold small">Sample order amount</label>
+                <div className="input-group">
+                  <span className="input-group-text border-0 bg-light text-muted small">₹</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="form-control border-0 bg-light py-2"
+                    value={sampleOrderAmount}
+                    onChange={(e) => setSampleOrderAmount(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="table-responsive mt-3">
+              <table className="table mb-0 align-middle">
+                <thead className="bg-light">
+                  <tr>
+                    <th className="small text-muted border-0">Mode</th>
+                    <th className="small text-muted border-0">Commission %</th>
+                    <th className="small text-muted border-0">App commission amount</th>
+                    <th className="small text-muted border-0">Rider earning amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {previewRows.map((r) => (
+                    <tr key={r.key}>
+                      <td className="small fw-semibold">{r.label}</td>
+                      <td className="small">{r.percent.toFixed(2)}%</td>
+                      <td className="small">₹{formatMoney(r.appCommission)}</td>
+                      <td className="small fw-semibold text-success">
+                        ₹{formatMoney(r.riderEarning)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="small text-muted mt-3 mb-0">
+              QA quick check: with ₹100 and 30% commission, preview should show app ₹30 and rider ₹70.
+            </p>
+          </div>
+
+          <div className="dashboard-card border-0 shadow-sm mt-3 bg-light-subtle">
+            <div className="d-flex align-items-start gap-2">
+              <Info size={16} className="text-muted mt-1 flex-shrink-0" />
+              <div>
+                <p className="fw-semibold mb-1">Legacy fields (not used in payout split)</p>
+                <p className="text-muted small mb-3">
+                  These values are retained only for backward compatibility with older DTOs.
+                  Current payout calculation uses percentage fields above.
+                </p>
+              </div>
+            </div>
+            <div className="row g-3">
+              <div className="col-12 col-md-4">
+                <label className="form-label small text-muted">Base fee (legacy)</label>
+                <input
+                  type="number"
+                  className="form-control bg-light"
+                  value={form.baseFee}
+                  disabled
+                  readOnly
+                />
+              </div>
+              <div className="col-12 col-md-4">
+                <label className="form-label small text-muted">Per km rate (legacy)</label>
+                <input
+                  type="number"
+                  className="form-control bg-light"
+                  value={form.perKmRate}
+                  disabled
+                  readOnly
+                />
+              </div>
+              <div className="col-12 col-md-4">
+                <label className="form-label small text-muted">Peak surge bonus (legacy)</label>
+                <input
+                  type="number"
+                  className="form-control bg-light"
+                  value={form.peakSurgeBonusFlat}
+                  disabled
+                  readOnly
+                />
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
