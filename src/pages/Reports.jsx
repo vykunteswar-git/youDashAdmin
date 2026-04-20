@@ -1,162 +1,394 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
-    BarChart3,
-    TrendingUp,
-    Download,
-    Calendar,
-    DollarSign,
-    Package,
-    Bike,
-    MapPin,
-    ChevronDown
+  BarChart3,
+  Calendar,
+  ChevronDown,
+  Download,
+  DollarSign,
+  Bike,
+  Package,
+  RefreshCw,
 } from "lucide-react";
+import { useRevenueReport } from "../hooks/useRevenueReport";
+import { formatINR, formatPercent } from "../utils/formatters";
 
-/* TODO(Backend): No /admin/... reports or export endpoints on deployed OpenAPI; charts and tables are mock. Wire when matching admin APIs exist. */
+const RANGE_OPTIONS = [
+  { label: "Today", value: "TODAY" },
+  { label: "This Week", value: "THIS_WEEK" },
+  { label: "This Month", value: "THIS_MONTH" },
+];
+
+const CHART_STYLES = [
+  { label: "Classic", value: "CLASSIC" },
+  { label: "Capsule", value: "CAPSULE" },
+  { label: "Glow", value: "GLOW" },
+];
+
+function formatCompactINR(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "₹0";
+  if (Math.abs(amount) >= 100000) {
+    return `₹${(amount / 100000).toFixed(1)}L`;
+  }
+  if (Math.abs(amount) >= 1000) {
+    return `₹${(amount / 1000).toFixed(1)}k`;
+  }
+  return `₹${amount.toFixed(0)}`;
+}
 
 const Reports = () => {
-    const [reportType, setReportType] = useState("Revenue"); // Revenue, Orders, Riders, Zones
-    const [timeRange, setTimeRange] = useState("This Week"); // Today, This Week, This Month
+  const [timeRange, setTimeRange] = useState("THIS_WEEK");
+  const [chartStyle, setChartStyle] = useState("CAPSULE");
+  const { report, loading, error, retry } = useRevenueReport(timeRange);
 
-    // Mock Data for Bar Chart
-    const chartData = [
-        { label: "Mon", value: 65, height: "65%" },
-        { label: "Tue", value: 85, height: "85%" },
-        { label: "Wed", value: 45, height: "45%" },
-        { label: "Thu", value: 90, height: "90%" },
-        { label: "Fri", value: 110, height: "100%" }, // Peak
-        { label: "Sat", value: 95, height: "88%" },
-        { label: "Sun", value: 60, height: "60%" }
-    ];
+  const displayTrend = useMemo(() => {
+    const source = Array.isArray(report.trend) ? report.trend : [];
+    const map = new Map();
+    source.forEach((item) => {
+      const rawLabel = String(item?.label ?? "").trim();
+      const value = Number(item?.value) || 0;
+      const key = rawLabel.toLowerCase();
+      map.set(key, value);
 
-    return (
-        <div className="container-fluid fade-in position-relative">
-            <div className="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center mb-4 gap-3">
-                <div>
-                    <h2 className="fw-bold mb-1">Reports & Analytics</h2>
-                    <p className="text-muted small mb-0">Generate, view, and export operational metrics across the ecosystem.</p>
-                </div>
-                <button className="btn btn-outline-secondary d-flex align-items-center gap-2 px-4 shadow-sm bg-white" style={{ borderRadius: '10px' }} onClick={() => alert("Aggregating CSV data for download...")}>
-                    <Download size={18} /> <span className="fw-bold">Export to CSV</span>
-                </button>
-            </div>
+      const dt = new Date(rawLabel);
+      if (!Number.isNaN(dt.getTime())) {
+        map.set(dt.toLocaleDateString(undefined, { weekday: "short" }).toLowerCase(), value);
+        map.set(String(dt.getDate()).toLowerCase(), value);
+        map.set(`${String(dt.getHours()).padStart(2, "0")}:00`.toLowerCase(), value);
+      }
+    });
 
-            {/* Control Panel */}
-            <div className="dashboard-card border-0 shadow-sm mb-4 d-flex flex-column flex-md-row gap-3 p-3">
-                <div className="dropdown flex-grow-1">
-                    <button className="btn btn-light w-100 d-flex justify-content-between align-items-center fw-bold text-muted py-2" data-bs-toggle="dropdown" style={{ borderRadius: '8px' }}>
-                        <div className="d-flex align-items-center gap-2"><BarChart3 size={16} /> {reportType} Report</div>
-                        <ChevronDown size={16} />
-                    </button>
-                    <ul className="dropdown-menu w-100 border-0 shadow-sm mt-1">
-                        <li><button className="dropdown-item py-2 fw-bold" onClick={() => setReportType("Revenue")}>Revenue & Payouts</button></li>
-                        <li><button className="dropdown-item py-2 fw-bold" onClick={() => setReportType("Orders")}>Order Volume</button></li>
-                        <li><button className="dropdown-item py-2 fw-bold" onClick={() => setReportType("Riders")}>Rider Performance</button></li>
-                        <li><button className="dropdown-item py-2 fw-bold" onClick={() => setReportType("Zones")}>Zone Density</button></li>
-                    </ul>
-                </div>
+    if (timeRange === "TODAY") {
+      const labels = ["00:00", "03:00", "06:00", "09:00", "12:00", "15:00", "18:00", "21:00"];
+      return labels.map((label) => ({ label, value: map.get(label.toLowerCase()) ?? 0 }));
+    }
 
-                <div className="dropdown flex-grow-1">
-                    <button className="btn btn-light w-100 d-flex justify-content-between align-items-center fw-bold text-muted py-2" data-bs-toggle="dropdown" style={{ borderRadius: '8px' }}>
-                        <div className="d-flex align-items-center gap-2"><Calendar size={16} /> {timeRange}</div>
-                        <ChevronDown size={16} />
-                    </button>
-                    <ul className="dropdown-menu w-100 border-0 shadow-sm mt-1">
-                        <li><button className="dropdown-item py-2 text-muted fw-bold" onClick={() => setTimeRange("Today")}>Today</button></li>
-                        <li><button className="dropdown-item py-2 text-muted fw-bold" onClick={() => setTimeRange("This Week")}>This Week</button></li>
-                        <li><button className="dropdown-item py-2 text-muted fw-bold" onClick={() => setTimeRange("This Month")}>This Month</button></li>
-                    </ul>
-                </div>
-            </div>
+    if (timeRange === "THIS_WEEK") {
+      const labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+      return labels.map((label) => ({ label, value: map.get(label.toLowerCase()) ?? 0 }));
+    }
 
-            <div className="row g-4 mb-4">
-                <div className="col-12 col-xl-8">
-                    <div className="dashboard-card border-0 shadow-sm h-100">
-                        <div className="d-flex justify-content-between align-items-start mb-5">
-                            <div>
-                                <h5 className="fw-bold mb-1">{reportType} Overview</h5>
-                                <span className="small text-muted">{timeRange} Analytics</span>
-                            </div>
-                            <div className="text-end">
-                                <h3 className="fw-bold m-0 text-dark">
-                                    {reportType === "Revenue" ? "₹4,25,000" : reportType === "Orders" ? "1,240" : reportType === "Riders" ? "92% active" : "Hyperlocal"}
-                                </h3>
-                                <span className="small fw-bold text-success d-flex align-items-center justify-content-end gap-1"><TrendingUp size={12} /> +14% vs last period</span>
-                            </div>
-                        </div>
+    const now = new Date();
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const labels = Array.from({ length: daysInMonth }, (_, i) => String(i + 1));
+    return labels.map((label) => ({ label, value: map.get(label.toLowerCase()) ?? 0 }));
+  }, [report.trend, timeRange]);
 
-                        {/* Pure CSS Bar Chart */}
-                        <div className="d-flex align-items-end justify-content-between pt-5 mt-auto px-2" style={{ height: '220px' }}>
-                            {chartData.map((data, index) => (
-                                <div key={index} className="d-flex flex-column align-items-center gap-3 w-100 transition-all hover-opacity-75 group" style={{ cursor: 'pointer' }}>
-                                    <div className="position-relative w-50 bg-light rounded-top-3 d-flex align-items-end" style={{ height: '180px' }}>
-                                        <div className="w-100 rounded-top-3 transition-all group-hover:bg-danger" style={{ height: data.height, backgroundColor: '#E51818' }}></div>
-                                        <div className="position-absolute w-100 text-center opacity-0 group-hover:opacity-100 transition-all fw-bold small" style={{ top: '-25px' }}>{data.value}k</div>
-                                    </div>
-                                    <span className="small text-muted fw-bold">{data.label}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-
-                <div className="col-12 col-xl-4">
-                    <div className="row g-4">
-                        <div className="col-12">
-                            <div className="dashboard-card border-0 shadow-sm bg-primary-red text-white p-4" style={{ backgroundColor: '#E51818' }}>
-                                <DollarSign size={24} className="mb-3 opacity-75" />
-                                <h3 className="fw-bold m-0">2.4x</h3>
-                                <p className="small opacity-75 mb-0">ROAS Multiplier</p>
-                            </div>
-                        </div>
-                        <div className="col-12">
-                            <div className="dashboard-card border-0 shadow-sm bg-white p-4">
-                                <Package size={24} className="mb-3 text-primary-red" />
-                                <h3 className="fw-bold m-0 text-dark">98.2%</h3>
-                                <p className="small text-muted mb-0">Successful Completion Rate</p>
-                            </div>
-                        </div>
-                        <div className="col-12">
-                            <div className="dashboard-card border-0 shadow-sm bg-white p-4">
-                                <Bike size={24} className="mb-3 text-warning" />
-                                <h3 className="fw-bold m-0 text-dark">14 Mins</h3>
-                                <p className="small text-muted mb-0">Avg Assignment ETA</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div className="dashboard-card border-0 shadow-sm overflow-hidden p-0">
-                <div className="p-4 border-bottom">
-                    <h6 className="fw-bold m-0">Raw Data SetPreview (Top 5)</h6>
-                </div>
-                <div className="table-responsive">
-                    <table className="table table-hover mb-0">
-                        <thead className="bg-light">
-                            <tr>
-                                <th className="px-4 py-3 small text-muted border-0">METRIC ID</th>
-                                <th className="px-3 py-3 small text-muted border-0">SOURCE</th>
-                                <th className="px-3 py-3 small text-muted border-0">VOLUME</th>
-                                <th className="px-3 py-3 small text-muted border-0">CONVERSION</th>
-                                <th className="px-4 py-3 small text-muted border-0 text-end">STATUS</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {[1, 2, 3, 4, 5].map(id => (
-                                <tr key={id}>
-                                    <td className="px-4 py-3 small fw-bold border-0">MET-{4500 + id}</td>
-                                    <td className="px-3 py-3 small text-muted border-0 d-flex align-items-center gap-2"><MapPin size={12} /> Zone {id}</td>
-                                    <td className="px-3 py-3 small fw-bold border-0">{(500 / id).toFixed(0)}</td>
-                                    <td className="px-3 py-3 small text-success fw-bold border-0">+{(2.4 * id).toFixed(1)}%</td>
-                                    <td className="px-4 py-3 border-0 text-end"><span className="badge bg-success bg-opacity-10 text-success rounded-pill px-3">Synced</span></td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+  const peak = useMemo(() => {
+    if (!Array.isArray(displayTrend) || displayTrend.length === 0) return 1;
+    return Math.max(
+      ...displayTrend.map((d) => {
+        const value = Number(d?.value);
+        return Number.isFinite(value) ? value : 0;
+      }),
+      1
     );
+  }, [displayTrend]);
+
+  const chartTitle = RANGE_OPTIONS.find((x) => x.value === timeRange)?.label || "This Week";
+  const showValueLabels = displayTrend.length <= 12 || timeRange === "THIS_MONTH";
+  const hasTrendData = displayTrend.some((d) => Number(d?.value) > 0);
+  const isScrollableTrend = timeRange === "THIS_MONTH" && displayTrend.length > 12;
+  const pointWidth = timeRange === "THIS_MONTH" ? 42 : 56;
+  const chartTrackWidth = Math.max(displayTrend.length * pointWidth, 420);
+
+  return (
+    <div className="container-fluid fade-in position-relative">
+      <div className="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center mb-4 gap-3">
+        <div>
+          <h2 className="fw-bold mb-1">Reports & Analytics</h2>
+          <p className="text-muted small mb-0">Revenue and performance insights from backend analytics APIs.</p>
+        </div>
+        <button
+          type="button"
+          className="btn btn-outline-secondary d-flex align-items-center gap-2 px-4 shadow-sm bg-white"
+          style={{ borderRadius: "10px" }}
+          onClick={() => window.alert("Export integration can use this report payload.")}
+        >
+          <Download size={18} /> <span className="fw-bold">Export to CSV</span>
+        </button>
+      </div>
+
+      <div className="dashboard-card border-0 shadow-sm mb-4 d-flex flex-column flex-md-row gap-3 p-3">
+        <div className="flex-grow-1">
+          <div
+            className="btn btn-light w-100 d-flex justify-content-between align-items-center fw-bold text-muted py-2 pe-none"
+            style={{ borderRadius: "8px" }}
+          >
+            <div className="d-flex align-items-center gap-2">
+              <BarChart3 size={16} /> Revenue Report
+            </div>
+          </div>
+        </div>
+
+        <div className="dropdown flex-grow-1">
+          <button
+            type="button"
+            className="btn btn-light w-100 d-flex justify-content-between align-items-center fw-bold text-muted py-2"
+            data-bs-toggle="dropdown"
+            style={{ borderRadius: "8px" }}
+          >
+            <div className="d-flex align-items-center gap-2">
+              <Calendar size={16} /> {chartTitle}
+            </div>
+            <ChevronDown size={16} />
+          </button>
+          <ul className="dropdown-menu w-100 border-0 shadow-sm mt-1">
+            {RANGE_OPTIONS.map((option) => (
+              <li key={option.value}>
+                <button
+                  type="button"
+                  className="dropdown-item py-2 text-muted fw-bold"
+                  onClick={() => setTimeRange(option.value)}
+                >
+                  {option.label}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      {error ? (
+        <div
+          className="alert alert-danger mb-4 d-flex align-items-center justify-content-between gap-3 rounded-4 border-0 shadow-sm"
+          role="alert"
+        >
+          <span>{error}</span>
+          <button type="button" className="btn btn-sm btn-outline-danger rounded-pill" onClick={retry}>
+            <RefreshCw size={14} className="me-1" />
+            Retry
+          </button>
+        </div>
+      ) : null}
+
+      <div className="row g-4 mb-4">
+        <div className="col-12 col-xl-8">
+          <div className="dashboard-card border-0 shadow-sm h-100">
+            <div className="d-flex justify-content-between align-items-start mb-5">
+              <div>
+                <h5 className="fw-bold mb-1">Revenue Overview</h5>
+                <span className="small text-muted">{chartTitle} Analytics</span>
+              </div>
+              <div className="text-end">
+                <h3 className="fw-bold m-0 text-dark">{loading ? "—" : formatINR(report.totalRevenue)}</h3>
+                <span className="small text-muted">Total Revenue</span>
+              </div>
+            </div>
+
+            <div className="d-flex flex-wrap gap-2 mb-3">
+              {CHART_STYLES.map((style) => (
+                <button
+                  key={style.value}
+                  type="button"
+                  className={`btn btn-sm fw-bold rounded-pill px-3 ${
+                    chartStyle === style.value ? "text-white border-0" : "btn-light text-muted"
+                  }`}
+                  style={{ backgroundColor: chartStyle === style.value ? "#E51818" : undefined }}
+                  onClick={() => setChartStyle(style.value)}
+                >
+                  {style.label}
+                </button>
+              ))}
+            </div>
+
+            {loading ? (
+              <div className="d-flex align-items-end justify-content-between pt-5 mt-auto px-2" style={{ height: "220px" }}>
+                {Array.from({ length: 7 }).map((_, i) => (
+                  <div key={i} className="d-flex flex-column align-items-center gap-3 w-100">
+                    <div className="skeleton-line w-50" style={{ height: 130 }} />
+                    <div className="skeleton-line w-75" />
+                  </div>
+                ))}
+              </div>
+            ) : displayTrend.length === 0 ? (
+              <p className="text-muted small text-center py-5 mb-0">No trend data for this range.</p>
+            ) : (
+              <div className={`${isScrollableTrend ? "overflow-auto" : ""} pt-2`}>
+                <div
+                  className={`d-flex align-items-end px-2 ${isScrollableTrend ? "gap-2" : "justify-content-between gap-1"}`}
+                  style={{ minWidth: isScrollableTrend ? `${chartTrackWidth}px` : undefined, height: "230px" }}
+                >
+                  {displayTrend.map((data, index) => {
+                    const value = Number(data?.value) || 0;
+                    const barHeight = Math.max((value / peak) * 100, hasTrendData ? 6 : 0);
+                    const showLabel = showValueLabels;
+                    return (
+                      <div
+                        key={`${data?.label || "point"}-${index}`}
+                        className="d-flex flex-column align-items-center gap-2"
+                        style={{
+                          width: isScrollableTrend ? pointWidth : "100%",
+                          minWidth: isScrollableTrend ? pointWidth : undefined,
+                          cursor: "pointer",
+                        }}
+                        title={`${data?.label || "Point"}: ${formatINR(value)}`}
+                      >
+                        <div
+                          className={`position-relative w-100 d-flex align-items-end ${
+                            chartStyle === "CAPSULE" ? "rounded-pill" : "rounded-top-3"
+                          }`}
+                          style={{
+                            height: "180px",
+                            backgroundColor: chartStyle === "GLOW" ? "#f3f4f6" : "#f8fafc",
+                            overflow: "hidden",
+                          }}
+                        >
+                          <div
+                            className={`w-100 transition-all ${
+                              chartStyle === "CAPSULE" ? "rounded-pill" : "rounded-top-3"
+                            }`}
+                            style={{
+                              height: `${barHeight}%`,
+                              minHeight: hasTrendData ? 3 : 0,
+                              background:
+                                chartStyle === "CLASSIC"
+                                  ? "#E51818"
+                                  : chartStyle === "CAPSULE"
+                                    ? "linear-gradient(180deg, #ff6b6b 0%, #E51818 100%)"
+                                    : "linear-gradient(180deg, #ff8a8a 0%, #E51818 65%, #b90f0f 100%)",
+                              boxShadow: chartStyle === "GLOW" ? "0 6px 14px rgba(229,24,24,0.28)" : "none",
+                            }}
+                          />
+                          {chartStyle === "GLOW" ? (
+                            <div
+                              className="position-absolute top-0 start-0 end-0"
+                              style={{
+                                height: 1,
+                                background:
+                                  "repeating-linear-gradient(to right, rgba(100,116,139,0.2) 0px, rgba(100,116,139,0.2) 12px, transparent 12px, transparent 20px)",
+                              }}
+                            />
+                          ) : null}
+                        </div>
+                        {showLabel ? (
+                          <div
+                            className={`px-1 py-0 fw-bold rounded-2 text-nowrap ${
+                              value > 0 ? "text-danger" : "text-muted"
+                            }`}
+                            style={{ fontSize: timeRange === "THIS_MONTH" ? 8 : 9, lineHeight: "10px" }}
+                          >
+                            {formatCompactINR(value)}
+                          </div>
+                        ) : (
+                          <div style={{ height: 10 }} />
+                        )}
+                        <span className="small text-muted fw-bold text-nowrap" style={{ fontSize: 10 }}>
+                          {data?.label || "-"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="col-12 col-xl-4">
+          <div className="row g-4">
+            <div className="col-12">
+              <div className="dashboard-card border-0 shadow-sm bg-primary-red text-white p-4" style={{ backgroundColor: "#E51818" }}>
+                <DollarSign size={24} className="mb-3 opacity-75" />
+                <h3 className="fw-bold m-0">{loading ? "—" : `${Number(report.rushMultiplier || 0).toFixed(2)}x`}</h3>
+                <p className="small opacity-75 mb-0">Rush Multiplier</p>
+              </div>
+            </div>
+            <div className="col-12">
+              <div className="dashboard-card border-0 shadow-sm bg-white p-4">
+                <Package size={24} className="mb-3 text-primary-red" />
+                <h3 className="fw-bold m-0 text-dark">{loading ? "—" : formatPercent(report.completionRate)}</h3>
+                <p className="small text-muted mb-0">Successful Completion Rate</p>
+              </div>
+            </div>
+            <div className="col-12">
+              <div className="dashboard-card border-0 shadow-sm bg-white p-4">
+                <Bike size={24} className="mb-3 text-warning" />
+                <h3 className="fw-bold m-0 text-dark">
+                  {loading ? "—" : `${Number(report.avgAssignmentEtaMinutes || 0).toFixed(1)} min`}
+                </h3>
+                <p className="small text-muted mb-0">Avg Assignment ETA</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="dashboard-card border-0 shadow-sm overflow-hidden p-0">
+        <div className="p-4 border-bottom d-flex justify-content-between align-items-center">
+          <h6 className="fw-bold m-0">Top Sources</h6>
+          {!loading ? (
+            <span className="text-muted small">{report.topSources.length} rows</span>
+          ) : null}
+        </div>
+        <div className="table-responsive">
+          <table className="table table-hover mb-0">
+            <thead className="bg-light">
+              <tr>
+                <th className="px-4 py-3 small text-muted border-0">SOURCE</th>
+                <th className="px-3 py-3 small text-muted border-0">VOLUME</th>
+                <th className="px-3 py-3 small text-muted border-0">REVENUE</th>
+                <th className="px-4 py-3 small text-muted border-0 text-end">CONVERSION</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                Array.from({ length: 5 }).map((_, idx) => (
+                  <tr key={idx}>
+                    <td className="px-4 py-3 border-0">
+                      <div className="skeleton-line w-75" />
+                    </td>
+                    <td className="px-3 py-3 border-0">
+                      <div className="skeleton-line w-50" />
+                    </td>
+                    <td className="px-3 py-3 border-0">
+                      <div className="skeleton-line w-50" />
+                    </td>
+                    <td className="px-4 py-3 border-0">
+                      <div className="skeleton-line w-25 ms-auto" />
+                    </td>
+                  </tr>
+                ))
+              ) : report.topSources.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="text-center py-5 text-muted small">
+                    No top source data available.
+                  </td>
+                </tr>
+              ) : (
+                report.topSources.map((row, idx) => (
+                  <tr key={`${row?.source || row?.name || "source"}-${idx}`}>
+                    <td className="px-4 py-3 small fw-bold border-0">
+                      {row?.source || row?.name || `Source ${idx + 1}`}
+                    </td>
+                    <td className="px-3 py-3 small border-0">{Number(row?.volume || 0).toLocaleString()}</td>
+                    <td className="px-3 py-3 small fw-bold border-0">{formatINR(row?.revenue || 0)}</td>
+                    <td className="px-4 py-3 small border-0 text-end text-success fw-bold">
+                      {formatPercent(row?.conversionRate || 0)}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes pulse {
+          0% { opacity: 0.7; }
+          50% { opacity: 0.35; }
+          100% { opacity: 0.7; }
+        }
+        .skeleton-line {
+          height: 12px;
+          border-radius: 8px;
+          background: #e5e7eb;
+          animation: pulse 1.4s ease-in-out infinite;
+        }
+      `}</style>
+    </div>
+  );
 };
 
 export default Reports;

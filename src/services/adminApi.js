@@ -1,4 +1,5 @@
 import {
+  analyticsService,
   appConfigService,
   authService,
   commissionService,
@@ -50,6 +51,7 @@ export const adminApi = {
   commission: commissionService,
   wallet: walletAdminService,
   coupons: couponAdminService,
+  analytics: analyticsService,
 };
 
 export default adminApi;

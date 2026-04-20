@@ -27,9 +27,70 @@ api.interceptors.request.use((config) => {
 });
 
 let authRedirectScheduled = false;
+let authFailureCount = 0;
+let authFailureWindowStartedAt = 0;
+
+const AUTH_FAILURE_WINDOW_MS = 15000;
+const AUTH_FAILURE_THRESHOLD = 3;
+
+function resetAuthFailureWindow() {
+  authFailureCount = 0;
+  authFailureWindowStartedAt = 0;
+}
+
+function noteAuthFailure() {
+  const now = Date.now();
+  if (
+    authFailureWindowStartedAt === 0 ||
+    now - authFailureWindowStartedAt > AUTH_FAILURE_WINDOW_MS
+  ) {
+    authFailureWindowStartedAt = now;
+    authFailureCount = 1;
+    return authFailureCount;
+  }
+  authFailureCount += 1;
+  return authFailureCount;
+}
+
+function isTokenClearlyInvalid(error) {
+  const body = error?.response?.data;
+  const message = [
+    typeof body === "string" ? body : "",
+    body?.message,
+    body?.error,
+    body?.detail,
+  ]
+    .filter((x) => typeof x === "string")
+    .join(" ")
+    .toLowerCase();
+
+  // Detect explicit token failures; avoid logging out for generic endpoint issues.
+  return (
+    message.includes("token expired") ||
+    message.includes("expired token") ||
+    message.includes("invalid token") ||
+    message.includes("jwt expired") ||
+    message.includes("signature") ||
+    message.includes("unauthorized")
+  );
+}
+
+function scheduleAuthRedirect() {
+  if (typeof window === "undefined") return;
+  if (authRedirectScheduled || window.location.pathname.endsWith("/login")) return;
+  authRedirectScheduled = true;
+  localStorage.removeItem("token");
+  localStorage.removeItem("accessToken");
+  localStorage.removeItem("adminAuthenticated");
+  window.location.replace("/login");
+}
 
 api.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    // Any successful call means current auth is likely healthy.
+    resetAuthFailureWindow();
+    return res;
+  },
   (error) => {
     const status = error?.response?.status;
     const url = String(error?.config?.url || "");
@@ -38,12 +99,18 @@ api.interceptors.response.use(
       !url.includes("/admin/login") &&
       typeof window !== "undefined"
     ) {
-      if (!authRedirectScheduled && !window.location.pathname.endsWith("/login")) {
-        authRedirectScheduled = true;
-        localStorage.removeItem("token");
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("adminAuthenticated");
-        window.location.replace("/login");
+      const hasToken = Boolean(getStoredAuthToken());
+      if (!hasToken) {
+        scheduleAuthRedirect();
+        return Promise.reject(error);
+      }
+
+      const failuresInWindow = noteAuthFailure();
+      if (
+        isTokenClearlyInvalid(error) ||
+        failuresInWindow >= AUTH_FAILURE_THRESHOLD
+      ) {
+        scheduleAuthRedirect();
       }
     }
     return Promise.reject(error);
@@ -91,6 +158,14 @@ export function unwrapEntity(res) {
   const d = res?.data;
   if (d && typeof d === "object" && "data" in d && d.data !== undefined) return d.data;
   return d;
+}
+
+function unwrapDataOr(res, fallback) {
+  const d = res?.data;
+  if (d && typeof d === "object" && "data" in d && d.data !== undefined) {
+    return d.data ?? fallback;
+  }
+  return d ?? fallback;
 }
 
 export const authService = {
@@ -189,6 +264,48 @@ export const notificationAdminService = {
   listFcmTargets: () => api.get("/admin/fcm-test/targets"),
   sendFcmTest: (payload) => api.post("/admin/fcm-test/send", payload),
   testPush: (payload) => api.post("/admin/notifications/test", payload),
+  sendBroadcast: (payload) => api.post("/admin/notifications/broadcast", payload),
+  sendNotificationBroadcast: (payload) =>
+    api.post("/admin/notifications/broadcast", payload),
+  getNotificationTargets: async (params = {}) => {
+    const q = typeof params?.q === "string" ? params.q : undefined;
+    const rawLimit = Number(params?.limit);
+    const limit = Number.isFinite(rawLimit)
+      ? Math.max(1, Math.min(100, Math.trunc(rawLimit)))
+      : 20;
+    const res = await api.get("/admin/notifications/targets", {
+      params: {
+        ...(q ? { q } : {}),
+        limit,
+      },
+    });
+    return unwrapDataOr(res, {
+      cities: [],
+      zones: [],
+      users: [],
+      riders: [],
+    });
+  },
+  getNotificationLogs: async (params = {}) => {
+    const rawPage = Number(params?.page);
+    const rawSize = Number(params?.size);
+    const page = Number.isFinite(rawPage) ? Math.max(0, Math.trunc(rawPage)) : 0;
+    const size = Number.isFinite(rawSize)
+      ? Math.max(1, Math.min(100, Math.trunc(rawSize)))
+      : 20;
+    const res = await api.get("/admin/notifications/logs", {
+      params: { page, size },
+    });
+    return unwrapDataOr(res, {
+      content: [],
+      number: page,
+      size,
+      totalElements: 0,
+      totalPages: 0,
+    });
+  },
+  getNotificationLogsPaged: async (params = {}) =>
+    notificationAdminService.getNotificationLogs(params),
 };
 
 /** RiderCommissionConfigDTO — GET returns ApiResponse wrapper */
@@ -216,6 +333,40 @@ export const couponAdminService = {
       `/admin/coupons/${encodeURIComponent(String(id))}`,
       payload
     ),
+};
+
+export const analyticsService = {
+  getDashboardSummary: async (range) => {
+    const res = await api.get("/admin/dashboard/summary", {
+      params: { range },
+    });
+    return unwrapDataOr(res, {});
+  },
+  getDashboardOrderVolume: async (range) => {
+    const res = await api.get("/admin/dashboard/order-volume", {
+      params: { range },
+    });
+    return unwrapDataOr(res, []);
+  },
+  getDashboardLiveActivity: async (limit = 10) => {
+    const res = await api.get("/admin/dashboard/live-activity", {
+      params: { limit },
+    });
+    return unwrapDataOr(res, []);
+  },
+  getRevenueReport: async (range) => {
+    const res = await api.get("/admin/reports/revenue", {
+      params: { range },
+    });
+    return unwrapDataOr(res, {
+      totalRevenue: 0,
+      rushMultiplier: 0,
+      completionRate: 0,
+      avgAssignmentEtaMinutes: 0,
+      trend: [],
+      topSources: [],
+    });
+  },
 };
 
 export default api;
