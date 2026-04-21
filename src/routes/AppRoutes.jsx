@@ -14,6 +14,7 @@ import Vehicles from "../pages/Vehicles";
 import Pricing from "../pages/Pricing";
 import DeliveryFee from "../pages/DeliveryFee";
 import RiderCommission from "../pages/RiderCommission";
+import RiderIncentives from "../pages/RiderIncentives";
 import WalletAdmin from "../pages/WalletAdmin";
 import Zones from "../pages/Zones";
 import Hubs from "../pages/Hubs";
@@ -89,6 +90,7 @@ const AppRoutes = () => {
         <Route path="pricing" element={<Pricing />} />
         <Route path="delivery-fee" element={<DeliveryFee />} />
         <Route path="rider-commission" element={<RiderCommission />} />
+        <Route path="rider-incentives" element={<RiderIncentives />} />
         <Route path="wallet-admin" element={<WalletAdmin />} />
         <Route path="transactions" element={<Transactions />} />
         <Route path="reports" element={<Reports />} />

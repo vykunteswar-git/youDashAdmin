@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -25,6 +24,7 @@ import {
   Tags,
   Percent,
   Wallet,
+  Flame,
 } from "lucide-react";
 
 const Sidebar = ({ collapsed, setCollapsed }) => {
@@ -56,6 +56,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       items: [
         { path: "/delivery-fee", label: "App config", icon: SlidersHorizontal },
         { path: "/rider-commission", label: "Rider commission", icon: Percent },
+        { path: "/rider-incentives", label: "Rider incentives", icon: Flame },
         { path: "/wallet-admin", label: "Wallet & settlements", icon: Wallet },
         { path: "/payments", label: "Payments", icon: CreditCard },
         { path: "/reports", label: "Reports & Analytics", icon: BarChart3 },

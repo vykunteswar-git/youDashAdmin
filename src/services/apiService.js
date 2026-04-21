@@ -374,6 +374,32 @@ export const transactionAdminService = {
   list: (params) => api.get("/admin/transactions", { params }),
 };
 
+/**
+ * @typedef {Object} PeakCampaignDTO
+ * @property {number|string=} id
+ * @property {string} name
+ * @property {string=} description
+ * @property {"INCITY"|"OUTSTATION"|null=} serviceMode
+ * @property {number} bonusAmount
+ * @property {number} minCompletedOrders
+ * @property {boolean} isActive
+ * @property {string} validFrom
+ * @property {string} validTo
+ * @property {string[]=} daysOfWeek
+ * @property {string} startTimeHhmm
+ * @property {string} endTimeHhmm
+ */
+export const incentiveAdminService = {
+  listPeakCampaigns: () => api.get("/admin/incentives/peak-campaigns"),
+  createPeakCampaign: (payload) =>
+    api.post("/admin/incentives/peak-campaigns", payload),
+  updatePeakCampaign: (id, payload) =>
+    api.put(
+      `/admin/incentives/peak-campaigns/${encodeURIComponent(String(id))}`,
+      payload
+    ),
+};
+
 export const analyticsService = {
   getDashboardSummary: async (range) => {
     const res = await api.get("/admin/dashboard/summary", {
