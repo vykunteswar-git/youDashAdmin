@@ -18,12 +18,6 @@ const RANGE_OPTIONS = [
   { label: "This Month", value: "THIS_MONTH" },
 ];
 
-const CHART_STYLES = [
-  { label: "Classic", value: "CLASSIC" },
-  { label: "Capsule", value: "CAPSULE" },
-  { label: "Glow", value: "GLOW" },
-];
-
 function formatCompactINR(value) {
   const amount = Number(value);
   if (!Number.isFinite(amount)) return "₹0";
@@ -38,7 +32,7 @@ function formatCompactINR(value) {
 
 const Reports = () => {
   const [timeRange, setTimeRange] = useState("THIS_WEEK");
-  const [chartStyle, setChartStyle] = useState("CAPSULE");
+  const chartStyle = "GLOW";
   const { report, loading, error, retry } = useRevenueReport(timeRange);
 
   const displayTrend = useMemo(() => {
@@ -174,22 +168,6 @@ const Reports = () => {
                 <h3 className="fw-bold m-0 text-dark">{loading ? "—" : formatINR(report.totalRevenue)}</h3>
                 <span className="small text-muted">Total Revenue</span>
               </div>
-            </div>
-
-            <div className="d-flex flex-wrap gap-2 mb-3">
-              {CHART_STYLES.map((style) => (
-                <button
-                  key={style.value}
-                  type="button"
-                  className={`btn btn-sm fw-bold rounded-pill px-3 ${
-                    chartStyle === style.value ? "text-white border-0" : "btn-light text-muted"
-                  }`}
-                  style={{ backgroundColor: chartStyle === style.value ? "#E51818" : undefined }}
-                  onClick={() => setChartStyle(style.value)}
-                >
-                  {style.label}
-                </button>
-              ))}
             </div>
 
             {loading ? (

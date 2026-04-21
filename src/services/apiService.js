@@ -335,6 +335,45 @@ export const couponAdminService = {
     ),
 };
 
+/** Admin banner DTO: id, title, subtitle, imageUrl, redirectUrl, sortOrder, isActive, startsAt, endsAt */
+export const bannerAdminService = {
+  list: () => api.get("/admin/banners"),
+  create: (payload) => api.post("/admin/banners", payload),
+  update: (id, payload) =>
+    api.put(`/admin/banners/${encodeURIComponent(String(id))}`, payload),
+  remove: (id) => api.delete(`/admin/banners/${encodeURIComponent(String(id))}`),
+};
+
+/**
+ * @typedef {Object} AdminTransactionSummaryDTO
+ * @property {string=} from
+ * @property {string=} to
+ * @property {number=} totalVolume
+ * @property {number=} activePayoutAmount
+ * @property {number=} paymentGatewayVolume
+ * @property {number=} totalTransactions
+ */
+
+/**
+ * @typedef {Object} AdminTransactionItemDTO
+ * @property {string} txnId
+ * @property {"ORDER_PAY"|"PAYOUT"|string} sourceType
+ * @property {string|number=} sourceId
+ * @property {"USER"|"RIDER"|string=} partyType
+ * @property {string|number=} partyId
+ * @property {string=} partyName
+ * @property {string=} method
+ * @property {string=} status
+ * @property {number=} amount
+ * @property {string=} createdAt
+ * @property {string=} reference
+ */
+
+export const transactionAdminService = {
+  getSummary: (params) => api.get("/admin/transactions/summary", { params }),
+  list: (params) => api.get("/admin/transactions", { params }),
+};
+
 export const analyticsService = {
   getDashboardSummary: async (range) => {
     const res = await api.get("/admin/dashboard/summary", {
