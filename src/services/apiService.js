@@ -4,7 +4,7 @@ const API_BASE_URL =
   (typeof import.meta !== "undefined" &&
     import.meta.env?.VITE_API_BASE_URL &&
     String(import.meta.env.VITE_API_BASE_URL).trim()) ||
-  "http://192.168.31.55:8080";
+  "http://62.72.58.46:8080";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
