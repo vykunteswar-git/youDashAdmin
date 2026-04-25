@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Search,
   RefreshCw,
@@ -18,16 +18,33 @@ import {
   unwrapList,
   unwrapEntity,
 } from "../services/apiService";
+import { adminSocketService } from "../services/adminSocketService";
 
 const ORDER_STATUSES = [
   "PENDING",
   "PENDING_ASSIGNMENT",
   "ASSIGNED",
+  "CREATED",
+  "CONFIRMED",
   "PICKED_UP",
+  "AT_ORIGIN_HUB",
+  "DEPARTED_ORIGIN_HUB",
   "IN_TRANSIT",
+  "AT_DESTINATION_HUB",
+  "SORTED_AT_DESTINATION",
+  "OUT_FOR_DELIVERY",
+  "READY_FOR_PICKUP",
   "DELIVERED",
+  "FAILED_DELIVERY",
+  "RETURNED",
   "CANCELLED",
 ];
+const STATUS_UPDATE_MAP = {
+  PENDING: "CREATED",
+  PENDING_ASSIGNMENT: "CREATED",
+  ASSIGNED: "CONFIRMED",
+};
+const SERVICE_MODE_TABS = ["INCITY", "OUTSTATION"];
 
 function formatWhen(iso) {
   if (!iso) return "—";
@@ -44,12 +61,16 @@ function statusBadgeClass(status) {
   const s = String(status || "").toUpperCase();
   if (s === "DELIVERED") return "active";
   if (s === "CANCELLED") return "cancelled";
-  if (s === "PENDING" || s === "PENDING_ASSIGNMENT") return "pending";
+  if (s === "ASSIGNED" || s === "CONFIRMED") return "active";
+  if (s === "CREATED" || s === "PENDING" || s === "PENDING_ASSIGNMENT")
+    return "pending";
+  if (s === "FAILED_DELIVERY" || s === "RETURNED") return "cancelled";
   return "info";
 }
 
 const Orders = () => {
   const [search, setSearch] = useState("");
+  const [serviceModeTab, setServiceModeTab] = useState("INCITY");
   const [statusTab, setStatusTab] = useState("All");
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -61,27 +82,111 @@ const Orders = () => {
 
   const [availableRiders, setAvailableRiders] = useState([]);
   const [riderPick, setRiderPick] = useState("");
-  const [statusPick, setStatusPick] = useState("ASSIGNED");
+  const [assignRolePick, setAssignRolePick] = useState("DELIVERY");
+  const [statusPick, setStatusPick] = useState("CONFIRMED");
+  const knownOutstationPendingIdsRef = useRef(new Set());
+  const outstationAlertInitializedRef = useRef(false);
+  const [outstationAlertOrder, setOutstationAlertOrder] = useState(null);
+  const [realtimeOrderAlert, setRealtimeOrderAlert] = useState(null);
+  const [apiNotice, setApiNotice] = useState(null);
+
+  const setApiError = useCallback((message) => {
+    setApiNotice({ type: "error", text: message || "Something went wrong." });
+  }, []);
+
+  const setApiSuccess = useCallback((message) => {
+    setApiNotice({ type: "success", text: message || "Done." });
+  }, []);
+
+  const playOutstationAlert = useCallback(() => {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.5);
+      window.setTimeout(() => {
+        ctx.close().catch(() => {});
+      }, 700);
+    } catch {
+      // no-op: sound is best-effort only
+    }
+  }, []);
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
       const res = await orderService.listOrders();
-      setOrders(unwrapList(res));
-    } catch (e) {
-      setError(
-        e?.response?.data?.message || e?.message || "Failed to load orders."
+      const list = unwrapList(res);
+      setOrders(list);
+      const pendingOutstationIds = new Set(
+        list
+          .filter((o) => String(o?.serviceMode || "").toUpperCase() === "OUTSTATION")
+          .filter((o) =>
+            ["CREATED", "PENDING", "PENDING_ASSIGNMENT"].includes(
+              String(o?.status || "").toUpperCase()
+            )
+          )
+          .filter((o) => o?.riderId == null)
+          .map((o) => String(o.id ?? o.orderId))
+          .filter(Boolean)
       );
+      if (outstationAlertInitializedRef.current) {
+        let hasNew = false;
+        let newestOrder = null;
+        for (const id of pendingOutstationIds) {
+          if (!knownOutstationPendingIdsRef.current.has(id)) {
+            hasNew = true;
+            newestOrder =
+              list.find((o) => String(o?.id ?? o?.orderId) === id) || null;
+            break;
+          }
+        }
+        if (hasNew) {
+          playOutstationAlert();
+          setOutstationAlertOrder(newestOrder);
+        }
+      } else {
+        outstationAlertInitializedRef.current = true;
+      }
+      knownOutstationPendingIdsRef.current = pendingOutstationIds;
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.message || "Failed to load orders.";
+      setError(msg);
+      setApiError(msg);
       setOrders([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [playOutstationAlert, setApiError]);
 
   const loadRiders = useCallback(async () => {
     try {
       const res = await riderService.getAvailableRiders();
+      setAvailableRiders(unwrapList(res));
+    } catch {
+      setAvailableRiders([]);
+    }
+  }, []);
+
+  const loadEligibleRidersForOrder = useCallback(async (order) => {
+    const id = order?.id ?? order?.orderId;
+    if (id == null) {
+      setAvailableRiders([]);
+      return;
+    }
+    try {
+      const res = await riderService.getEligibleRidersForOrder(id);
       setAvailableRiders(unwrapList(res));
     } catch {
       setAvailableRiders([]);
@@ -93,13 +198,36 @@ const Orders = () => {
     loadRiders();
   }, [loadOrders, loadRiders]);
 
+  useEffect(() => {
+    const unsubscribe = adminSocketService.subscribe((evt) => {
+      if (!evt || !evt.orderId) return;
+      loadOrders();
+      const eventType = String(evt.eventType || evt.event || "")
+        .toLowerCase()
+        .trim();
+      if (eventType === "order_created") {
+        playOutstationAlert();
+        setRealtimeOrderAlert({
+          id: evt.orderId,
+          serviceMode: evt.serviceMode,
+          status: evt.status,
+        });
+      }
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, [loadOrders, playOutstationAlert]);
+
   const openDetail = async (order) => {
     const id = order?.id ?? order?.orderId;
     if (id == null) return;
     setSelectedId(id);
     setDetail(order);
     setRiderPick(order?.riderId != null ? String(order.riderId) : "");
-    setStatusPick(String(order?.status || "ASSIGNED").toUpperCase());
+    setStatusPick(String(order?.status || "CONFIRMED").toUpperCase());
+    setAssignRolePick("DELIVERY");
+    await loadEligibleRidersForOrder(order);
     setDetailLoading(true);
     try {
       const res = await orderService.getOrder(id);
@@ -107,10 +235,12 @@ const Orders = () => {
       if (entity && typeof entity === "object") {
         setDetail(entity);
         setRiderPick(entity.riderId != null ? String(entity.riderId) : "");
-        setStatusPick(String(entity.status || "ASSIGNED").toUpperCase());
+        setStatusPick(String(entity.status || "CONFIRMED").toUpperCase());
+        await loadEligibleRidersForOrder(entity);
       }
     } catch {
       // keep list row data
+      setApiError("Failed to load latest order details.");
     } finally {
       setDetailLoading(false);
     }
@@ -125,23 +255,28 @@ const Orders = () => {
     if (selectedId == null) return;
     setActionBusy(true);
     try {
-      await fn();
+      const resp = await fn();
       await loadOrders();
       const res = await orderService.getOrder(selectedId);
       const entity = unwrapEntity(res);
       if (entity && typeof entity === "object") setDetail(entity);
+      setApiSuccess(resp?.data?.message || "Action completed successfully.");
     } catch (e) {
-      window.alert(
-        e?.response?.data?.message || e?.message || "Action failed."
-      );
+      setApiError(e?.response?.data?.message || e?.message || "Action failed.");
     } finally {
       setActionBusy(false);
     }
   };
 
   const q = search.trim().toLowerCase();
+  const modeFilteredOrders = useMemo(() => {
+    return orders.filter(
+      (o) => String(o?.serviceMode || "").toUpperCase() === serviceModeTab
+    );
+  }, [orders, serviceModeTab]);
+
   const filteredOrders = useMemo(() => {
-    return orders.filter((o) => {
+    return modeFilteredOrders.filter((o) => {
       if (statusTab !== "All") {
         const st = String(o?.status || "").toUpperCase();
         if (st !== statusTab.toUpperCase()) return false;
@@ -161,26 +296,71 @@ const Orders = () => {
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [orders, statusTab, q]);
+  }, [modeFilteredOrders, statusTab, q]);
 
   const statusCounts = useMemo(() => {
-    const m = { All: orders.length };
+    const m = { All: modeFilteredOrders.length };
     for (const s of ORDER_STATUSES) {
-      m[s] = orders.filter(
+      m[s] = modeFilteredOrders.filter(
         (o) => String(o?.status || "").toUpperCase() === s
       ).length;
     }
     return m;
-  }, [orders]);
+  }, [modeFilteredOrders]);
 
   const fmtMoney = (n) =>
     n == null || Number.isNaN(Number(n))
       ? "—"
       : `₹${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  const fmtAddress = (s) => {
+    const v = String(s || "").trim();
+    return v || "—";
+  };
+  const isAnyBusy = loading || detailLoading || actionBusy;
 
   return (
     <>
       <div className="container-fluid fade-in position-relative">
+        {apiNotice ? (
+          <div
+            className={`alert ${
+              apiNotice.type === "error" ? "alert-danger" : "alert-success"
+            } mb-3 d-flex align-items-center justify-content-between gap-3 rounded-4 border-0 shadow-sm`}
+            role="alert"
+          >
+            <span>{apiNotice.text}</span>
+            <button
+              type="button"
+              className="btn btn-sm btn-light rounded-pill"
+              onClick={() => setApiNotice(null)}
+            >
+              Dismiss
+            </button>
+          </div>
+        ) : null}
+
+        {isAnyBusy ? (
+          <div
+            className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+            style={{
+              zIndex: 1300,
+              backgroundColor: "rgba(15, 23, 42, 0.35)",
+              backdropFilter: "blur(1px)",
+            }}
+          >
+            <div className="bg-white rounded-4 shadow px-4 py-3 d-flex align-items-center gap-3">
+              <span className="spinner-border spinner-border-sm text-danger" />
+              <span className="small fw-semibold text-muted">
+                {actionBusy
+                  ? "Processing request..."
+                  : detailLoading
+                  ? "Loading order details..."
+                  : "Loading orders..."}
+              </span>
+            </div>
+          </div>
+        ) : null}
+
         <div className="d-flex flex-column flex-lg-row justify-content-between align-items-lg-start gap-3 mb-4">
           <div>
             <h2 className="fw-bold mb-1">Orders</h2>
@@ -220,6 +400,105 @@ const Orders = () => {
             </button>
           </div>
         ) : null}
+
+        {outstationAlertOrder ? (
+          <div className="alert alert-warning border-0 shadow-sm rounded-4 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3">
+            <div>
+              <div className="fw-bold">New outstation order alert</div>
+              <div className="small text-muted">
+                Order #{outstationAlertOrder?.id ?? outstationAlertOrder?.orderId ?? "—"} is waiting for rider assignment.
+              </div>
+            </div>
+            <div className="d-flex gap-2">
+              <button
+                type="button"
+                className="btn btn-sm btn-dark"
+                onClick={() => {
+                  openDetail(outstationAlertOrder);
+                  setOutstationAlertOrder(null);
+                }}
+              >
+                Open order
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm btn-light"
+                onClick={() => setOutstationAlertOrder(null)}
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {realtimeOrderAlert ? (
+          <div className="alert alert-danger border-0 shadow-sm rounded-4 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3">
+            <div>
+              <div className="fw-bold">New order alert</div>
+              <div className="small text-muted">
+                Order #{realtimeOrderAlert.id} ({realtimeOrderAlert.serviceMode ?? "—"}) is now{" "}
+                {realtimeOrderAlert.status ?? "CREATED"}.
+              </div>
+            </div>
+            <div className="d-flex gap-2">
+              <button
+                type="button"
+                className="btn btn-sm btn-dark"
+                onClick={async () => {
+                  try {
+                    const res = await orderService.getOrder(realtimeOrderAlert.id);
+                    const entity = unwrapEntity(res);
+                    if (entity && typeof entity === "object") {
+                      await openDetail(entity);
+                    }
+                  } finally {
+                    setRealtimeOrderAlert(null);
+                  }
+                }}
+              >
+                Open order
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm btn-light"
+                onClick={() => setRealtimeOrderAlert(null)}
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="row g-3 mb-4">
+          {SERVICE_MODE_TABS.map((tab) => {
+            const active = serviceModeTab === tab;
+            const count =
+              tab === "ALL"
+                ? orders.length
+                : orders.filter(
+                    (o) => String(o?.serviceMode || "").toUpperCase() === tab
+                  ).length;
+            return (
+              <div key={tab} className="col-auto">
+                <button
+                  type="button"
+                  onClick={() => setServiceModeTab(tab)}
+                  className="btn border-0 px-3 py-2 small rounded-pill fw-semibold"
+                  style={{
+                    backgroundColor: active ? "#111827" : "#fff",
+                    color: active ? "#fff" : "#64748B",
+                    boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+                  }}
+                >
+                  {tab === "INCITY" ? "Incity" : "Outstation"}
+                  <span className="ms-1 opacity-80" style={{ fontSize: 11 }}>
+                    ({count})
+                  </span>
+                </button>
+              </div>
+            );
+          })}
+        </div>
 
         <div className="row g-3 mb-4">
           {["All", ...ORDER_STATUSES].map((tab) => (
@@ -330,20 +609,15 @@ const Orders = () => {
                           {order.userId ?? "—"}
                         </td>
                         <td className="px-3 py-3 border-0 small text-muted">
-                          <div className="d-flex align-items-center gap-1 flex-wrap">
-                            <MapPin size={12} className="text-danger" />
-                            <span className="font-monospace" style={{ fontSize: 11 }}>
-                              {order.pickupLat != null && order.pickupLng != null
-                                ? `${Number(order.pickupLat).toFixed(4)}, ${Number(order.pickupLng).toFixed(4)}`
-                                : "—"}
-                            </span>
-                            <ChevronRight size={12} />
-                            <MapPin size={12} className="text-success" />
-                            <span className="font-monospace" style={{ fontSize: 11 }}>
-                              {order.dropLat != null && order.dropLng != null
-                                ? `${Number(order.dropLat).toFixed(4)}, ${Number(order.dropLng).toFixed(4)}`
-                                : "—"}
-                            </span>
+                          <div className="d-flex flex-column gap-1">
+                            <div className="d-flex align-items-center gap-1">
+                              <MapPin size={12} className="text-danger" />
+                              <span>{fmtAddress(order.pickupAddress)}</span>
+                            </div>
+                            <div className="d-flex align-items-center gap-1">
+                              <MapPin size={12} className="text-success" />
+                              <span>{fmtAddress(order.dropAddress)}</span>
+                            </div>
                           </div>
                         </td>
                         <td className="px-3 py-3 border-0 small">
@@ -378,7 +652,8 @@ const Orders = () => {
         </div>
 
         <p className="text-muted small mt-3 mb-0">
-          Showing {filteredOrders.length} of {orders.length} orders
+          Showing {filteredOrders.length} of {modeFilteredOrders.length}{" "}
+          {serviceModeTab === "INCITY" ? "incity orders" : "outstation orders"}
         </p>
       </div>
 
@@ -435,6 +710,7 @@ const Orders = () => {
                     <div className="d-flex flex-column gap-3">
                       <div className="p-3 rounded-3 bg-light">
                         <p className="text-muted mb-1 small">Pickup</p>
+                        <p className="mb-1 small">{fmtAddress(detail.pickupAddress)}</p>
                         <p className="fw-semibold mb-0 font-monospace small">
                           {detail.pickupLat != null && detail.pickupLng != null
                             ? `${detail.pickupLat}, ${detail.pickupLng}`
@@ -455,6 +731,7 @@ const Orders = () => {
                       </div>
                       <div className="p-3 rounded-3 bg-light">
                         <p className="text-muted mb-1 small">Drop</p>
+                        <p className="mb-1 small">{fmtAddress(detail.dropAddress)}</p>
                         <p className="fw-semibold mb-0 font-monospace small">
                           {detail.dropLat != null && detail.dropLng != null
                             ? `${detail.dropLat}, ${detail.dropLng}`
@@ -550,6 +827,16 @@ const Orders = () => {
                     <div className="d-flex flex-column gap-2">
                       <select
                         className="form-select form-select-sm rounded-3"
+                        value={assignRolePick}
+                        onChange={(e) => setAssignRolePick(e.target.value)}
+                        disabled={actionBusy}
+                      >
+                        <option value="DELIVERY">Delivery rider</option>
+                        <option value="PICKUP">Pickup rider</option>
+                        <option value="BOTH">Both roles</option>
+                      </select>
+                      <select
+                        className="form-select form-select-sm rounded-3"
                         value={riderPick}
                         onChange={(e) => setRiderPick(e.target.value)}
                         disabled={actionBusy}
@@ -573,8 +860,24 @@ const Orders = () => {
                         }
                         onClick={() => {
                           const rid = parseInt(riderPick, 10);
+                          const payload =
+                            assignRolePick === "PICKUP"
+                              ? {
+                                  pickupRiderId: rid,
+                                  assignmentRole: "PICKUP",
+                                }
+                              : assignRolePick === "DELIVERY"
+                              ? {
+                                  deliveryRiderId: rid,
+                                  assignmentRole: "DELIVERY",
+                                }
+                              : {
+                                  pickupRiderId: rid,
+                                  deliveryRiderId: rid,
+                                  assignmentRole: "BOTH",
+                                };
                           runAction(() =>
-                            orderService.assignRider(selectedId, rid)
+                            orderService.assignRider(selectedId, payload)
                           );
                         }}
                       >
@@ -609,7 +912,10 @@ const Orders = () => {
                         onClick={() =>
                           runAction(() =>
                             orderService.updateStatus(selectedId, {
-                              status: statusPick,
+                              status:
+                                STATUS_UPDATE_MAP[
+                                  String(statusPick || "").toUpperCase()
+                                ] ?? statusPick,
                             })
                           )
                         }

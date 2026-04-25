@@ -32,6 +32,9 @@ export default function IncentiveCampaignFormModal({
   submitting,
   onFormChange,
   onToggleDay,
+  onAddSlab,
+  onRemoveSlab,
+  onSlabChange,
   onClose,
   onSubmit,
 }) {
@@ -61,7 +64,20 @@ export default function IncentiveCampaignFormModal({
 
         <div className="row g-3">
           <div className="col-12 col-md-6">
-            <label className="form-label small text-muted fw-bold">Name *</label>
+            <label className="form-label small text-muted fw-bold">Incentive Type *</label>
+            <select
+              className="form-select bg-light border-0 py-2"
+              value={form.incentiveType}
+              onChange={(e) => onFormChange("incentiveType", e.target.value)}
+              style={{ borderRadius: "10px" }}
+            >
+              <option value="DAILY_DELIVERIES_SLOT">Daily Delivery Slot</option>
+              <option value="ONLINE_HOURS_DAILY">Online Hours Daily</option>
+            </select>
+          </div>
+
+          <div className="col-12 col-md-6">
+            <label className="form-label small text-muted fw-bold">Name (optional)</label>
             <input
               type="text"
               className="form-control bg-light border-0 py-2"
@@ -84,6 +100,17 @@ export default function IncentiveCampaignFormModal({
             </select>
           </div>
 
+          <div className="col-12 col-md-6">
+            <label className="form-label small text-muted fw-bold">Incentive Date *</label>
+            <input
+              type="date"
+              className="form-control bg-light border-0 py-2"
+              value={form.incentiveDate}
+              onChange={(e) => onFormChange("incentiveDate", e.target.value)}
+              style={{ borderRadius: "10px" }}
+            />
+          </div>
+
           <div className="col-12">
             <label className="form-label small text-muted fw-bold">Description</label>
             <textarea
@@ -95,31 +122,105 @@ export default function IncentiveCampaignFormModal({
             />
           </div>
 
-          <div className="col-12 col-md-6">
-            <label className="form-label small text-muted fw-bold">Bonus Amount *</label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              className="form-control bg-light border-0 py-2"
-              value={form.bonusAmount}
-              onChange={(e) => onFormChange("bonusAmount", e.target.value)}
-              style={{ borderRadius: "10px" }}
-            />
-          </div>
-          <div className="col-12 col-md-6">
-            <label className="form-label small text-muted fw-bold">Min Completed Orders *</label>
-            <input
-              type="number"
-              min="1"
-              className="form-control bg-light border-0 py-2"
-              value={form.minCompletedOrders}
-              onChange={(e) => onFormChange("minCompletedOrders", e.target.value)}
-              style={{ borderRadius: "10px" }}
-            />
-          </div>
+          {form.incentiveType === "ONLINE_HOURS_DAILY" ? (
+            <>
+              <div className="col-12 col-md-6">
+                <label className="form-label small text-muted fw-bold">Target Online Minutes *</label>
+                <input
+                  type="number"
+                  min="1"
+                  className="form-control bg-light border-0 py-2"
+                  value={form.targetOnlineMinutes}
+                  onChange={(e) => onFormChange("targetOnlineMinutes", e.target.value)}
+                  style={{ borderRadius: "10px" }}
+                />
+              </div>
+              <div className="col-12 col-md-6">
+                <label className="form-label small text-muted fw-bold">Bonus Amount *</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className="form-control bg-light border-0 py-2"
+                  value={form.bonusAmount}
+                  onChange={(e) => onFormChange("bonusAmount", e.target.value)}
+                  style={{ borderRadius: "10px" }}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="col-12 col-md-6">
+                <label className="form-label small text-muted fw-bold">Start Time (HH:mm) *</label>
+                <input
+                  type="time"
+                  className="form-control bg-light border-0 py-2"
+                  value={form.startTimeHhmm}
+                  onChange={(e) => onFormChange("startTimeHhmm", e.target.value)}
+                  style={{ borderRadius: "10px" }}
+                />
+              </div>
+              <div className="col-12 col-md-6">
+                <label className="form-label small text-muted fw-bold">End Time (HH:mm) *</label>
+                <input
+                  type="time"
+                  className="form-control bg-light border-0 py-2"
+                  value={form.endTimeHhmm}
+                  onChange={(e) => onFormChange("endTimeHhmm", e.target.value)}
+                  style={{ borderRadius: "10px" }}
+                />
+              </div>
+              <div className="col-12">
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <label className="form-label small text-muted fw-bold mb-0">Delivery Slabs *</label>
+                  <button type="button" className="btn btn-sm btn-light" onClick={onAddSlab}>
+                    + Add slab
+                  </button>
+                </div>
+                <div className="d-flex flex-column gap-2">
+                  {(form.slabs || []).map((slab, index) => (
+                    <div key={index} className="row g-2 align-items-center">
+                      <div className="col-5">
+                        <input
+                          type="number"
+                          min="1"
+                          className="form-control bg-light border-0 py-2"
+                          placeholder="Deliveries"
+                          value={slab.requiredDeliveries}
+                          onChange={(e) => onSlabChange(index, "requiredDeliveries", e.target.value)}
+                          style={{ borderRadius: "10px" }}
+                        />
+                      </div>
+                      <div className="col-5">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          className="form-control bg-light border-0 py-2"
+                          placeholder="Bonus amount"
+                          value={slab.bonusAmount}
+                          onChange={(e) => onSlabChange(index, "bonusAmount", e.target.value)}
+                          style={{ borderRadius: "10px" }}
+                        />
+                      </div>
+                      <div className="col-2 text-end">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-danger"
+                          onClick={() => onRemoveSlab(index)}
+                          title="Delete slab"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
 
-          <div className="col-12 col-md-6">
+          <div className="col-12 col-md-6 d-none">
             <label className="form-label small text-muted fw-bold">Valid From *</label>
             <input
               type="datetime-local"
@@ -129,7 +230,7 @@ export default function IncentiveCampaignFormModal({
               style={{ borderRadius: "10px" }}
             />
           </div>
-          <div className="col-12 col-md-6">
+          <div className="col-12 col-md-6 d-none">
             <label className="form-label small text-muted fw-bold">Valid To *</label>
             <input
               type="datetime-local"
@@ -140,7 +241,7 @@ export default function IncentiveCampaignFormModal({
             />
           </div>
 
-          <div className="col-12 col-md-6">
+          <div className="col-12 col-md-6 d-none">
             <label className="form-label small text-muted fw-bold">Start Time (HH:mm) *</label>
             <input
               type="time"
@@ -150,7 +251,7 @@ export default function IncentiveCampaignFormModal({
               style={{ borderRadius: "10px" }}
             />
           </div>
-          <div className="col-12 col-md-6">
+          <div className="col-12 col-md-6 d-none">
             <label className="form-label small text-muted fw-bold">End Time (HH:mm) *</label>
             <input
               type="time"

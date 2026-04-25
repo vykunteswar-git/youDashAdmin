@@ -1,4 +1,4 @@
-import { CheckCircle2, Pencil, XCircle } from "lucide-react";
+import { CheckCircle2, Pencil, Trash2, XCircle } from "lucide-react";
 import {
   formatBonus,
   formatCampaignWindow,
@@ -7,7 +7,7 @@ import {
   serviceModeLabel,
 } from "./incentiveUtils";
 
-function CampaignRow({ campaign, onEdit, onToggleActive, togglingId }) {
+function CampaignRow({ campaign, onEdit, onToggleActive, onDelete, togglingId }) {
   const status = getCampaignStatus(campaign);
   const isToggling = togglingId === campaign.id;
   return (
@@ -19,6 +19,7 @@ function CampaignRow({ campaign, onEdit, onToggleActive, togglingId }) {
         </div>
       </td>
       <td className="px-3 py-3 border-0 small">{serviceModeLabel(campaign.serviceMode)}</td>
+      <td className="px-3 py-3 border-0 small">{campaign.incentiveType === "ONLINE_HOURS_DAILY" ? "Online Hours" : "Daily Deliveries"}</td>
       <td className="px-3 py-3 border-0 small fw-bold">{formatBonus(campaign.bonusAmount)}</td>
       <td className="px-3 py-3 border-0 small">{campaign.minCompletedOrders}</td>
       <td className="px-3 py-3 border-0 small text-muted">{formatCampaignWindow(campaign)}</td>
@@ -59,6 +60,15 @@ function CampaignRow({ campaign, onEdit, onToggleActive, togglingId }) {
             </>
           )}
         </button>
+        <button
+          type="button"
+          className="btn btn-light btn-sm ms-2"
+          onClick={() => onDelete(campaign)}
+          title="Delete campaign"
+        >
+          <Trash2 size={14} className="me-1 text-danger" />
+          Delete
+        </button>
       </td>
     </tr>
   );
@@ -71,6 +81,7 @@ export default function IncentiveCampaignTable({
   onRetry,
   onEdit,
   onToggleActive,
+  onDelete,
   togglingId,
   onCreate,
 }) {
@@ -82,6 +93,7 @@ export default function IncentiveCampaignTable({
             <tr>
               <th className="px-4 py-3 text-muted small border-0">NAME</th>
               <th className="px-3 py-3 text-muted small border-0">SERVICE MODE</th>
+              <th className="px-3 py-3 text-muted small border-0">TYPE</th>
               <th className="px-3 py-3 text-muted small border-0">BONUS AMOUNT</th>
               <th className="px-3 py-3 text-muted small border-0">MIN ORDERS</th>
               <th className="px-3 py-3 text-muted small border-0">ACTIVE WINDOW</th>
@@ -94,7 +106,7 @@ export default function IncentiveCampaignTable({
             {loading ? (
               Array.from({ length: 6 }).map((_, idx) => (
                 <tr key={idx}>
-                  <td colSpan={8} className="px-4 py-3 border-0">
+                  <td colSpan={9} className="px-4 py-3 border-0">
                     <div className="placeholder-glow">
                       <span className="placeholder col-12 rounded-2" style={{ height: "14px" }} />
                     </div>
@@ -103,7 +115,7 @@ export default function IncentiveCampaignTable({
               ))
             ) : error ? (
               <tr>
-                <td colSpan={8} className="text-center py-5">
+                <td colSpan={9} className="text-center py-5">
                   <p className="text-muted small mb-2">{error}</p>
                   <button type="button" className="btn btn-sm btn-outline-danger" onClick={onRetry}>
                     Retry
@@ -112,7 +124,7 @@ export default function IncentiveCampaignTable({
               </tr>
             ) : campaigns.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-center py-5">
+                <td colSpan={9} className="text-center py-5">
                   <p className="text-muted small mb-3">No incentive campaigns found.</p>
                   <button type="button" className="btn btn-sm btn-danger" onClick={onCreate}>
                     Create Campaign
@@ -126,6 +138,7 @@ export default function IncentiveCampaignTable({
                   campaign={campaign}
                   onEdit={onEdit}
                   onToggleActive={onToggleActive}
+                  onDelete={onDelete}
                   togglingId={togglingId}
                 />
               ))

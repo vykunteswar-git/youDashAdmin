@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { analyticsService, getAxiosErrorMessage } from "../services/apiService";
+import { adminSocketService } from "../services/adminSocketService";
 
 const DEFAULT_SUMMARY = {
   totalOrders: 0,
@@ -72,10 +73,10 @@ export function useDashboardData(range) {
 
   useEffect(() => {
     fetchActivity();
-    const timer = window.setInterval(() => {
+    const unsubscribe = adminSocketService.subscribe(() => {
       fetchActivity();
-    }, 45000);
-    return () => window.clearInterval(timer);
+    });
+    return () => unsubscribe();
   }, [fetchActivity]);
 
   return {

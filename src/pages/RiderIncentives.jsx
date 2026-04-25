@@ -118,6 +118,38 @@ const RiderIncentives = () => {
     }));
   };
 
+  const handleAddSlab = () => {
+    setForm((prev) => ({
+      ...prev,
+      slabs: [...(Array.isArray(prev.slabs) ? prev.slabs : []), { requiredDeliveries: "", bonusAmount: "" }],
+    }));
+  };
+
+  const handleRemoveSlab = (index) => {
+    setForm((prev) => {
+      const slabs = Array.isArray(prev.slabs) ? prev.slabs : [];
+      if (slabs.length <= 1) {
+        return {
+          ...prev,
+          slabs: [{ requiredDeliveries: "", bonusAmount: "" }],
+        };
+      }
+      return {
+        ...prev,
+        slabs: slabs.filter((_, i) => i !== index),
+      };
+    });
+  };
+
+  const handleSlabChange = (index, field, value) => {
+    setForm((prev) => {
+      const slabs = Array.isArray(prev.slabs) ? [...prev.slabs] : [];
+      if (!slabs[index]) return prev;
+      slabs[index] = { ...slabs[index], [field]: value };
+      return { ...prev, slabs };
+    });
+  };
+
   const handleSave = async () => {
     const validationError = validateCampaignForm(form);
     if (validationError) {
@@ -158,6 +190,22 @@ const RiderIncentives = () => {
       pushToast("success", !campaign.isActive ? "Campaign activated." : "Campaign deactivated.");
     } catch (e) {
       pushToast("danger", getAxiosErrorMessage(e, "Failed to update campaign status."));
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  const handleDeleteCampaign = async (campaign) => {
+    if (!campaign?.id) return;
+    const ok = window.confirm(`Delete incentive "${campaign.name || campaign.id}"?`);
+    if (!ok) return;
+    setTogglingId(campaign.id);
+    try {
+      await incentiveAdminService.deletePeakCampaign(campaign.id);
+      await loadCampaigns();
+      pushToast("success", "Campaign deleted.");
+    } catch (e) {
+      pushToast("danger", getAxiosErrorMessage(e, "Failed to delete campaign."));
     } finally {
       setTogglingId(null);
     }
@@ -269,6 +317,7 @@ const RiderIncentives = () => {
           onRetry={loadCampaigns}
           onEdit={handleEditOpen}
           onToggleActive={handleToggleActive}
+          onDelete={handleDeleteCampaign}
           togglingId={togglingId}
           onCreate={handleCreateOpen}
         />
@@ -282,6 +331,9 @@ const RiderIncentives = () => {
         submitting={submitting}
         onFormChange={handleFormChange}
         onToggleDay={handleToggleDay}
+        onAddSlab={handleAddSlab}
+        onRemoveSlab={handleRemoveSlab}
+        onSlabChange={handleSlabChange}
         onClose={resetFormState}
         onSubmit={handleSave}
       />

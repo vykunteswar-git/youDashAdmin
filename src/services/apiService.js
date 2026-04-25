@@ -4,7 +4,7 @@ const API_BASE_URL =
   (typeof import.meta !== "undefined" &&
     import.meta.env?.VITE_API_BASE_URL &&
     String(import.meta.env.VITE_API_BASE_URL).trim()) ||
-  "http://62.72.58.46:8080";
+  "http://192.168.31.55:8080";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -240,8 +240,11 @@ const orderPath = (orderId) =>
 export const orderService = {
   listOrders: () => api.get("/admin/orders"),
   getOrder: (id) => api.get(orderPath(id)),
-  assignRider: (orderId, riderId) =>
-    api.post(`${orderPath(orderId)}/assign-rider`, { riderId }),
+  assignRider: (orderId, rider) =>
+    api.post(
+      `${orderPath(orderId)}/assign-rider`,
+      typeof rider === "object" ? rider : { riderId: rider }
+    ),
   updateStatus: (orderId, payload) =>
     api.post(`${orderPath(orderId)}/update-status`, payload),
 };
@@ -253,6 +256,8 @@ export const riderService = {
       params: status ? { status } : undefined,
     }),
   getAvailableRiders: () => api.post("/admin/riders/available"),
+  getEligibleRidersForOrder: (orderId) =>
+    api.get(`/admin/riders/eligible-for-order/${encodeURIComponent(String(orderId))}`),
   approveRider: (id) =>
     api.post(`/admin/riders/${encodeURIComponent(String(id))}/approve`),
   rejectRider: (id) =>
@@ -398,6 +403,8 @@ export const incentiveAdminService = {
       `/admin/incentives/peak-campaigns/${encodeURIComponent(String(id))}`,
       payload
     ),
+  deletePeakCampaign: (id) =>
+    api.delete(`/admin/incentives/peak-campaigns/${encodeURIComponent(String(id))}`),
 };
 
 export const analyticsService = {

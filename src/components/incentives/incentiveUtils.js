@@ -54,16 +54,31 @@ export function getCampaignStatus(campaign) {
 }
 
 export function normalizeCampaign(raw) {
+  const slabs = Array.isArray(raw?.slabs)
+    ? raw.slabs
+        .map((s) => ({
+          requiredDeliveries: Number(s?.requiredDeliveries) || 0,
+          bonusAmount: Number(s?.bonusAmount) || 0,
+        }))
+        .filter((s) => s.requiredDeliveries > 0)
+        .sort((a, b) => a.requiredDeliveries - b.requiredDeliveries)
+    : [];
+
   return {
     id: raw?.id,
+    incentiveType:
+      raw?.incentiveType === "ONLINE_HOURS_DAILY" ? "ONLINE_HOURS_DAILY" : "DAILY_DELIVERIES_SLOT",
     name: raw?.name ?? "",
     description: raw?.description ?? "",
     serviceMode:
       raw?.serviceMode === "INCITY" || raw?.serviceMode === "OUTSTATION"
         ? raw.serviceMode
         : null,
+    incentiveDate: raw?.incentiveDate ?? "",
+    targetOnlineMinutes: Number(raw?.targetOnlineMinutes) || 0,
     bonusAmount: Number(raw?.bonusAmount) || 0,
     minCompletedOrders: Number(raw?.minCompletedOrders) || 1,
+    slabs,
     isActive: Boolean(raw?.isActive),
     validFrom: raw?.validFrom ?? "",
     validTo: raw?.validTo ?? "",
@@ -76,10 +91,21 @@ export function normalizeCampaign(raw) {
 }
 
 export function campaignToForm(campaign) {
+  const slabs = Array.isArray(campaign?.slabs) && campaign.slabs.length > 0
+    ? campaign.slabs.map((s) => ({
+        requiredDeliveries: String(s.requiredDeliveries ?? ""),
+        bonusAmount: String(s.bonusAmount ?? ""),
+      }))
+    : [{ requiredDeliveries: "10", bonusAmount: "100" }];
+
   return {
+    incentiveType: campaign?.incentiveType ?? "DAILY_DELIVERIES_SLOT",
     name: campaign?.name ?? "",
     description: campaign?.description ?? "",
     serviceMode: campaign?.serviceMode ?? "",
+    incentiveDate: campaign?.incentiveDate ?? "",
+    targetOnlineMinutes:
+      campaign?.targetOnlineMinutes != null ? String(campaign.targetOnlineMinutes) : "",
     bonusAmount: campaign?.bonusAmount != null ? String(campaign.bonusAmount) : "",
     minCompletedOrders:
       campaign?.minCompletedOrders != null ? String(campaign.minCompletedOrders) : "1",
@@ -88,6 +114,7 @@ export function campaignToForm(campaign) {
     daysOfWeek: Array.isArray(campaign?.daysOfWeek) ? campaign.daysOfWeek : [],
     startTimeHhmm: campaign?.startTimeHhmm ?? "",
     endTimeHhmm: campaign?.endTimeHhmm ?? "",
+    slabs,
     isActive: campaign?.isActive ?? true,
   };
 }
@@ -97,45 +124,78 @@ export function emptyCampaignForm() {
 }
 
 export function validateCampaignForm(form) {
-  if (!form.name.trim()) return "Name is required.";
-  const bonusAmount = Number(form.bonusAmount);
-  if (!Number.isFinite(bonusAmount) || bonusAmount < 0) {
-    return "Bonus amount must be a non-negative number.";
+  if (!["ONLINE_HOURS_DAILY", "DAILY_DELIVERIES_SLOT"].includes(form.incentiveType)) {
+    return "Select a valid incentive type.";
   }
-  const minCompletedOrders = Number(form.minCompletedOrders);
-  if (!Number.isInteger(minCompletedOrders) || minCompletedOrders < 1) {
-    return "Minimum completed orders must be at least 1.";
+  if (!String(form.incentiveDate || "").trim()) {
+    return "Incentive date is required.";
   }
-  const validFrom = toIsoInstant(form.validFrom);
-  const validTo = toIsoInstant(form.validTo);
-  if (!validFrom || !validTo) return "Valid from and valid to are required.";
-  if (new Date(validTo).getTime() <= new Date(validFrom).getTime()) {
-    return "Valid to must be after valid from.";
+  if (form.incentiveType === "ONLINE_HOURS_DAILY") {
+    const minutes = Number(form.targetOnlineMinutes);
+    if (!Number.isInteger(minutes) || minutes < 1) {
+      return "Target online minutes must be at least 1.";
+    }
+    const bonus = Number(form.bonusAmount);
+    if (!Number.isFinite(bonus) || bonus < 0) {
+      return "Bonus amount must be a non-negative number.";
+    }
+    return "";
   }
 
   const hhmmPattern = /^([01]\d|2[0-3]):([0-5]\d)$/;
-  if (!hhmmPattern.test(String(form.startTimeHhmm).trim())) {
-    return "Start time must be in HH:mm format.";
+  if (!hhmmPattern.test(String(form.startTimeHhmm).trim())) return "Start time must be HH:mm.";
+  if (!hhmmPattern.test(String(form.endTimeHhmm).trim())) return "End time must be HH:mm.";
+  if (!Array.isArray(form.slabs) || form.slabs.length === 0) return "Add at least one delivery slab.";
+  for (const slab of form.slabs) {
+    const req = Number(slab?.requiredDeliveries);
+    const bonus = Number(slab?.bonusAmount);
+    if (!Number.isInteger(req) || req < 1) return "Each slab deliveries value must be at least 1.";
+    if (!Number.isFinite(bonus) || bonus < 0) return "Each slab bonus amount must be non-negative.";
   }
-  if (!hhmmPattern.test(String(form.endTimeHhmm).trim())) {
-    return "End time must be in HH:mm format.";
+  const sortedReq = form.slabs.map((s) => Number(s.requiredDeliveries)).sort((a, b) => a - b);
+  for (let i = 1; i < sortedReq.length; i += 1) {
+    if (sortedReq[i] === sortedReq[i - 1]) return "Slab deliveries must be unique.";
   }
   return "";
 }
 
 export function buildCampaignPayload(form) {
+  const slabs = Array.isArray(form.slabs)
+    ? form.slabs
+        .map((s) => ({
+          requiredDeliveries: Number(s.requiredDeliveries),
+          bonusAmount: Number(s.bonusAmount),
+        }))
+        .filter((s) => Number.isInteger(s.requiredDeliveries) && s.requiredDeliveries > 0)
+        .sort((a, b) => a.requiredDeliveries - b.requiredDeliveries)
+    : [];
+
+  const topSlab = slabs[0] || null;
+  const maxBonus = slabs.length > 0 ? Math.max(...slabs.map((s) => s.bonusAmount || 0)) : 0;
+
   return {
-    name: form.name.trim(),
+    incentiveType: form.incentiveType,
+    name: String(form.name || "").trim() || null,
     description: form.description.trim(),
     serviceMode: form.serviceMode || null,
-    bonusAmount: Number(form.bonusAmount),
-    minCompletedOrders: Number(form.minCompletedOrders),
+    incentiveDate: String(form.incentiveDate || "").trim(),
+    targetOnlineMinutes:
+      form.incentiveType === "ONLINE_HOURS_DAILY" ? Number(form.targetOnlineMinutes) : null,
+    bonusAmount:
+      form.incentiveType === "ONLINE_HOURS_DAILY" ? Number(form.bonusAmount) : Number(maxBonus || 0),
+    minCompletedOrders:
+      form.incentiveType === "ONLINE_HOURS_DAILY"
+        ? 1
+        : Number(topSlab?.requiredDeliveries || form.minCompletedOrders || 1),
+    slabs: form.incentiveType === "DAILY_DELIVERIES_SLOT" ? slabs : [],
     isActive: Boolean(form.isActive),
-    validFrom: toIsoInstant(form.validFrom),
-    validTo: toIsoInstant(form.validTo),
+    validFrom: toIsoInstant(form.validFrom) || new Date(`${form.incentiveDate}T00:00:00`).toISOString(),
+    validTo: toIsoInstant(form.validTo) || new Date(`${form.incentiveDate}T23:59:59`).toISOString(),
     daysOfWeek: Array.isArray(form.daysOfWeek) ? form.daysOfWeek : [],
-    startTimeHhmm: String(form.startTimeHhmm || "").trim(),
-    endTimeHhmm: String(form.endTimeHhmm || "").trim(),
+    startTimeHhmm:
+      form.incentiveType === "DAILY_DELIVERIES_SLOT" ? String(form.startTimeHhmm || "").trim() : "00:00",
+    endTimeHhmm:
+      form.incentiveType === "DAILY_DELIVERIES_SLOT" ? String(form.endTimeHhmm || "").trim() : "23:59",
   };
 }
 
@@ -143,9 +203,14 @@ export function buildCampaignPayloadFromCampaign(campaign, overrides = {}) {
   return {
     name: String(campaign?.name || "").trim(),
     description: String(campaign?.description || "").trim(),
+    incentiveType:
+      campaign?.incentiveType === "ONLINE_HOURS_DAILY" ? "ONLINE_HOURS_DAILY" : "DAILY_DELIVERIES_SLOT",
     serviceMode: campaign?.serviceMode || null,
+    incentiveDate: campaign?.incentiveDate || null,
+    targetOnlineMinutes: Number(campaign?.targetOnlineMinutes) || null,
     bonusAmount: Number(campaign?.bonusAmount) || 0,
     minCompletedOrders: Number(campaign?.minCompletedOrders) || 1,
+    slabs: Array.isArray(campaign?.slabs) ? campaign.slabs : [],
     isActive: Boolean(campaign?.isActive),
     validFrom: campaign?.validFrom || null,
     validTo: campaign?.validTo || null,
