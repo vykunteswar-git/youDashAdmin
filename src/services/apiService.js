@@ -247,6 +247,8 @@ export const orderService = {
     ),
   updateStatus: (orderId, payload) =>
     api.post(`${orderPath(orderId)}/update-status`, payload),
+  notifyUser: (orderId, payload) =>
+    api.post(`${orderPath(orderId)}/notify-user`, payload),
 };
 
 export const riderService = {
@@ -255,7 +257,7 @@ export const riderService = {
     api.get("/admin/riders", {
       params: status ? { status } : undefined,
     }),
-  getAvailableRiders: () => api.post("/admin/riders/available"),
+  getAvailableRiders: () => api.get("/admin/riders/available"),
   getEligibleRidersForOrder: (orderId) =>
     api.get(`/admin/riders/eligible-for-order/${encodeURIComponent(String(orderId))}`),
   approveRider: (id) =>

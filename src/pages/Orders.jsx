@@ -15,6 +15,7 @@ import {
 import {
   orderService,
   riderService,
+  notificationAdminService,
   unwrapList,
   unwrapEntity,
 } from "../services/apiService";
@@ -182,16 +183,21 @@ const Orders = () => {
   const loadEligibleRidersForOrder = useCallback(async (order) => {
     const id = order?.id ?? order?.orderId;
     if (id == null) {
-      setAvailableRiders([]);
+      await loadRiders();
       return;
     }
     try {
       const res = await riderService.getEligibleRidersForOrder(id);
-      setAvailableRiders(unwrapList(res));
+      const list = unwrapList(res);
+      if (list.length > 0) {
+        setAvailableRiders(list);
+      } else {
+        await loadRiders();
+      }
     } catch {
-      setAvailableRiders([]);
+      await loadRiders();
     }
-  }, []);
+  }, [loadRiders]);
 
   useEffect(() => {
     loadOrders();
@@ -361,26 +367,21 @@ const Orders = () => {
           </div>
         ) : null}
 
-        <div className="d-flex flex-column flex-lg-row justify-content-between align-items-lg-start gap-3 mb-4">
+        <div className="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3 mb-4">
           <div>
             <h2 className="fw-bold mb-1">Orders</h2>
             <p className="text-muted small mb-0">
-              {loading
-                ? "Loading orders…"
-                : "All orders from the admin API — assign riders and update status."}
+              {loading ? "Loading orders…" : `${filteredOrders.length} orders`}
             </p>
           </div>
           <button
             type="button"
-            className="btn d-flex align-items-center gap-2 px-4 py-2 small fw-bold text-white border-0 shadow-sm"
-            style={{ backgroundColor: "#E51818", borderRadius: 12 }}
-            onClick={() => {
-              loadOrders();
-              loadRiders();
-            }}
+            className="btn d-flex align-items-center gap-2 px-3 py-2 small fw-semibold text-white border-0"
+            style={{ backgroundColor: "#E51818", borderRadius: 10 }}
+            onClick={() => { loadOrders(); loadRiders(); }}
             disabled={loading}
           >
-            <RefreshCw size={18} className={loading ? "spin" : ""} />
+            <RefreshCw size={15} className={loading ? "spin" : ""} />
             Refresh
           </button>
         </div>
@@ -469,74 +470,86 @@ const Orders = () => {
           </div>
         ) : null}
 
-        <div className="row g-3 mb-4">
-          {SERVICE_MODE_TABS.map((tab) => {
-            const active = serviceModeTab === tab;
-            const count =
-              tab === "ALL"
-                ? orders.length
-                : orders.filter(
-                    (o) => String(o?.serviceMode || "").toUpperCase() === tab
-                  ).length;
-            return (
-              <div key={tab} className="col-auto">
-                <button
-                  type="button"
-                  onClick={() => setServiceModeTab(tab)}
-                  className="btn border-0 px-3 py-2 small rounded-pill fw-semibold"
-                  style={{
-                    backgroundColor: active ? "#111827" : "#fff",
-                    color: active ? "#fff" : "#64748B",
-                    boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-                  }}
-                >
-                  {tab === "INCITY" ? "Incity" : "Outstation"}
-                  <span className="ms-1 opacity-80" style={{ fontSize: 11 }}>
-                    ({count})
-                  </span>
-                </button>
-              </div>
-            );
-          })}
-        </div>
+        <div
+          className="dashboard-card border-0 shadow-sm mb-4 py-3"
+          style={{ borderRadius: 14 }}
+        >
+          <div className="d-flex flex-wrap align-items-center gap-2">
+            {/* Mode toggle */}
+            <div
+              className="d-flex rounded-3 overflow-hidden border"
+              style={{ borderColor: "#E5E7EB" }}
+            >
+              {SERVICE_MODE_TABS.map((tab) => {
+                const active = serviceModeTab === tab;
+                const count = orders.filter(
+                  (o) => String(o?.serviceMode || "").toUpperCase() === tab
+                ).length;
+                return (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setServiceModeTab(tab)}
+                    className="btn border-0 px-3 py-2 small fw-semibold"
+                    style={{
+                      backgroundColor: active ? "#111827" : "transparent",
+                      color: active ? "#fff" : "#64748B",
+                      borderRadius: 0,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {tab === "INCITY" ? "Incity" : "Outstation"}
+                    <span
+                      className="ms-1"
+                      style={{ fontSize: 11, opacity: 0.75 }}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
 
-        <div className="row g-3 mb-4">
-          {["All", ...ORDER_STATUSES].map((tab) => (
-            <div key={tab} className="col-auto">
+            {/* Status dropdown */}
+            <select
+              className="form-select form-select-sm border fw-semibold text-secondary"
+              style={{ width: "auto", minWidth: 170, borderRadius: 8, borderColor: "#E5E7EB", fontSize: 13 }}
+              value={statusTab}
+              onChange={(e) => setStatusTab(e.target.value)}
+            >
+              <option value="All">All statuses ({statusCounts.All ?? 0})</option>
+              {ORDER_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s.replace(/_/g, " ")} ({statusCounts[s] ?? 0})
+                </option>
+              ))}
+            </select>
+
+            {/* Search */}
+            <div className="search-container flex-grow-1 mb-0" style={{ minWidth: 180 }}>
+              <Search size={15} className="text-muted" />
+              <input
+                type="text"
+                placeholder="Search orders…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="form-control bg-light border-0 ps-5 py-2 small"
+                style={{ borderRadius: 8 }}
+              />
+            </div>
+
+            {/* Clear filters */}
+            {(statusTab !== "All" || search.trim()) && (
               <button
                 type="button"
-                onClick={() => setStatusTab(tab)}
-                className="btn border-0 px-3 py-2 small rounded-pill fw-semibold"
-                style={{
-                  backgroundColor:
-                    statusTab === tab ? "#E51818" : "#fff",
-                  color: statusTab === tab ? "#fff" : "#64748B",
-                  boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-                }}
+                className="btn btn-sm d-flex align-items-center gap-1 text-muted"
+                style={{ borderRadius: 8, fontSize: 12 }}
+                onClick={() => { setStatusTab("All"); setSearch(""); }}
               >
-                {tab === "All" ? "All" : tab.replace(/_/g, " ")}
-                <span
-                  className="ms-1 opacity-80"
-                  style={{ fontSize: 11 }}
-                >
-                  ({statusCounts[tab] ?? 0})
-                </span>
+                <X size={13} />
+                Clear
               </button>
-            </div>
-          ))}
-        </div>
-
-        <div className="dashboard-card mb-3 border-0 py-3">
-          <div className="search-container flex-grow-1 mb-0">
-            <Search size={18} className="text-muted" />
-            <input
-              type="text"
-              placeholder="Search by id, user, status, rider, vehicle…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="form-control bg-light border-0 ps-5 py-2"
-              style={{ borderRadius: 12 }}
-            />
+            )}
           </div>
         </div>
 
@@ -876,9 +889,26 @@ const Orders = () => {
                                   deliveryRiderId: rid,
                                   assignmentRole: "BOTH",
                                 };
-                          runAction(() =>
-                            orderService.assignRider(selectedId, payload)
-                          );
+                          runAction(async () => {
+                            const res = await orderService.assignRider(selectedId, payload);
+                            const userId = detail?.userId;
+                            if (userId != null) {
+                              try {
+                                await notificationAdminService.sendBroadcast({
+                                  targetUserIds: [userId],
+                                  title: "Rider Assigned",
+                                  body: "Your rider is on the way! Track your delivery now.",
+                                  data: {
+                                    type: "RIDER_ASSIGNED",
+                                    orderId: String(selectedId),
+                                  },
+                                });
+                              } catch {
+                                // notification is best-effort; assignment still succeeded
+                              }
+                            }
+                            return res;
+                          });
                         }}
                       >
                         Assign rider
