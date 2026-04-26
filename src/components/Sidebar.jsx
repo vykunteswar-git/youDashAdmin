@@ -25,6 +25,7 @@ import {
   Percent,
   Wallet,
   Flame,
+  Smartphone,
 } from "lucide-react";
 
 const Sidebar = ({ collapsed, setCollapsed }) => {
@@ -75,6 +76,7 @@ const Sidebar = ({ collapsed, setCollapsed }) => {
       title: "Settings",
       items: [
         { path: "/content", label: "CMS", icon: Image },
+        { path: "/app-version", label: "App version", icon: Smartphone },
         { path: "/settings", label: "Settings", icon: Settings },
       ]
     }

@@ -27,6 +27,7 @@ import Notifications from "../pages/Notifications";
 import Support from "../pages/Support";
 import CMS from "../pages/CMS";
 import Settings from "../pages/Settings";
+import AppVersion from "../pages/AppVersion";
 import Login from "../pages/Login";
 
 function AppShell({ collapsed, setCollapsed }) {
@@ -99,6 +100,7 @@ const AppRoutes = () => {
         <Route path="support" element={<Support />} />
         <Route path="content" element={<CMS />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="app-version" element={<AppVersion />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
     </Routes>

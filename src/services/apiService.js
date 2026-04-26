@@ -189,6 +189,11 @@ export const appConfigService = {
   updateConfig: (payload) => api.put("/admin/config", payload),
 };
 
+export const appVersionService = {
+  getConfig: () => api.get("/admin/app-version"),
+  updateConfig: (payload) => api.put("/admin/app-version", payload),
+};
+
 export const zoneService = {
   list: () => api.get("/admin/zones"),
   create: (payload) => api.post("/admin/zones", payload),
