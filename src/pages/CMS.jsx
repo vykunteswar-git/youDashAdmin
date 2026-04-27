@@ -198,6 +198,8 @@ const CMS = () => {
   const [bannerModalOpen, setBannerModalOpen] = useState(false);
   const [editingBannerId, setEditingBannerId] = useState(null);
   const [bannerForm, setBannerForm] = useState(EMPTY_BANNER_FORM);
+  const [bannerImageFile, setBannerImageFile] = useState(null);
+  const [bannerPreviewUrl, setBannerPreviewUrl] = useState("");
   const [bannerFormError, setBannerFormError] = useState("");
 
   const [coupons, setCoupons] = useState([]);
@@ -273,20 +275,33 @@ const CMS = () => {
   );
 
   const closeBannerModal = () => {
+    if (bannerPreviewUrl && bannerPreviewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(bannerPreviewUrl);
+    }
     setBannerModalOpen(false);
     setEditingBannerId(null);
     setBannerForm(EMPTY_BANNER_FORM);
+    setBannerImageFile(null);
+    setBannerPreviewUrl("");
     setBannerFormError("");
   };
 
   const openCreateBanner = () => {
+    if (bannerPreviewUrl && bannerPreviewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(bannerPreviewUrl);
+    }
     setEditingBannerId(null);
     setBannerForm(EMPTY_BANNER_FORM);
+    setBannerImageFile(null);
+    setBannerPreviewUrl("");
     setBannerFormError("");
     setBannerModalOpen(true);
   };
 
   const openEditBanner = (banner) => {
+    if (bannerPreviewUrl && bannerPreviewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(bannerPreviewUrl);
+    }
     setEditingBannerId(banner.id);
     setBannerForm({
       title: banner.title || "",
@@ -298,8 +313,24 @@ const CMS = () => {
       startsAt: toDatetimeLocalValue(banner.startsAt),
       endsAt: toDatetimeLocalValue(banner.endsAt),
     });
+    setBannerImageFile(null);
+    setBannerPreviewUrl(banner.imageUrl || "");
     setBannerFormError("");
     setBannerModalOpen(true);
+  };
+
+  const onBannerFileChange = (event) => {
+    const file = event.target.files?.[0] || null;
+    if (bannerPreviewUrl && bannerPreviewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(bannerPreviewUrl);
+    }
+    if (file) {
+      setBannerImageFile(file);
+      setBannerPreviewUrl(URL.createObjectURL(file));
+      return;
+    }
+    setBannerImageFile(null);
+    setBannerPreviewUrl(editingBannerId ? bannerForm.imageUrl.trim() : "");
   };
 
   const saveBanner = async () => {
@@ -307,8 +338,8 @@ const CMS = () => {
 
     const startsAt = toIsoInstant(bannerForm.startsAt);
     const endsAt = toIsoInstant(bannerForm.endsAt);
-    if (!editingBannerId && !bannerForm.imageUrl.trim()) {
-      setBannerFormError("Image URL is required when creating a banner.");
+    if (!editingBannerId && !bannerImageFile && !bannerForm.imageUrl.trim()) {
+      setBannerFormError("Please upload a banner image.");
       return;
     }
     if (startsAt && endsAt && new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
@@ -319,13 +350,16 @@ const CMS = () => {
     const payload = {
       title: bannerForm.title.trim(),
       subtitle: bannerForm.subtitle.trim(),
-      imageUrl: bannerForm.imageUrl.trim(),
+      imageUrl: bannerForm.imageUrl.trim() || null,
       redirectUrl: bannerForm.redirectUrl.trim() || null,
       sortOrder: Number(bannerForm.sortOrder) || 0,
       isActive: Boolean(bannerForm.isActive),
       startsAt,
       endsAt,
     };
+    if (bannerImageFile) {
+      payload.imageFile = bannerImageFile;
+    }
 
     setBannerSaving(true);
     try {
@@ -770,98 +804,126 @@ const CMS = () => {
       {bannerModalOpen &&
         createPortal(
           <div
-            className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center p-3"
+            className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-start justify-content-center p-3 p-md-4"
             style={{ backgroundColor: "rgba(15, 23, 42, 0.55)", zIndex: 1200 }}
           >
-            <div className="bg-white rounded-4 p-4 shadow-lg w-100" style={{ maxWidth: 620 }}>
-              <h5 className="fw-bold mb-3">{editingBannerId ? "Edit Banner" : "Create Banner"}</h5>
-              {bannerFormError ? (
-                <div className="alert alert-danger small py-2">{bannerFormError}</div>
-              ) : null}
+            <div
+              className="bg-white rounded-4 shadow-lg w-100 d-flex flex-column"
+              style={{ maxWidth: 620, maxHeight: "92vh" }}
+            >
+              <div className="p-4 pb-2">
+                <h5 className="fw-bold mb-3">{editingBannerId ? "Edit Banner" : "Create Banner"}</h5>
+                {bannerFormError ? (
+                  <div className="alert alert-danger small py-2">{bannerFormError}</div>
+                ) : null}
+              </div>
 
-              <div className="row g-3">
-                <div className="col-12 col-md-6">
-                  <label className="form-label small text-muted fw-bold">Title</label>
-                  <input
-                    className="form-control bg-light border-0"
-                    value={bannerForm.title}
-                    onChange={(e) => setBannerForm((prev) => ({ ...prev, title: e.target.value }))}
-                  />
-                </div>
-                <div className="col-12 col-md-6">
-                  <label className="form-label small text-muted fw-bold">Sort order</label>
-                  <input
-                    type="number"
-                    className="form-control bg-light border-0"
-                    value={bannerForm.sortOrder}
-                    onChange={(e) =>
-                      setBannerForm((prev) => ({ ...prev, sortOrder: e.target.value }))
-                    }
-                  />
-                </div>
-                <div className="col-12">
-                  <label className="form-label small text-muted fw-bold">Subtitle</label>
-                  <input
-                    className="form-control bg-light border-0"
-                    value={bannerForm.subtitle}
-                    onChange={(e) => setBannerForm((prev) => ({ ...prev, subtitle: e.target.value }))}
-                  />
-                </div>
-                <div className="col-12">
-                  <label className="form-label small text-muted fw-bold">Image URL *</label>
-                  <input
-                    className="form-control bg-light border-0"
-                    value={bannerForm.imageUrl}
-                    onChange={(e) => setBannerForm((prev) => ({ ...prev, imageUrl: e.target.value }))}
-                  />
-                </div>
-                <div className="col-12">
-                  <label className="form-label small text-muted fw-bold">Redirect URL</label>
-                  <input
-                    className="form-control bg-light border-0"
-                    value={bannerForm.redirectUrl}
-                    onChange={(e) =>
-                      setBannerForm((prev) => ({ ...prev, redirectUrl: e.target.value }))
-                    }
-                  />
-                </div>
-                <div className="col-12 col-md-6">
-                  <label className="form-label small text-muted fw-bold">Starts at</label>
-                  <input
-                    type="datetime-local"
-                    className="form-control bg-light border-0"
-                    value={bannerForm.startsAt}
-                    onChange={(e) => setBannerForm((prev) => ({ ...prev, startsAt: e.target.value }))}
-                  />
-                </div>
-                <div className="col-12 col-md-6">
-                  <label className="form-label small text-muted fw-bold">Ends at</label>
-                  <input
-                    type="datetime-local"
-                    className="form-control bg-light border-0"
-                    value={bannerForm.endsAt}
-                    onChange={(e) => setBannerForm((prev) => ({ ...prev, endsAt: e.target.value }))}
-                  />
-                </div>
-                <div className="col-12">
-                  <div className="form-check">
+              <div className="px-4 pb-2" style={{ overflowY: "auto" }}>
+                <div className="row g-3">
+                  <div className="col-12 col-md-6">
+                    <label className="form-label small text-muted fw-bold">Title</label>
                     <input
-                      id="banner-active"
-                      type="checkbox"
-                      className="form-check-input"
-                      checked={bannerForm.isActive}
+                      className="form-control bg-light border-0"
+                      value={bannerForm.title}
+                      onChange={(e) => setBannerForm((prev) => ({ ...prev, title: e.target.value }))}
+                    />
+                  </div>
+                  <div className="col-12 col-md-6">
+                    <label className="form-label small text-muted fw-bold">Sort order</label>
+                    <input
+                      type="number"
+                      className="form-control bg-light border-0"
+                      value={bannerForm.sortOrder}
                       onChange={(e) =>
-                        setBannerForm((prev) => ({ ...prev, isActive: e.target.checked }))
+                        setBannerForm((prev) => ({ ...prev, sortOrder: e.target.value }))
                       }
                     />
-                    <label htmlFor="banner-active" className="form-check-label small fw-bold">
-                      Active
+                  </div>
+                  <div className="col-12">
+                    <label className="form-label small text-muted fw-bold">Subtitle</label>
+                    <input
+                      className="form-control bg-light border-0"
+                      value={bannerForm.subtitle}
+                      onChange={(e) => setBannerForm((prev) => ({ ...prev, subtitle: e.target.value }))}
+                    />
+                  </div>
+                  <div className="col-12">
+                    <label className="form-label small text-muted fw-bold">
+                      Banner image {!editingBannerId ? "*" : ""}
                     </label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="form-control bg-light border-0"
+                      onChange={onBannerFileChange}
+                    />
+                    <div className="small text-muted mt-1">
+                      {bannerImageFile ? `Selected: ${bannerImageFile.name}` : "No file selected"}
+                    </div>
+                    {editingBannerId && !bannerImageFile ? (
+                      <div className="small text-muted mt-1">
+                        No new file selected - existing image will be kept.
+                      </div>
+                    ) : null}
+                    {bannerPreviewUrl ? (
+                      <div className="mt-2">
+                        <img
+                          src={bannerPreviewUrl}
+                          alt="Banner preview"
+                          className="rounded-3 border"
+                          style={{ width: "100%", maxHeight: 180, objectFit: "cover" }}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="col-12">
+                    <label className="form-label small text-muted fw-bold">Redirect URL</label>
+                    <input
+                      className="form-control bg-light border-0"
+                      value={bannerForm.redirectUrl}
+                      onChange={(e) =>
+                        setBannerForm((prev) => ({ ...prev, redirectUrl: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div className="col-12 col-md-6">
+                    <label className="form-label small text-muted fw-bold">Starts at</label>
+                    <input
+                      type="datetime-local"
+                      className="form-control bg-light border-0"
+                      value={bannerForm.startsAt}
+                      onChange={(e) => setBannerForm((prev) => ({ ...prev, startsAt: e.target.value }))}
+                    />
+                  </div>
+                  <div className="col-12 col-md-6">
+                    <label className="form-label small text-muted fw-bold">Ends at</label>
+                    <input
+                      type="datetime-local"
+                      className="form-control bg-light border-0"
+                      value={bannerForm.endsAt}
+                      onChange={(e) => setBannerForm((prev) => ({ ...prev, endsAt: e.target.value }))}
+                    />
+                  </div>
+                  <div className="col-12">
+                    <div className="form-check">
+                      <input
+                        id="banner-active"
+                        type="checkbox"
+                        className="form-check-input"
+                        checked={bannerForm.isActive}
+                        onChange={(e) =>
+                          setBannerForm((prev) => ({ ...prev, isActive: e.target.checked }))
+                        }
+                      />
+                      <label htmlFor="banner-active" className="form-check-label small fw-bold">
+                        Active
+                      </label>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="d-flex gap-2 mt-4">
+              <div className="d-flex gap-2 p-4 pt-3 border-top mt-auto">
                 <button
                   type="button"
                   className="btn btn-light flex-grow-1"

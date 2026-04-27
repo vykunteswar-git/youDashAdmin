@@ -5,7 +5,7 @@ import {
   ChevronRight, ArrowUpRight, ArrowDownLeft, Calendar, User,
   CheckCircle2, XCircle, AlertCircle, Wallet, Star
 } from "lucide-react";
-import { userService, unwrapList } from "../services/apiService";
+import { getAxiosErrorMessage, userService, unwrapList } from "../services/apiService";
 
 /** Maps UserResponseDTO into the shape used by this page (orders/wallet still placeholders until APIs exist). */
 function normalizeApiUser(u) {
@@ -83,6 +83,10 @@ const Users = () => {
   const [users, setUsers] = useState([]);
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState("");
+  const [actionNotice, setActionNotice] = useState(null);
+  const [hardDeleteModalUser, setHardDeleteModalUser] = useState(null);
+  const [hardDeleteConfirmText, setHardDeleteConfirmText] = useState("");
+  const [hardDeleteLoading, setHardDeleteLoading] = useState(false);
 
   const [selectedUser, setSelectedUser] = useState(null);
   const [detailTab, setDetailTab] = useState("Orders");
@@ -95,12 +99,33 @@ const Users = () => {
   };
   const handleBan = (id) => updateUser(id, { status: "Banned" });
   const handleReset = (id) => alert(`Password reset link sent to user #${id}.`);
-  const handleDelete = (id) => {
-    if (!window.confirm("Permanently delete this user?")) return;
-    setUsers(u => u.filter(x => x.id !== id));
-    setSelectedUser(null);
+  const handleDelete = (user) => {
+    setHardDeleteModalUser(user);
+    setHardDeleteConfirmText("");
   };
   const openProfile = (user) => { setSelectedUser(user); setDetailTab("Orders"); setSelectedOrder(null); };
+
+  const handleHardDeleteConfirm = async () => {
+    if (!hardDeleteModalUser) return;
+    setHardDeleteLoading(true);
+    try {
+      await userService.hardDeleteUser(hardDeleteModalUser.id);
+      setHardDeleteModalUser(null);
+      setHardDeleteConfirmText("");
+      setSelectedUser((prev) =>
+        prev?.id === hardDeleteModalUser.id ? null : prev
+      );
+      await loadUsers();
+      setActionNotice({ type: "success", text: "User permanently deleted." });
+    } catch (e) {
+      setActionNotice({
+        type: "danger",
+        text: getAxiosErrorMessage(e, "Failed to permanently delete user."),
+      });
+    } finally {
+      setHardDeleteLoading(false);
+    }
+  };
 
   const loadUsers = useCallback(async () => {
     setListLoading(true);
@@ -184,6 +209,23 @@ const Users = () => {
             </button>
           </div>
         ) : null}
+        {actionNotice ? (
+          <div
+            className={`alert mb-4 d-flex align-items-center justify-content-between gap-3 ${
+              actionNotice.type === "success" ? "alert-success" : "alert-danger"
+            }`}
+            role="alert"
+          >
+            <span>{actionNotice.text}</span>
+            <button
+              type="button"
+              className="btn btn-sm btn-light"
+              onClick={() => setActionNotice(null)}
+            >
+              Dismiss
+            </button>
+          </div>
+        ) : null}
 
         {/* Table */}
         <div className="dashboard-card p-0 overflow-hidden border-0 shadow-sm">
@@ -242,7 +284,7 @@ const Users = () => {
                           <li><button className="dropdown-item d-flex align-items-center gap-2 rounded-3 py-2 small fw-bold text-danger" onClick={() => handleBan(user.id)}><ShieldOff size={15} /> Ban Account</button></li>
                           <li><button className="dropdown-item d-flex align-items-center gap-2 rounded-3 py-2 small fw-bold text-warning" onClick={() => handleReset(user.id)}><KeyRound size={15} /> Reset Password</button></li>
                           <li><hr className="dropdown-divider my-1 opacity-25" /></li>
-                          <li><button className="dropdown-item d-flex align-items-center gap-2 rounded-3 py-2 small text-danger" onClick={() => handleDelete(user.id)}><Trash2 size={15} /> Delete</button></li>
+                          <li><button className="dropdown-item d-flex align-items-center gap-2 rounded-3 py-2 small text-danger" onClick={() => handleDelete(user)}><Trash2 size={15} /> Delete</button></li>
                         </ul>
                       </div>
                     </td>
@@ -381,7 +423,7 @@ const Users = () => {
                     </button>
                     <button className="btn fw-bold small d-flex align-items-center gap-2 py-2 px-3 border-0 rounded-3"
                       style={{ backgroundColor: "#FEE2E2", color: "#DC2626" }}
-                      onClick={() => handleDelete(selectedUser.id)}>
+                      onClick={() => handleDelete(selectedUser)}>
                       <Trash2 size={15} /> Delete Account
                     </button>
                   </div>
@@ -629,6 +671,53 @@ const Users = () => {
                 </div>
               </div>
 
+            </div>
+          </div>
+        </div>
+      )}
+
+      {hardDeleteModalUser && (
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center p-3"
+          style={{ backgroundColor: "rgba(15, 23, 42, 0.55)", zIndex: 1200 }}
+        >
+          <div className="bg-white rounded-4 p-4 shadow-lg w-100" style={{ maxWidth: 520 }}>
+            <h5 className="fw-bold mb-2 text-danger">Permanent User Deletion</h5>
+            <p className="small text-muted mb-2">
+              This action cannot be undone. The user account and related data may be permanently removed.
+            </p>
+            <p className="small mb-3">
+              Type <span className="fw-bold">DELETE</span> to confirm removing{" "}
+              <span className="fw-bold">{hardDeleteModalUser.name}</span>.
+            </p>
+            <input
+              className="form-control bg-light border-0"
+              value={hardDeleteConfirmText}
+              onChange={(e) => setHardDeleteConfirmText(e.target.value)}
+              placeholder="Type DELETE"
+            />
+            <div className="d-flex gap-2 mt-4">
+              <button
+                type="button"
+                className="btn btn-light flex-grow-1"
+                onClick={() => {
+                  if (!hardDeleteLoading) {
+                    setHardDeleteModalUser(null);
+                    setHardDeleteConfirmText("");
+                  }
+                }}
+                disabled={hardDeleteLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger flex-grow-1"
+                onClick={handleHardDeleteConfirm}
+                disabled={hardDeleteLoading || hardDeleteConfirmText.trim().toUpperCase() !== "DELETE"}
+              >
+                {hardDeleteLoading ? "Deleting..." : "Permanently Delete"}
+              </button>
             </div>
           </div>
         </div>

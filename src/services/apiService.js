@@ -175,6 +175,8 @@ export const authService = {
 
 export const userService = {
   getUsers: () => api.get("/admin/users"),
+  hardDeleteUser: (id) =>
+    api.delete(`/admin/users/${encodeURIComponent(String(id))}/hard-delete`),
 };
 
 export const vehicleService = {
@@ -348,11 +350,28 @@ export const couponAdminService = {
 };
 
 /** Admin banner DTO: id, title, subtitle, imageUrl, redirectUrl, sortOrder, isActive, startsAt, endsAt */
+function buildBannerFormData(payload = {}) {
+  if (payload instanceof FormData) return payload;
+  const fd = new FormData();
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value == null) return;
+    if (key === "imageFile") {
+      if (value instanceof File) fd.append("imageFile", value);
+      return;
+    }
+    fd.append(key, String(value));
+  });
+  return fd;
+}
+
 export const bannerAdminService = {
   list: () => api.get("/admin/banners"),
-  create: (payload) => api.post("/admin/banners", payload),
+  create: (payload) => api.post("/admin/banners", buildBannerFormData(payload)),
   update: (id, payload) =>
-    api.put(`/admin/banners/${encodeURIComponent(String(id))}`, payload),
+    api.put(
+      `/admin/banners/${encodeURIComponent(String(id))}`,
+      buildBannerFormData(payload)
+    ),
   remove: (id) => api.delete(`/admin/banners/${encodeURIComponent(String(id))}`),
 };
 

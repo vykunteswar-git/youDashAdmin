@@ -68,6 +68,9 @@ const Riders = () => {
   const [availableRiders, setAvailableRiders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [statusFilteredRiders, setStatusFilteredRiders] = useState([]);
+  const [statusLoading, setStatusLoading] = useState(false);
   const [actionId, setActionId] = useState(null);
   const [selectedRider, setSelectedRider] = useState(null);
 
@@ -96,6 +99,32 @@ const Riders = () => {
     loadRiders();
   }, [loadRiders]);
 
+  const loadStatusRiders = useCallback(async (status) => {
+    if (!status || status === "ALL") {
+      setStatusFilteredRiders([]);
+      return;
+    }
+    setStatusLoading(true);
+    setError("");
+    try {
+      const res = await riderService.listByStatus(status);
+      setStatusFilteredRiders(
+        unwrapList(res).map((r) => normalizeRider(r, `status:${String(status).toLowerCase()}`))
+      );
+    } catch (e) {
+      const msg =
+        e?.response?.data?.message || e?.message || "Failed to load riders by status.";
+      setError(msg);
+      setStatusFilteredRiders([]);
+    } finally {
+      setStatusLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadStatusRiders(statusFilter);
+  }, [statusFilter, loadStatusRiders]);
+
   const mergedList = useMemo(
     () => [...pendingRiders, ...availableRiders],
     [pendingRiders, availableRiders]
@@ -110,10 +139,11 @@ const Riders = () => {
   }, [availableRiders]);
 
   const baseList = useMemo(() => {
+    if (statusFilter !== "ALL") return statusFilteredRiders;
     if (activeTab === "Pending") return pendingRiders;
     if (activeTab === "Available") return availableRiders;
     return mergedList;
-  }, [activeTab, pendingRiders, availableRiders, mergedList]);
+  }, [activeTab, pendingRiders, availableRiders, mergedList, statusFilter, statusFilteredRiders]);
 
   const q = search.trim().toLowerCase();
   const filteredRiders = baseList.filter((rider) => {
@@ -267,10 +297,13 @@ const Riders = () => {
                 className="btn p-0 px-3 py-2 rounded-pill small fw-bold transition-all border-0"
                 style={{
                   minWidth: "88px",
-                  backgroundColor: activeTab === tab ? "#E51818" : "#F1F5F9",
-                  color: activeTab === tab ? "#fff" : "#64748B",
+                  backgroundColor:
+                    statusFilter === "ALL" && activeTab === tab ? "#E51818" : "#F1F5F9",
+                  color: statusFilter === "ALL" && activeTab === tab ? "#fff" : "#64748B",
                   boxShadow:
-                    activeTab === tab ? "0 4px 12px rgba(229,24,24,0.3)" : "none",
+                    statusFilter === "ALL" && activeTab === tab
+                      ? "0 4px 12px rgba(229,24,24,0.3)"
+                      : "none",
                 }}
               >
                 {tab}
@@ -286,6 +319,19 @@ const Riders = () => {
                 )}
               </button>
             ))}
+          </div>
+          <div style={{ minWidth: "220px" }}>
+            <select
+              className="form-select bg-light border-0 shadow-none"
+              style={{ borderRadius: "12px", height: "44px" }}
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <option value="ALL">Status filter: All (tab-based view)</option>
+              <option value="PENDING">Status filter: PENDING</option>
+              <option value="APPROVED">Status filter: APPROVED</option>
+              <option value="REJECTED">Status filter: REJECTED</option>
+            </select>
           </div>
           <div className="search-container flex-grow-1 position-relative">
             <Search size={18} className="text-muted position-absolute" style={{ left: "16px", top: "50%", transform: "translateY(-50%)" }} />
@@ -330,14 +376,14 @@ const Riders = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {loading ? (
+                  {loading || statusLoading ? (
                     <tr>
                       <td
                         colSpan={7}
                         className="text-center py-5 text-muted small"
                       >
                         <div className="spinner-border spinner-border-sm me-2 text-danger" role="status"></div>
-                        Loading riders…
+                        {statusLoading ? "Loading riders by status…" : "Loading riders…"}
                       </td>
                     </tr>
                   ) : filteredRiders.length === 0 ? (
