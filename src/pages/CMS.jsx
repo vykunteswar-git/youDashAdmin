@@ -20,6 +20,7 @@ import {
   readApiMessage,
   unwrapList,
 } from "../services/apiService";
+import { uploadImageToCloudinary } from "../services/cloudinaryUpload";
 
 const EMPTY_BANNER_FORM = {
   title: "",
@@ -357,12 +358,14 @@ const CMS = () => {
       startsAt,
       endsAt,
     };
-    if (bannerImageFile) {
-      payload.imageFile = bannerImageFile;
-    }
 
     setBannerSaving(true);
     try {
+      if (bannerImageFile) {
+        const uploadedUrl = await uploadImageToCloudinary(bannerImageFile);
+        payload.imageUrl = uploadedUrl;
+      }
+
       const res = editingBannerId
         ? await bannerAdminService.update(editingBannerId, payload)
         : await bannerAdminService.create(payload);
