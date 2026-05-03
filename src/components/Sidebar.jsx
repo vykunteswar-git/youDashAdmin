@@ -1,86 +1,11 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import {
-  LayoutDashboard,
-  Users,
-  Bike,
-  Truck,
-  Package,
-  CreditCard,
-  History,
-  Bell,
-  LifeBuoy,
-  Image,
-  Settings,
-  ChevronLeft,
-  ChevronRight,
-  LogOut,
-  BarChart3,
-  Ticket,
-  MapPin,
-  Warehouse,
-  Waypoints,
-  SlidersHorizontal,
-  Tags,
-  Percent,
-  Wallet,
-  Flame,
-  Smartphone,
-} from "lucide-react";
+import { Package, ChevronLeft, ChevronRight, LogOut } from "lucide-react";
+import { menuGroups } from "../config/adminNavConfig";
 
 const Sidebar = ({ collapsed, setCollapsed }) => {
   const navigate = useNavigate();
   const { notifyAuthChanged } = useAuth();
-
-  const menuGroups = [
-    {
-      title: "Core",
-      items: [
-        { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-        { path: "/orders", label: "Orders", icon: Package },
-      ]
-    },
-    {
-      title: "Management",
-      items: [
-        { path: "/users", label: "Users", icon: Users },
-        { path: "/riders", label: "Riders", icon: Bike },
-        { path: "/vehicles", label: "Vehicles", icon: Truck },
-        { path: "/zones", label: "Zones", icon: MapPin },
-        { path: "/hubs", label: "Hubs", icon: Warehouse },
-        { path: "/hub-routes", label: "Hub routes", icon: Waypoints },
-        { path: "/categories", label: "Package categories", icon: Tags },
-      ]
-    },
-    {
-      title: "Finance",
-      items: [
-        { path: "/delivery-fee", label: "App config", icon: SlidersHorizontal },
-        { path: "/rider-commission", label: "Rider commission", icon: Percent },
-        { path: "/rider-incentives", label: "Rider incentives", icon: Flame },
-        { path: "/wallet-admin", label: "Wallet & settlements", icon: Wallet },
-        { path: "/payments", label: "Payments", icon: CreditCard },
-        { path: "/reports", label: "Reports & Analytics", icon: BarChart3 },
-        { path: "/promotions", label: "Coupons & Offers", icon: Ticket },
-        { path: "/transactions", label: "Transactions", icon: History },
-      ]
-    },
-    {
-      title: "Communications",
-      items: [
-        { path: "/notifications", label: "Notifications", icon: Bell },
-        { path: "/support", label: "Support", icon: LifeBuoy },
-      ]
-    },
-    {
-      title: "Settings",
-      items: [
-        { path: "/content", label: "CMS", icon: Image },
-        { path: "/app-version", label: "App version", icon: Smartphone },
-        { path: "/settings", label: "Settings", icon: Settings },
-      ]
-    }
-  ];
 
   const handleLogout = () => {
     const ok = window.confirm(

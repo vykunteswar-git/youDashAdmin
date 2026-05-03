@@ -11,7 +11,8 @@ import Orders from "../pages/Orders";
 import Riders from "../pages/Riders";
 import Payments from "../pages/Payments";
 import Vehicles from "../pages/Vehicles";
-import Pricing from "../pages/Pricing";
+/* Legacy redirect only — same as App config; uncomment if you need /pricing as its own route */
+// import Pricing from "../pages/Pricing";
 import DeliveryFee from "../pages/DeliveryFee";
 import RiderCommission from "../pages/RiderCommission";
 import RiderIncentives from "../pages/RiderIncentives";
@@ -24,9 +25,10 @@ import Transactions from "../pages/Transactions";
 import Reports from "../pages/Reports";
 import Promotions from "../pages/Promotions";
 import Notifications from "../pages/Notifications";
-import Support from "../pages/Support";
+/* Not integrated (mock / no admin API): uncomment imports + routes below when backend exists */
+// import Support from "../pages/Support";
 import CMS from "../pages/CMS";
-import Settings from "../pages/Settings";
+// import Settings from "../pages/Settings";
 import AppVersion from "../pages/AppVersion";
 import Login from "../pages/Login";
 
@@ -88,7 +90,7 @@ const AppRoutes = () => {
         <Route path="hubs" element={<Hubs />} />
         <Route path="hub-routes" element={<HubRoutes />} />
         <Route path="categories" element={<Categories />} />
-        <Route path="pricing" element={<Pricing />} />
+        {/* <Route path="pricing" element={<Pricing />} /> */}
         <Route path="delivery-fee" element={<DeliveryFee />} />
         <Route path="rider-commission" element={<RiderCommission />} />
         <Route path="rider-incentives" element={<RiderIncentives />} />
@@ -97,9 +99,9 @@ const AppRoutes = () => {
         <Route path="reports" element={<Reports />} />
         <Route path="promotions" element={<Promotions />} />
         <Route path="notifications" element={<Notifications />} />
-        <Route path="support" element={<Support />} />
+        {/* <Route path="support" element={<Support />} /> */}
         <Route path="content" element={<CMS />} />
-        <Route path="settings" element={<Settings />} />
+        {/* <Route path="settings" element={<Settings />} /> */}
         <Route path="app-version" element={<AppVersion />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>

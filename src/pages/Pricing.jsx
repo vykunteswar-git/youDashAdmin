@@ -1,3 +1,5 @@
+/* Route commented out in src/routes/AppRoutes.jsx — uncomment if you keep a dedicated /pricing redirect. */
+
 import { Navigate } from "react-router-dom";
 
 /* TODO(Backend): No separate /admin/pricing on deployed OpenAPI; app rates live under GET/PUT /admin/config (Delivery fee screen). */

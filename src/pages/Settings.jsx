@@ -1,3 +1,5 @@
+/* Route commented out in src/routes/AppRoutes.jsx — re-enable when business-settings admin API is ready. */
+
 import { useState, useRef } from "react";
 import {
     Building2,

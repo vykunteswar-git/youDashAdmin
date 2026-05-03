@@ -1,3 +1,5 @@
+/* Route commented out in src/routes/AppRoutes.jsx — re-enable when support/ticket admin API is ready. */
+
 import { useState } from "react";
 import {
     LifeBuoy,
