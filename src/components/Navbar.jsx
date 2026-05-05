@@ -10,7 +10,9 @@ const Header = ({ setCollapsed, collapsed }) => {
 
   const isMac =
     typeof navigator !== "undefined" &&
-    /Mac|iPhone|iPod|iPad/i.test(navigator.platform || navigator.userAgent || "");
+    /Mac|iPhone|iPod|iPad/i.test(
+      navigator.platform || navigator.userAgent || "",
+    );
 
   useEffect(() => {
     const onKey = (e) => {
@@ -34,10 +36,20 @@ const Header = ({ setCollapsed, collapsed }) => {
 
   return (
     <>
-      <GlobalSearchPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
-      <header className="glass-header header-shadow px-4 py-2 d-flex align-items-center justify-content-between border-bottom position-relative bg-white" style={{ zIndex: 100 }}>
+      <GlobalSearchPalette
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+      />
+      <header
+        className="glass-header header-shadow px-4 py-2 d-flex align-items-center justify-content-between border-bottom position-relative bg-white"
+        style={{ zIndex: 100 }}
+      >
         <div className="d-flex align-items-center gap-2 gap-md-3 flex-grow-1 min-w-0">
-          <button className="btn btn-link text-dark p-0 d-lg-none flex-shrink-0" type="button" onClick={() => setCollapsed(!collapsed)}>
+          <button
+            className="btn btn-link text-dark p-0 d-lg-none flex-shrink-0"
+            type="button"
+            onClick={() => setCollapsed(!collapsed)}
+          >
             <Menu size={20} />
           </button>
 
@@ -53,8 +65,12 @@ const Header = ({ setCollapsed, collapsed }) => {
               style={{ borderRadius: "10px", minHeight: 40 }}
             >
               <Search size={18} className="text-muted flex-shrink-0" />
-              <span className="text-muted small text-truncate d-none d-sm-inline">Jump to page…</span>
-              <span className="text-muted small text-truncate d-sm-none">Search pages…</span>
+              <span className="text-muted small text-truncate d-none d-sm-inline">
+                Jump to page…
+              </span>
+              <span className="text-muted small text-truncate d-sm-none">
+                Search pages…
+              </span>
               <kbd
                 className="ms-auto d-none d-md-inline-flex align-items-center gap-1 small text-muted border rounded px-2 py-0 bg-white flex-shrink-0"
                 style={{ fontSize: 10 }}
@@ -72,9 +88,14 @@ const Header = ({ setCollapsed, collapsed }) => {
           <div className="d-flex align-items-center gap-2 cursor-pointer">
             <div className="text-end d-none d-sm-block">
               <p className="mb-0 fw-bold small">Admin User</p>
-              <p className="mb-0 text-muted small" style={{ fontSize: '10px' }}>Super Admin</p>
+              <p className="mb-0 text-muted small" style={{ fontSize: "10px" }}>
+                Super Admin
+              </p>
             </div>
-            <div className="bg-primary-red p-1 rounded-circle" style={{ backgroundColor: '#E51818' }}>
+            <div
+              className="bg-primary-red p-1 rounded-circle"
+              style={{ backgroundColor: "#E51818" }}
+            >
               <User size={24} className="text-white" />
             </div>
           </div>

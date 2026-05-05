@@ -34,7 +34,7 @@ import Login from "../pages/Login";
 
 function AppShell({ collapsed, setCollapsed }) {
   return (
-    <div className="d-flex min-vh-100 position-relative bg-light">
+    <div className="d-flex min-vh-100 position-relative app-shell">
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} />
       <main
         className={`main-content flex-grow-1 p-0 ${
@@ -47,7 +47,7 @@ function AppShell({ collapsed, setCollapsed }) {
         }}
       >
         <Header collapsed={collapsed} setCollapsed={setCollapsed} />
-        <div className="p-3 p-md-4 overflow-hidden">
+        <div className="app-page-surface p-3 p-md-4 overflow-hidden">
           <Outlet />
         </div>
       </main>

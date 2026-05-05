@@ -55,12 +55,19 @@ const STATUS_LABEL_OVERRIDES = {
   READY_FOR_PICKUP: "Ready For Pickup",
   FAILED_DELIVERY: "Failed Delivery",
 };
-const OUTSTATION_EXCEPTION_STATUSES = ["FAILED_DELIVERY", "RETURNED", "CANCELLED"];
+const OUTSTATION_EXCEPTION_STATUSES = [
+  "FAILED_DELIVERY",
+  "RETURNED",
+  "CANCELLED",
+];
 
 function formatStatusLabel(status) {
-  const normalized = String(status || "").toUpperCase().trim();
+  const normalized = String(status || "")
+    .toUpperCase()
+    .trim();
   if (!normalized) return "—";
-  if (STATUS_LABEL_OVERRIDES[normalized]) return STATUS_LABEL_OVERRIDES[normalized];
+  if (STATUS_LABEL_OVERRIDES[normalized])
+    return STATUS_LABEL_OVERRIDES[normalized];
   return normalized
     .split("_")
     .filter(Boolean)
@@ -69,11 +76,19 @@ function formatStatusLabel(status) {
 }
 
 function getOutstationProgressIndex(status) {
-  const normalized = String(status || "").toUpperCase().trim();
+  const normalized = String(status || "")
+    .toUpperCase()
+    .trim();
   if (normalized === "DELIVERED") return 6;
-  if (normalized === "READY_FOR_PICKUP" || normalized === "OUT_FOR_DELIVERY") return 5;
-  if (normalized === "AT_DESTINATION_HUB" || normalized === "SORTED_AT_DESTINATION") return 4;
-  if (normalized === "IN_TRANSIT" || normalized === "DEPARTED_ORIGIN_HUB") return 3;
+  if (normalized === "READY_FOR_PICKUP" || normalized === "OUT_FOR_DELIVERY")
+    return 5;
+  if (
+    normalized === "AT_DESTINATION_HUB" ||
+    normalized === "SORTED_AT_DESTINATION"
+  )
+    return 4;
+  if (normalized === "IN_TRANSIT" || normalized === "DEPARTED_ORIGIN_HUB")
+    return 3;
   if (normalized === "AT_ORIGIN_HUB") return 2;
   if (normalized === "PICKED_UP") return 1;
   if (
@@ -126,11 +141,12 @@ const Orders = () => {
   const [riderPick, setRiderPick] = useState("");
   const [assignRolePick, setAssignRolePick] = useState("DELIVERY");
   const [statusPick, setStatusPick] = useState("CONFIRMED");
-  const knownOutstationPendingIdsRef = useRef(new Set());
+  const knownOutstationOrderIdsRef = useRef(new Set());
   const outstationAlertInitializedRef = useRef(false);
   const [outstationAlertOrder, setOutstationAlertOrder] = useState(null);
   const [realtimeOrderAlert, setRealtimeOrderAlert] = useState(null);
   const [apiNotice, setApiNotice] = useState(null);
+  const outstationAlertIntervalRef = useRef(null);
 
   const setApiError = useCallback((message) => {
     setApiNotice({ type: "error", text: message || "Something went wrong." });
@@ -145,24 +161,48 @@ const Orders = () => {
       const Ctx = window.AudioContext || window.webkitAudioContext;
       if (!Ctx) return;
       const ctx = new Ctx();
-      const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(880, ctx.currentTime);
-      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
-      osc.connect(gain);
       gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.5);
+
+      // Louder, longer triple pulse so outstation arrivals are hard to miss.
+      const pulses = [
+        { at: 0, freq: 920, len: 0.34 },
+        { at: 0.4, freq: 740, len: 0.34 },
+        { at: 0.8, freq: 920, len: 0.46 },
+      ];
+      for (const pulse of pulses) {
+        const osc = ctx.createOscillator();
+        osc.type = "square";
+        osc.frequency.setValueAtTime(pulse.freq, ctx.currentTime + pulse.at);
+        osc.connect(gain);
+        osc.start(ctx.currentTime + pulse.at);
+        osc.stop(ctx.currentTime + pulse.at + pulse.len);
+      }
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.32, ctx.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 1.35);
       window.setTimeout(() => {
         ctx.close().catch(() => {});
-      }, 700);
+      }, 1800);
     } catch {
       // no-op: sound is best-effort only
     }
   }, []);
+
+  const stopOutstationAlertLoop = useCallback(() => {
+    if (outstationAlertIntervalRef.current != null) {
+      window.clearInterval(outstationAlertIntervalRef.current);
+      outstationAlertIntervalRef.current = null;
+    }
+  }, []);
+
+  const startOutstationAlertLoop = useCallback(() => {
+    if (outstationAlertIntervalRef.current != null) return;
+    playOutstationAlert();
+    outstationAlertIntervalRef.current = window.setInterval(() => {
+      playOutstationAlert();
+    }, 3500);
+  }, [playOutstationAlert]);
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
@@ -171,23 +211,19 @@ const Orders = () => {
       const res = await orderService.listOrders();
       const list = unwrapList(res);
       setOrders(list);
-      const pendingOutstationIds = new Set(
+      const outstationOrderIds = new Set(
         list
-          .filter((o) => String(o?.serviceMode || "").toUpperCase() === "OUTSTATION")
-          .filter((o) =>
-            ["CREATED", "PENDING", "PENDING_ASSIGNMENT"].includes(
-              String(o?.status || "").toUpperCase()
-            )
+          .filter(
+            (o) => String(o?.serviceMode || "").toUpperCase() === "OUTSTATION",
           )
-          .filter((o) => o?.riderId == null)
           .map((o) => String(o.id ?? o.orderId))
-          .filter(Boolean)
+          .filter(Boolean),
       );
       if (outstationAlertInitializedRef.current) {
         let hasNew = false;
         let newestOrder = null;
-        for (const id of pendingOutstationIds) {
-          if (!knownOutstationPendingIdsRef.current.has(id)) {
+        for (const id of outstationOrderIds) {
+          if (!knownOutstationOrderIdsRef.current.has(id)) {
             hasNew = true;
             newestOrder =
               list.find((o) => String(o?.id ?? o?.orderId) === id) || null;
@@ -195,15 +231,15 @@ const Orders = () => {
           }
         }
         if (hasNew) {
-          playOutstationAlert();
           setOutstationAlertOrder(newestOrder);
         }
       } else {
         outstationAlertInitializedRef.current = true;
       }
-      knownOutstationPendingIdsRef.current = pendingOutstationIds;
+      knownOutstationOrderIdsRef.current = outstationOrderIds;
     } catch (e) {
-      const msg = e?.response?.data?.message || e?.message || "Failed to load orders.";
+      const msg =
+        e?.response?.data?.message || e?.message || "Failed to load orders.";
       setError(msg);
       setApiError(msg);
       setOrders([]);
@@ -248,7 +284,20 @@ const Orders = () => {
         .toLowerCase()
         .trim();
       if (eventType === "order_created") {
-        playOutstationAlert();
+        if (
+          String(evt.serviceMode || "").toUpperCase() === "OUTSTATION" &&
+          evt.orderId != null
+        ) {
+          setOutstationAlertOrder(
+            (prev) =>
+              prev ?? {
+                id: evt.orderId,
+                orderId: evt.orderId,
+                serviceMode: evt.serviceMode,
+                status: evt.status,
+              },
+          );
+        }
         setRealtimeOrderAlert({
           id: evt.orderId,
           serviceMode: evt.serviceMode,
@@ -259,7 +308,18 @@ const Orders = () => {
     return () => {
       unsubscribe();
     };
-  }, [loadOrders, playOutstationAlert]);
+  }, [loadOrders]);
+
+  useEffect(() => {
+    if (outstationAlertOrder) {
+      startOutstationAlertLoop();
+    } else {
+      stopOutstationAlertLoop();
+    }
+    return () => {
+      stopOutstationAlertLoop();
+    };
+  }, [outstationAlertOrder, startOutstationAlertLoop, stopOutstationAlertLoop]);
 
   const openDetail = async (order) => {
     const id = order?.id ?? order?.orderId;
@@ -301,7 +361,11 @@ const Orders = () => {
       ? detail.allowedNextStatuses
       : [];
     return (curated.length > 0 ? curated : allowed)
-      .map((s) => String(s || "").toUpperCase().trim())
+      .map((s) =>
+        String(s || "")
+          .toUpperCase()
+          .trim(),
+      )
       .filter(Boolean);
   }, [detail]);
 
@@ -335,7 +399,7 @@ const Orders = () => {
   const q = search.trim().toLowerCase();
   const modeFilteredOrders = useMemo(() => {
     return orders.filter(
-      (o) => String(o?.serviceMode || "").toUpperCase() === serviceModeTab
+      (o) => String(o?.serviceMode || "").toUpperCase() === serviceModeTab,
     );
   }, [orders, serviceModeTab]);
 
@@ -366,7 +430,7 @@ const Orders = () => {
     const m = { All: modeFilteredOrders.length };
     for (const s of ORDER_STATUSES) {
       m[s] = modeFilteredOrders.filter(
-        (o) => String(o?.status || "").toUpperCase() === s
+        (o) => String(o?.status || "").toUpperCase() === s,
       ).length;
     }
     return m;
@@ -418,8 +482,8 @@ const Orders = () => {
                 {actionBusy
                   ? "Processing request..."
                   : detailLoading
-                  ? "Loading order details..."
-                  : "Loading orders..."}
+                    ? "Loading order details..."
+                    : "Loading orders..."}
               </span>
             </div>
           </div>
@@ -436,7 +500,10 @@ const Orders = () => {
             type="button"
             className="btn d-flex align-items-center gap-2 px-3 py-2 small fw-semibold text-white border-0"
             style={{ backgroundColor: "#E51818", borderRadius: 10 }}
-            onClick={() => { loadOrders(); loadRiders(); }}
+            onClick={() => {
+              loadOrders();
+              loadRiders();
+            }}
             disabled={loading}
           >
             <RefreshCw size={15} className={loading ? "spin" : ""} />
@@ -465,7 +532,11 @@ const Orders = () => {
             <div>
               <div className="fw-bold">New outstation order alert</div>
               <div className="small text-muted">
-                Order #{outstationAlertOrder?.id ?? outstationAlertOrder?.orderId ?? "—"} is waiting for rider assignment.
+                Order #
+                {outstationAlertOrder?.id ??
+                  outstationAlertOrder?.orderId ??
+                  "—"}{" "}
+                is waiting for rider assignment.
               </div>
             </div>
             <div className="d-flex gap-2">
@@ -495,7 +566,8 @@ const Orders = () => {
             <div>
               <div className="fw-bold">New order alert</div>
               <div className="small text-muted">
-                Order #{realtimeOrderAlert.id} ({realtimeOrderAlert.serviceMode ?? "—"}) is now{" "}
+                Order #{realtimeOrderAlert.id} (
+                {realtimeOrderAlert.serviceMode ?? "—"}) is now{" "}
                 {realtimeOrderAlert.status ?? "CREATED"}.
               </div>
             </div>
@@ -505,7 +577,9 @@ const Orders = () => {
                 className="btn btn-sm btn-dark"
                 onClick={async () => {
                   try {
-                    const res = await orderService.getOrder(realtimeOrderAlert.id);
+                    const res = await orderService.getOrder(
+                      realtimeOrderAlert.id,
+                    );
                     const entity = unwrapEntity(res);
                     if (entity && typeof entity === "object") {
                       await openDetail(entity);
@@ -541,7 +615,7 @@ const Orders = () => {
               {SERVICE_MODE_TABS.map((tab) => {
                 const active = serviceModeTab === tab;
                 const count = orders.filter(
-                  (o) => String(o?.serviceMode || "").toUpperCase() === tab
+                  (o) => String(o?.serviceMode || "").toUpperCase() === tab,
                 ).length;
                 return (
                   <button
@@ -571,20 +645,31 @@ const Orders = () => {
             {/* Status dropdown */}
             <select
               className="form-select form-select-sm border fw-semibold text-secondary"
-              style={{ width: "auto", minWidth: 170, borderRadius: 8, borderColor: "#E5E7EB", fontSize: 13 }}
+              style={{
+                width: "auto",
+                minWidth: 170,
+                borderRadius: 8,
+                borderColor: "#E5E7EB",
+                fontSize: 13,
+              }}
               value={statusTab}
               onChange={(e) => setStatusTab(e.target.value)}
             >
-              <option value="All">All statuses ({statusCounts.All ?? 0})</option>
+              <option value="All">
+                All statuses ({statusCounts.All ?? 0})
+              </option>
               {ORDER_STATUSES.map((s) => (
                 <option key={s} value={s}>
-                  {s.replace(/_/g, " ")} ({statusCounts[s] ?? 0})
+                  {formatStatusLabel(s)} ({statusCounts[s] ?? 0})
                 </option>
               ))}
             </select>
 
             {/* Search */}
-            <div className="search-container flex-grow-1 mb-0" style={{ minWidth: 180 }}>
+            <div
+              className="search-container flex-grow-1 mb-0"
+              style={{ minWidth: 180 }}
+            >
               <Search size={15} className="text-muted" />
               <input
                 type="text"
@@ -602,7 +687,10 @@ const Orders = () => {
                 type="button"
                 className="btn btn-sm d-flex align-items-center gap-1 text-muted"
                 style={{ borderRadius: 8, fontSize: 12 }}
-                onClick={() => { setStatusTab("All"); setSearch(""); }}
+                onClick={() => {
+                  setStatusTab("All");
+                  setSearch("");
+                }}
               >
                 <X size={13} />
                 Clear
@@ -616,24 +704,14 @@ const Orders = () => {
             <table className="table mb-0 table-hover align-middle">
               <thead className="bg-light">
                 <tr>
-                  <th className="px-4 py-3 text-muted small border-0">
-                    ORDER
-                  </th>
-                  <th className="px-3 py-3 text-muted small border-0">
-                    USER
-                  </th>
-                  <th className="px-3 py-3 text-muted small border-0">
-                    ROUTE
-                  </th>
-                  <th className="px-3 py-3 text-muted small border-0">
-                    MODE
-                  </th>
+                  <th className="px-4 py-3 text-muted small border-0">ORDER</th>
+                  <th className="px-3 py-3 text-muted small border-0">USER</th>
+                  <th className="px-3 py-3 text-muted small border-0">ROUTE</th>
+                  <th className="px-3 py-3 text-muted small border-0">MODE</th>
                   <th className="px-3 py-3 text-muted small border-0">
                     STATUS
                   </th>
-                  <th className="px-3 py-3 text-muted small border-0">
-                    RIDER
-                  </th>
+                  <th className="px-3 py-3 text-muted small border-0">RIDER</th>
                   <th className="px-3 py-3 text-muted small border-0 text-end">
                     TOTAL
                   </th>
@@ -697,7 +775,7 @@ const Orders = () => {
                         <td className="px-3 py-3 border-0">
                           <span
                             className={`status-badge status-${statusBadgeClass(
-                              order.status
+                              order.status,
                             )}`}
                             style={{ fontSize: 11 }}
                           >
@@ -746,7 +824,7 @@ const Orders = () => {
                   ) : null}
                   <span
                     className={`status-badge status-${statusBadgeClass(
-                      detail.status
+                      detail.status,
                     )}`}
                   >
                     {formatStatusLabel(detail.status)}
@@ -781,15 +859,18 @@ const Orders = () => {
                     <div className="d-flex flex-column gap-3">
                       <div className="p-3 rounded-3 bg-light">
                         <p className="text-muted mb-1 small">Pickup</p>
-                        <p className="mb-1 small">{fmtAddress(detail.pickupAddress)}</p>
-                        {(!String(detail.pickupAddress || "").trim() &&
-                          detail.pickupLat != null &&
-                          detail.pickupLng != null) ? (
+                        <p className="mb-1 small">
+                          {fmtAddress(detail.pickupAddress)}
+                        </p>
+                        {!String(detail.pickupAddress || "").trim() &&
+                        detail.pickupLat != null &&
+                        detail.pickupLng != null ? (
                           <p className="text-muted mb-1 font-monospace small">
                             {detail.pickupLat}, {detail.pickupLng}
                           </p>
                         ) : null}
-                        {detail.pickupLat != null && detail.pickupLng != null ? (
+                        {detail.pickupLat != null &&
+                        detail.pickupLng != null ? (
                           <a
                             className="small"
                             href={`https://www.google.com/maps?q=${detail.pickupLat},${detail.pickupLng}`}
@@ -802,10 +883,12 @@ const Orders = () => {
                       </div>
                       <div className="p-3 rounded-3 bg-light">
                         <p className="text-muted mb-1 small">Drop</p>
-                        <p className="mb-1 small">{fmtAddress(detail.dropAddress)}</p>
-                        {(!String(detail.dropAddress || "").trim() &&
-                          detail.dropLat != null &&
-                          detail.dropLng != null) ? (
+                        <p className="mb-1 small">
+                          {fmtAddress(detail.dropAddress)}
+                        </p>
+                        {!String(detail.dropAddress || "").trim() &&
+                        detail.dropLat != null &&
+                        detail.dropLng != null ? (
                           <p className="text-muted mb-1 font-monospace small">
                             {detail.dropLat}, {detail.dropLng}
                           </p>
@@ -838,19 +921,27 @@ const Orders = () => {
                       </div>
                       <div className="col-6 col-md-4">
                         <p className="text-muted mb-1">Vehicle ID</p>
-                        <p className="fw-bold mb-0">{detail.vehicleId ?? "—"}</p>
+                        <p className="fw-bold mb-0">
+                          {detail.vehicleId ?? "—"}
+                        </p>
                       </div>
                       <div className="col-6 col-md-4">
                         <p className="text-muted mb-1">Payment</p>
-                        <p className="fw-bold mb-0">{detail.paymentType ?? "—"}</p>
+                        <p className="fw-bold mb-0">
+                          {detail.paymentType ?? "—"}
+                        </p>
                       </div>
                       <div className="col-6 col-md-4">
                         <p className="text-muted mb-1">Delivery type</p>
-                        <p className="fw-bold mb-0">{detail.deliveryType ?? "—"}</p>
+                        <p className="fw-bold mb-0">
+                          {detail.deliveryType ?? "—"}
+                        </p>
                       </div>
                       <div className="col-6 col-md-4">
                         <p className="text-muted mb-1">Origin hub</p>
-                        <p className="fw-bold mb-0">{detail.originHubId ?? "—"}</p>
+                        <p className="fw-bold mb-0">
+                          {detail.originHubId ?? "—"}
+                        </p>
                       </div>
                       <div className="col-6 col-md-4">
                         <p className="text-muted mb-1">Destination hub</p>
@@ -891,13 +982,15 @@ const Orders = () => {
                       <User size={18} /> Assign rider
                     </h6>
                     <p className="text-muted small mb-3">
-                      POST{" "}
-                      <code className="small">/assign-rider</code> with a rider
-                      id from the available pool.
+                      POST <code className="small">/assign-rider</code> with a
+                      rider id from the available pool.
                     </p>
                     <div className="d-flex flex-column gap-2">
                       <div className="small text-muted">
-                        Currently assigned rider: {detail?.riderId != null ? `#${detail.riderId}` : "Not assigned"}
+                        Currently assigned rider:{" "}
+                        {detail?.riderId != null
+                          ? `#${detail.riderId}`
+                          : "Not assigned"}
                       </div>
                       <select
                         className="form-select form-select-sm rounded-3"
@@ -918,8 +1011,8 @@ const Orders = () => {
                         <option value="">Select rider…</option>
                         {availableRiders.map((r) => (
                           <option key={r.id} value={String(r.id)}>
-                            #{r.id} — {r.name ?? "Rider"} ({r.vehicleType ?? "—"}
-                            )
+                            #{r.id} — {r.name ?? "Rider"} (
+                            {r.vehicleType ?? "—"})
                           </option>
                         ))}
                       </select>
@@ -955,17 +1048,20 @@ const Orders = () => {
                                   assignmentRole: "PICKUP",
                                 }
                               : assignRolePick === "DELIVERY"
-                              ? {
-                                  deliveryRiderId: rid,
-                                  assignmentRole: "DELIVERY",
-                                }
-                              : {
-                                  pickupRiderId: rid,
-                                  deliveryRiderId: rid,
-                                  assignmentRole: "BOTH",
-                                };
+                                ? {
+                                    deliveryRiderId: rid,
+                                    assignmentRole: "DELIVERY",
+                                  }
+                                : {
+                                    pickupRiderId: rid,
+                                    deliveryRiderId: rid,
+                                    assignmentRole: "BOTH",
+                                  };
                           runAction(async () => {
-                            const res = await orderService.assignRider(selectedId, payload);
+                            const res = await orderService.assignRider(
+                              selectedId,
+                              payload,
+                            );
                             const userId = detail?.userId;
                             if (userId != null) {
                               try {
@@ -993,7 +1089,9 @@ const Orders = () => {
 
                   <div className="dashboard-card border-0 shadow-sm">
                     <h6 className="fw-bold mb-2">Update status</h6>
-                    <p className="text-muted small mb-3">Only valid next statuses are shown.</p>
+                    <p className="text-muted small mb-3">
+                      Only valid next statuses are shown.
+                    </p>
                     <div className="d-flex flex-column gap-2">
                       <select
                         aria-label="Next status"
@@ -1012,7 +1110,9 @@ const Orders = () => {
                         aria-label="Update status"
                         type="button"
                         className="btn btn-outline-primary fw-semibold rounded-3 py-2"
-                        disabled={actionBusy || nextStatuses.length === 0 || !statusPick}
+                        disabled={
+                          actionBusy || nextStatuses.length === 0 || !statusPick
+                        }
                         onClick={() =>
                           runAction(() =>
                             orderService.updateStatus(selectedId, {
@@ -1020,16 +1120,19 @@ const Orders = () => {
                                 STATUS_UPDATE_MAP[
                                   String(statusPick || "").toUpperCase()
                                 ] ?? statusPick,
-                            })
+                            }),
                           )
                         }
                       >
-                        {nextStatuses.length === 0 ? "No valid next status" : "Update status"}
+                        {nextStatuses.length === 0
+                          ? "No valid next status"
+                          : "Update status"}
                       </button>
                     </div>
                   </div>
 
-                  {String(detail?.serviceMode || "").toUpperCase() === "OUTSTATION" ? (
+                  {String(detail?.serviceMode || "").toUpperCase() ===
+                  "OUTSTATION" ? (
                     <div className="dashboard-card border-0 shadow-sm">
                       <h6 className="fw-bold mb-3">Outstation milestones</h6>
                       <div className="d-flex flex-wrap gap-2">
@@ -1042,23 +1145,28 @@ const Orders = () => {
                           "Out For Delivery/Ready For Pickup",
                           "Delivered",
                         ].map((stepLabel, index) => {
-                          const progressIndex = getOutstationProgressIndex(detail?.status);
+                          const progressIndex = getOutstationProgressIndex(
+                            detail?.status,
+                          );
                           const isCompleted = progressIndex > index;
                           const isCurrent = progressIndex === index;
                           const badgeClass = isCurrent
                             ? "bg-primary text-white"
                             : isCompleted
-                            ? "bg-success-subtle text-success"
-                            : "bg-light text-muted";
+                              ? "bg-success-subtle text-success"
+                              : "bg-light text-muted";
                           return (
-                            <span key={stepLabel} className={`badge rounded-pill fw-semibold ${badgeClass}`}>
+                            <span
+                              key={stepLabel}
+                              className={`badge rounded-pill fw-semibold ${badgeClass}`}
+                            >
                               {stepLabel}
                             </span>
                           );
                         })}
                       </div>
                       {OUTSTATION_EXCEPTION_STATUSES.includes(
-                        String(detail?.status || "").toUpperCase()
+                        String(detail?.status || "").toUpperCase(),
                       ) ? (
                         <div className="mt-3">
                           <span className="badge bg-danger-subtle text-danger fw-semibold">
