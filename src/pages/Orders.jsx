@@ -46,6 +46,47 @@ const STATUS_UPDATE_MAP = {
   ASSIGNED: "CONFIRMED",
 };
 const SERVICE_MODE_TABS = ["INCITY", "OUTSTATION"];
+const STATUS_LABEL_OVERRIDES = {
+  AT_ORIGIN_HUB: "At Origin Hub",
+  DEPARTED_ORIGIN_HUB: "Departed Origin Hub",
+  AT_DESTINATION_HUB: "At Destination Hub",
+  SORTED_AT_DESTINATION: "Sorted At Destination",
+  OUT_FOR_DELIVERY: "Out For Delivery",
+  READY_FOR_PICKUP: "Ready For Pickup",
+  FAILED_DELIVERY: "Failed Delivery",
+};
+const OUTSTATION_EXCEPTION_STATUSES = ["FAILED_DELIVERY", "RETURNED", "CANCELLED"];
+
+function formatStatusLabel(status) {
+  const normalized = String(status || "").toUpperCase().trim();
+  if (!normalized) return "—";
+  if (STATUS_LABEL_OVERRIDES[normalized]) return STATUS_LABEL_OVERRIDES[normalized];
+  return normalized
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function getOutstationProgressIndex(status) {
+  const normalized = String(status || "").toUpperCase().trim();
+  if (normalized === "DELIVERED") return 6;
+  if (normalized === "READY_FOR_PICKUP" || normalized === "OUT_FOR_DELIVERY") return 5;
+  if (normalized === "AT_DESTINATION_HUB" || normalized === "SORTED_AT_DESTINATION") return 4;
+  if (normalized === "IN_TRANSIT" || normalized === "DEPARTED_ORIGIN_HUB") return 3;
+  if (normalized === "AT_ORIGIN_HUB") return 2;
+  if (normalized === "PICKED_UP") return 1;
+  if (
+    normalized === "CONFIRMED" ||
+    normalized === "ASSIGNED" ||
+    normalized === "CREATED" ||
+    normalized === "PENDING" ||
+    normalized === "PENDING_ASSIGNMENT"
+  ) {
+    return 0;
+  }
+  return -1;
+}
 
 function formatWhen(iso) {
   if (!iso) return "—";
@@ -183,21 +224,16 @@ const Orders = () => {
   const loadEligibleRidersForOrder = useCallback(async (order) => {
     const id = order?.id ?? order?.orderId;
     if (id == null) {
-      await loadRiders();
+      setAvailableRiders([]);
       return;
     }
     try {
       const res = await riderService.getEligibleRidersForOrder(id);
-      const list = unwrapList(res);
-      if (list.length > 0) {
-        setAvailableRiders(list);
-      } else {
-        await loadRiders();
-      }
+      setAvailableRiders(unwrapList(res));
     } catch {
-      await loadRiders();
+      setAvailableRiders([]);
     }
-  }, [loadRiders]);
+  }, []);
 
   useEffect(() => {
     loadOrders();
@@ -256,6 +292,28 @@ const Orders = () => {
     setSelectedId(null);
     setDetail(null);
   };
+
+  const nextStatuses = useMemo(() => {
+    const curated = Array.isArray(detail?.adminSelectableNextStatuses)
+      ? detail.adminSelectableNextStatuses
+      : [];
+    const allowed = Array.isArray(detail?.allowedNextStatuses)
+      ? detail.allowedNextStatuses
+      : [];
+    return (curated.length > 0 ? curated : allowed)
+      .map((s) => String(s || "").toUpperCase().trim())
+      .filter(Boolean);
+  }, [detail]);
+
+  useEffect(() => {
+    if (nextStatuses.length === 0) {
+      setStatusPick("");
+      return;
+    }
+    if (!nextStatuses.includes(String(statusPick || "").toUpperCase())) {
+      setStatusPick(nextStatuses[0]);
+    }
+  }, [nextStatuses, statusPick]);
 
   const runAction = async (fn) => {
     if (selectedId == null) return;
@@ -643,7 +701,7 @@ const Orders = () => {
                             )}`}
                             style={{ fontSize: 11 }}
                           >
-                            {order.status ?? "—"}
+                            {formatStatusLabel(order.status)}
                           </span>
                         </td>
                         <td className="px-3 py-3 border-0 small text-muted">
@@ -691,7 +749,7 @@ const Orders = () => {
                       detail.status
                     )}`}
                   >
-                    {detail.status ?? "—"}
+                    {formatStatusLabel(detail.status)}
                   </span>
                 </h4>
                 <p className="text-muted small mb-0">
@@ -724,44 +782,44 @@ const Orders = () => {
                       <div className="p-3 rounded-3 bg-light">
                         <p className="text-muted mb-1 small">Pickup</p>
                         <p className="mb-1 small">{fmtAddress(detail.pickupAddress)}</p>
-                        <p className="fw-semibold mb-0 font-monospace small">
-                          {detail.pickupLat != null && detail.pickupLng != null
-                            ? `${detail.pickupLat}, ${detail.pickupLng}`
-                            : "—"}
-                        </p>
-                        <a
-                          className="small"
-                          href={
-                            detail.pickupLat != null && detail.pickupLng != null
-                              ? `https://www.google.com/maps?q=${detail.pickupLat},${detail.pickupLng}`
-                              : undefined
-                          }
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Open in Maps
-                        </a>
+                        {(!String(detail.pickupAddress || "").trim() &&
+                          detail.pickupLat != null &&
+                          detail.pickupLng != null) ? (
+                          <p className="text-muted mb-1 font-monospace small">
+                            {detail.pickupLat}, {detail.pickupLng}
+                          </p>
+                        ) : null}
+                        {detail.pickupLat != null && detail.pickupLng != null ? (
+                          <a
+                            className="small"
+                            href={`https://www.google.com/maps?q=${detail.pickupLat},${detail.pickupLng}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Open in Maps
+                          </a>
+                        ) : null}
                       </div>
                       <div className="p-3 rounded-3 bg-light">
                         <p className="text-muted mb-1 small">Drop</p>
                         <p className="mb-1 small">{fmtAddress(detail.dropAddress)}</p>
-                        <p className="fw-semibold mb-0 font-monospace small">
-                          {detail.dropLat != null && detail.dropLng != null
-                            ? `${detail.dropLat}, ${detail.dropLng}`
-                            : "—"}
-                        </p>
-                        <a
-                          className="small"
-                          href={
-                            detail.dropLat != null && detail.dropLng != null
-                              ? `https://www.google.com/maps?q=${detail.dropLat},${detail.dropLng}`
-                              : undefined
-                          }
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Open in Maps
-                        </a>
+                        {(!String(detail.dropAddress || "").trim() &&
+                          detail.dropLat != null &&
+                          detail.dropLng != null) ? (
+                          <p className="text-muted mb-1 font-monospace small">
+                            {detail.dropLat}, {detail.dropLng}
+                          </p>
+                        ) : null}
+                        {detail.dropLat != null && detail.dropLng != null ? (
+                          <a
+                            className="small"
+                            href={`https://www.google.com/maps?q=${detail.dropLat},${detail.dropLng}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Open in Maps
+                          </a>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -838,6 +896,9 @@ const Orders = () => {
                       id from the available pool.
                     </p>
                     <div className="d-flex flex-column gap-2">
+                      <div className="small text-muted">
+                        Currently assigned rider: {detail?.riderId != null ? `#${detail.riderId}` : "Not assigned"}
+                      </div>
                       <select
                         className="form-select form-select-sm rounded-3"
                         value={assignRolePick}
@@ -852,7 +913,7 @@ const Orders = () => {
                         className="form-select form-select-sm rounded-3"
                         value={riderPick}
                         onChange={(e) => setRiderPick(e.target.value)}
-                        disabled={actionBusy}
+                        disabled={actionBusy || availableRiders.length === 0}
                       >
                         <option value="">Select rider…</option>
                         {availableRiders.map((r) => (
@@ -862,12 +923,26 @@ const Orders = () => {
                           </option>
                         ))}
                       </select>
+                      {availableRiders.length === 0 ? (
+                        <div className="alert alert-light border small mb-0 py-2 px-3">
+                          No eligible riders found for this order.
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-link p-0 ms-1 align-baseline"
+                            onClick={() => loadEligibleRidersForOrder(detail)}
+                            disabled={actionBusy}
+                          >
+                            Retry
+                          </button>
+                        </div>
+                      ) : null}
                       <button
                         type="button"
                         className="btn text-white fw-semibold rounded-3 py-2"
                         style={{ backgroundColor: "#E51818" }}
                         disabled={
                           actionBusy ||
+                          availableRiders.length === 0 ||
                           riderPick === "" ||
                           Number.isNaN(parseInt(riderPick, 10))
                         }
@@ -918,27 +993,26 @@ const Orders = () => {
 
                   <div className="dashboard-card border-0 shadow-sm">
                     <h6 className="fw-bold mb-2">Update status</h6>
-                    <p className="text-muted small mb-3">
-                      Status values must match{" "}
-                      <code className="small">OrderStatus</code> enum names.
-                    </p>
+                    <p className="text-muted small mb-3">Only valid next statuses are shown.</p>
                     <div className="d-flex flex-column gap-2">
                       <select
+                        aria-label="Next status"
                         className="form-select form-select-sm rounded-3"
                         value={statusPick}
                         onChange={(e) => setStatusPick(e.target.value)}
-                        disabled={actionBusy}
+                        disabled={actionBusy || nextStatuses.length === 0}
                       >
-                        {ORDER_STATUSES.map((s) => (
+                        {nextStatuses.map((s) => (
                           <option key={s} value={s}>
-                            {s}
+                            {formatStatusLabel(s)}
                           </option>
                         ))}
                       </select>
                       <button
+                        aria-label="Update status"
                         type="button"
                         className="btn btn-outline-primary fw-semibold rounded-3 py-2"
-                        disabled={actionBusy}
+                        disabled={actionBusy || nextStatuses.length === 0 || !statusPick}
                         onClick={() =>
                           runAction(() =>
                             orderService.updateStatus(selectedId, {
@@ -950,10 +1024,50 @@ const Orders = () => {
                           )
                         }
                       >
-                        Update status
+                        {nextStatuses.length === 0 ? "No valid next status" : "Update status"}
                       </button>
                     </div>
                   </div>
+
+                  {String(detail?.serviceMode || "").toUpperCase() === "OUTSTATION" ? (
+                    <div className="dashboard-card border-0 shadow-sm">
+                      <h6 className="fw-bold mb-3">Outstation milestones</h6>
+                      <div className="d-flex flex-wrap gap-2">
+                        {[
+                          "Confirmed",
+                          "Picked Up",
+                          "At Origin Hub",
+                          "In Transit",
+                          "At Destination Hub",
+                          "Out For Delivery/Ready For Pickup",
+                          "Delivered",
+                        ].map((stepLabel, index) => {
+                          const progressIndex = getOutstationProgressIndex(detail?.status);
+                          const isCompleted = progressIndex > index;
+                          const isCurrent = progressIndex === index;
+                          const badgeClass = isCurrent
+                            ? "bg-primary text-white"
+                            : isCompleted
+                            ? "bg-success-subtle text-success"
+                            : "bg-light text-muted";
+                          return (
+                            <span key={stepLabel} className={`badge rounded-pill fw-semibold ${badgeClass}`}>
+                              {stepLabel}
+                            </span>
+                          );
+                        })}
+                      </div>
+                      {OUTSTATION_EXCEPTION_STATUSES.includes(
+                        String(detail?.status || "").toUpperCase()
+                      ) ? (
+                        <div className="mt-3">
+                          <span className="badge bg-danger-subtle text-danger fw-semibold">
+                            {formatStatusLabel(detail?.status)}
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
 
                   {actionBusy ? (
                     <p className="small text-muted d-flex align-items-center gap-2 mb-0">
