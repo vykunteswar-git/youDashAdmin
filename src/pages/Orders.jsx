@@ -22,22 +22,53 @@ import {
 import { adminSocketService } from "../services/adminSocketService";
 
 const ORDER_STATUSES = [
+  // INCITY
   "PENDING",
   "PENDING_ASSIGNMENT",
   "ASSIGNED",
   "CREATED",
   "CONFIRMED",
   "PICKED_UP",
+  "OUT_FOR_DELIVERY",
+  "DELIVERED",
+  // OUTSTATION new
+  "ORDER_CREATED",
+  "RIDER_ASSIGNED",
+  "PICKUP_CONFIRMED",
+  "PARCEL_PICKED_UP",
+  "ARRIVED_ORIGIN_HUB",
+  "DISPATCHED_TO_DESTINATION",
+  "ARRIVED_DESTINATION_HUB",
+  "DELIVERY_RIDER_ASSIGNED",
+  "READY_FOR_PICKUP",
+  "COLLECTED_BY_CUSTOMER",
+  // Legacy outstation
   "AT_ORIGIN_HUB",
   "DEPARTED_ORIGIN_HUB",
   "IN_TRANSIT",
   "AT_DESTINATION_HUB",
   "SORTED_AT_DESTINATION",
-  "OUT_FOR_DELIVERY",
-  "READY_FOR_PICKUP",
-  "DELIVERED",
+  // Failure states
+  "DELIVERY_FAILED",
   "FAILED_DELIVERY",
+  "RETURN_INITIATED",
+  "RETURNED_TO_SENDER",
   "RETURNED",
+  "CANCELLED",
+  "EXPIRED",
+  "FAILED",
+];
+const OUTSTATION_BULK_STATUSES = [
+  "RIDER_ASSIGNED",
+  "PICKUP_CONFIRMED",
+  "PARCEL_PICKED_UP",
+  "ARRIVED_ORIGIN_HUB",
+  "DISPATCHED_TO_DESTINATION",
+  "ARRIVED_DESTINATION_HUB",
+  "DELIVERY_RIDER_ASSIGNED",
+  "READY_FOR_PICKUP",
+  "COLLECTED_BY_CUSTOMER",
+  "DELIVERY_FAILED",
   "CANCELLED",
 ];
 const STATUS_UPDATE_MAP = {
@@ -54,11 +85,28 @@ const STATUS_LABEL_OVERRIDES = {
   OUT_FOR_DELIVERY: "Out For Delivery",
   READY_FOR_PICKUP: "Ready For Pickup",
   FAILED_DELIVERY: "Failed Delivery",
+  DELIVERY_FAILED: "Delivery Failed",
+  ORDER_CREATED: "Order Created",
+  RIDER_ASSIGNED: "Rider Assigned",
+  PICKUP_CONFIRMED: "Pickup Confirmed",
+  PARCEL_PICKED_UP: "Parcel Picked Up",
+  ARRIVED_ORIGIN_HUB: "Arrived Origin Hub",
+  DISPATCHED_TO_DESTINATION: "Dispatched To Destination",
+  ARRIVED_DESTINATION_HUB: "Arrived Destination Hub",
+  DELIVERY_RIDER_ASSIGNED: "Delivery Rider Assigned",
+  COLLECTED_BY_CUSTOMER: "Collected By Customer",
+  RETURN_INITIATED: "Return Initiated",
+  RETURNED_TO_SENDER: "Returned To Sender",
 };
 const OUTSTATION_EXCEPTION_STATUSES = [
+  "DELIVERY_FAILED",
   "FAILED_DELIVERY",
+  "RETURN_INITIATED",
+  "RETURNED_TO_SENDER",
   "RETURNED",
   "CANCELLED",
+  "EXPIRED",
+  "FAILED",
 ];
 
 function formatStatusLabel(status) {
@@ -79,22 +127,33 @@ function getOutstationProgressIndex(status) {
   const normalized = String(status || "")
     .toUpperCase()
     .trim();
-  if (normalized === "DELIVERED") return 6;
-  if (normalized === "READY_FOR_PICKUP" || normalized === "OUT_FOR_DELIVERY")
+  if (normalized === "DELIVERED" || normalized === "COLLECTED_BY_CUSTOMER") return 6;
+  if (
+    normalized === "READY_FOR_PICKUP" ||
+    normalized === "OUT_FOR_DELIVERY" ||
+    normalized === "DELIVERY_RIDER_ASSIGNED"
+  )
     return 5;
   if (
     normalized === "AT_DESTINATION_HUB" ||
-    normalized === "SORTED_AT_DESTINATION"
+    normalized === "SORTED_AT_DESTINATION" ||
+    normalized === "ARRIVED_DESTINATION_HUB"
   )
     return 4;
-  if (normalized === "IN_TRANSIT" || normalized === "DEPARTED_ORIGIN_HUB")
+  if (
+    normalized === "IN_TRANSIT" ||
+    normalized === "DEPARTED_ORIGIN_HUB" ||
+    normalized === "DISPATCHED_TO_DESTINATION"
+  )
     return 3;
-  if (normalized === "AT_ORIGIN_HUB") return 2;
-  if (normalized === "PICKED_UP") return 1;
+  if (normalized === "AT_ORIGIN_HUB" || normalized === "ARRIVED_ORIGIN_HUB") return 2;
+  if (normalized === "PICKED_UP" || normalized === "PARCEL_PICKED_UP" || normalized === "PICKUP_CONFIRMED") return 1;
   if (
     normalized === "CONFIRMED" ||
     normalized === "ASSIGNED" ||
     normalized === "CREATED" ||
+    normalized === "ORDER_CREATED" ||
+    normalized === "RIDER_ASSIGNED" ||
     normalized === "PENDING" ||
     normalized === "PENDING_ASSIGNMENT"
   ) {
@@ -116,12 +175,26 @@ function formatWhen(iso) {
 
 function statusBadgeClass(status) {
   const s = String(status || "").toUpperCase();
-  if (s === "DELIVERED") return "active";
-  if (s === "CANCELLED") return "cancelled";
-  if (s === "ASSIGNED" || s === "CONFIRMED") return "active";
-  if (s === "CREATED" || s === "PENDING" || s === "PENDING_ASSIGNMENT")
+  if (s === "DELIVERED" || s === "COLLECTED_BY_CUSTOMER") return "active";
+  if (
+    s === "CANCELLED" ||
+    s === "FAILED_DELIVERY" ||
+    s === "DELIVERY_FAILED" ||
+    s === "RETURNED" ||
+    s === "RETURNED_TO_SENDER" ||
+    s === "EXPIRED" ||
+    s === "FAILED"
+  )
+    return "cancelled";
+  if (s === "ASSIGNED" || s === "CONFIRMED" || s === "RIDER_ASSIGNED") return "active";
+  if (
+    s === "CREATED" ||
+    s === "ORDER_CREATED" ||
+    s === "PENDING" ||
+    s === "PENDING_ASSIGNMENT"
+  )
     return "pending";
-  if (s === "FAILED_DELIVERY" || s === "RETURNED") return "cancelled";
+  if (s === "RETURN_INITIATED") return "cancelled";
   return "info";
 }
 
@@ -141,6 +214,11 @@ const Orders = () => {
   const [riderPick, setRiderPick] = useState("");
   const [assignRolePick, setAssignRolePick] = useState("DELIVERY");
   const [statusPick, setStatusPick] = useState("CONFIRMED");
+  const [routeFilter, setRouteFilter] = useState("All Routes");
+  const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
+  const [bulkStatus, setBulkStatus] = useState(OUTSTATION_BULK_STATUSES[0]);
+  const [bulkBusy, setBulkBusy] = useState(false);
+
   const knownOutstationOrderIdsRef = useRef(new Set());
   const outstationAlertInitializedRef = useRef(false);
   const [outstationAlertOrder, setOutstationAlertOrder] = useState(null);
@@ -403,11 +481,36 @@ const Orders = () => {
     );
   }, [orders, serviceModeTab]);
 
+  const availableRoutes = useMemo(() => {
+    if (serviceModeTab !== "OUTSTATION") return [];
+    const routeSet = new Set();
+    for (const o of modeFilteredOrders) {
+      const orig = String(o.originHubCity || "").trim();
+      const dest = String(o.destinationHubCity || "").trim();
+      if (orig && dest) routeSet.add(`${orig} → ${dest}`);
+    }
+    return Array.from(routeSet).sort();
+  }, [modeFilteredOrders, serviceModeTab]);
+
+  useEffect(() => {
+    setSelectedOrderIds(new Set());
+  }, [serviceModeTab, routeFilter, statusTab]);
+
+  useEffect(() => {
+    if (serviceModeTab !== "OUTSTATION") setRouteFilter("All Routes");
+  }, [serviceModeTab]);
+
   const filteredOrders = useMemo(() => {
     return modeFilteredOrders.filter((o) => {
       if (statusTab !== "All") {
         const st = String(o?.status || "").toUpperCase();
         if (st !== statusTab.toUpperCase()) return false;
+      }
+      if (serviceModeTab === "OUTSTATION" && routeFilter !== "All Routes") {
+        const orig = String(o.originHubCity || "").trim();
+        const dest = String(o.destinationHubCity || "").trim();
+        const route = orig && dest ? `${orig} → ${dest}` : "";
+        if (route !== routeFilter) return false;
       }
       if (!q) return true;
       const hay = [
@@ -418,13 +521,15 @@ const Orders = () => {
         o.paymentType,
         o.riderId,
         o.vehicleId,
+        o.originHubCity,
+        o.destinationHubCity,
       ]
         .filter((x) => x != null)
         .join(" ")
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [modeFilteredOrders, statusTab, q]);
+  }, [modeFilteredOrders, statusTab, q, serviceModeTab, routeFilter]);
 
   const statusCounts = useMemo(() => {
     const m = { All: modeFilteredOrders.length };
@@ -435,6 +540,56 @@ const Orders = () => {
     }
     return m;
   }, [modeFilteredOrders]);
+
+  const runBulkStatusUpdate = async () => {
+    if (selectedOrderIds.size === 0 || !bulkStatus) return;
+    setBulkBusy(true);
+    let succeeded = 0;
+    let failed = 0;
+    try {
+      for (const orderId of selectedOrderIds) {
+        try {
+          await orderService.updateStatus(orderId, { status: bulkStatus });
+          succeeded++;
+        } catch {
+          failed++;
+        }
+      }
+      await loadOrders();
+      setSelectedOrderIds(new Set());
+      if (failed === 0) {
+        setApiSuccess(
+          `Updated ${succeeded} order${succeeded !== 1 ? "s" : ""} to ${formatStatusLabel(bulkStatus)}.`,
+        );
+      } else {
+        setApiError(
+          `${succeeded} updated, ${failed} failed. Check individual orders.`,
+        );
+      }
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const toggleOrderSelection = (orderId, e) => {
+    e.stopPropagation();
+    setSelectedOrderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderId)) next.delete(orderId);
+      else next.add(orderId);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    const visibleIds = filteredOrders.map((o) => o.id ?? o.orderId);
+    const allSelected = visibleIds.every((id) => selectedOrderIds.has(id));
+    if (allSelected) {
+      setSelectedOrderIds(new Set());
+    } else {
+      setSelectedOrderIds(new Set(visibleIds));
+    }
+  };
 
   const fmtMoney = (n) =>
     n == null || Number.isNaN(Number(n))
@@ -665,6 +820,36 @@ const Orders = () => {
               ))}
             </select>
 
+            {/* Route filter — outstation only */}
+            {serviceModeTab === "OUTSTATION" && availableRoutes.length > 0 && (
+              <select
+                className="form-select form-select-sm border fw-semibold text-secondary"
+                style={{
+                  width: "auto",
+                  minWidth: 200,
+                  borderRadius: 8,
+                  borderColor: "#E5E7EB",
+                  fontSize: 13,
+                }}
+                value={routeFilter}
+                onChange={(e) => setRouteFilter(e.target.value)}
+              >
+                <option value="All Routes">All routes ({modeFilteredOrders.length})</option>
+                {availableRoutes.map((route) => {
+                  const count = modeFilteredOrders.filter((o) => {
+                    const orig = String(o.originHubCity || "").trim();
+                    const dest = String(o.destinationHubCity || "").trim();
+                    return orig && dest && `${orig} → ${dest}` === route;
+                  }).length;
+                  return (
+                    <option key={route} value={route}>
+                      {route} ({count})
+                    </option>
+                  );
+                })}
+              </select>
+            )}
+
             {/* Search */}
             <div
               className="search-container flex-grow-1 mb-0"
@@ -682,13 +867,16 @@ const Orders = () => {
             </div>
 
             {/* Clear filters */}
-            {(statusTab !== "All" || search.trim()) && (
+            {(statusTab !== "All" ||
+              routeFilter !== "All Routes" ||
+              search.trim()) && (
               <button
                 type="button"
                 className="btn btn-sm d-flex align-items-center gap-1 text-muted"
                 style={{ borderRadius: 8, fontSize: 12 }}
                 onClick={() => {
                   setStatusTab("All");
+                  setRouteFilter("All Routes");
                   setSearch("");
                 }}
               >
@@ -699,14 +887,91 @@ const Orders = () => {
           </div>
         </div>
 
+        {/* Bulk action bar — outstation only */}
+        {serviceModeTab === "OUTSTATION" && (
+          <div
+            className="dashboard-card border-0 shadow-sm mb-3 py-2 px-3"
+            style={{ borderRadius: 12 }}
+          >
+            <div className="d-flex flex-wrap align-items-center gap-3">
+              <span className="small fw-semibold text-muted">
+                {selectedOrderIds.size > 0
+                  ? `${selectedOrderIds.size} order${selectedOrderIds.size !== 1 ? "s" : ""} selected`
+                  : "Select orders to bulk-update"}
+              </span>
+              <select
+                className="form-select form-select-sm border"
+                style={{ width: "auto", minWidth: 220, borderRadius: 8, fontSize: 13 }}
+                value={bulkStatus}
+                onChange={(e) => setBulkStatus(e.target.value)}
+                disabled={bulkBusy}
+              >
+                {OUTSTATION_BULK_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {formatStatusLabel(s)}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="btn btn-sm fw-semibold text-white border-0 d-flex align-items-center gap-2"
+                style={{
+                  backgroundColor:
+                    selectedOrderIds.size === 0 ? "#9CA3AF" : "#E51818",
+                  borderRadius: 8,
+                  fontSize: 13,
+                }}
+                disabled={bulkBusy || selectedOrderIds.size === 0}
+                onClick={runBulkStatusUpdate}
+              >
+                {bulkBusy ? (
+                  <span className="spinner-border spinner-border-sm" />
+                ) : null}
+                Update {selectedOrderIds.size > 0 ? selectedOrderIds.size : ""}{" "}
+                selected
+              </button>
+              {selectedOrderIds.size > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-light d-flex align-items-center gap-1"
+                  style={{ borderRadius: 8, fontSize: 12 }}
+                  onClick={() => setSelectedOrderIds(new Set())}
+                  disabled={bulkBusy}
+                >
+                  <X size={12} />
+                  Clear selection
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="dashboard-card p-0 overflow-hidden border-0 shadow-sm">
           <div className="table-responsive">
             <table className="table mb-0 table-hover align-middle">
               <thead className="bg-light">
                 <tr>
+                  {serviceModeTab === "OUTSTATION" && (
+                    <th className="px-3 py-3 border-0" style={{ width: 40 }}>
+                      <input
+                        type="checkbox"
+                        className="form-check-input"
+                        checked={
+                          filteredOrders.length > 0 &&
+                          filteredOrders.every((o) =>
+                            selectedOrderIds.has(o.id ?? o.orderId),
+                          )
+                        }
+                        onChange={toggleSelectAll}
+                        title="Select all visible"
+                      />
+                    </th>
+                  )}
                   <th className="px-4 py-3 text-muted small border-0">ORDER</th>
                   <th className="px-3 py-3 text-muted small border-0">USER</th>
-                  <th className="px-3 py-3 text-muted small border-0">ROUTE</th>
+                  <th className="px-3 py-3 text-muted small border-0">
+                    {serviceModeTab === "OUTSTATION" ? "HUB ROUTE" : "ROUTE"}
+                  </th>
                   <th className="px-3 py-3 text-muted small border-0">MODE</th>
                   <th className="px-3 py-3 text-muted small border-0">
                     STATUS
@@ -722,7 +987,7 @@ const Orders = () => {
                 {loading ? (
                   <tr>
                     <td
-                      colSpan={8}
+                      colSpan={serviceModeTab === "OUTSTATION" ? 9 : 8}
                       className="text-center py-5 text-muted small"
                     >
                       Loading…
@@ -731,7 +996,7 @@ const Orders = () => {
                 ) : filteredOrders.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={8}
+                      colSpan={serviceModeTab === "OUTSTATION" ? 9 : 8}
                       className="text-center py-5 text-muted small"
                     >
                       No orders in this view.
@@ -740,13 +1005,31 @@ const Orders = () => {
                 ) : (
                   filteredOrders.map((order) => {
                     const id = order.id ?? order.orderId;
+                    const isSelected = selectedOrderIds.has(id);
+                    const hubOrig = String(order.originHubCity || "").trim();
+                    const hubDest = String(order.destinationHubCity || "").trim();
+                    const hubRoute = hubOrig && hubDest ? `${hubOrig} → ${hubDest}` : null;
                     return (
                       <tr
                         key={id}
                         className="cursor-pointer"
                         role="button"
                         onClick={() => openDetail(order)}
+                        style={isSelected ? { backgroundColor: "#FEF3F2" } : undefined}
                       >
+                        {serviceModeTab === "OUTSTATION" && (
+                          <td
+                            className="px-3 py-3 border-0"
+                            onClick={(e) => toggleOrderSelection(id, e)}
+                          >
+                            <input
+                              type="checkbox"
+                              className="form-check-input"
+                              checked={isSelected}
+                              onChange={() => {}}
+                            />
+                          </td>
+                        )}
                         <td className="px-4 py-3 border-0">
                           <span className="fw-bold small">#{id}</span>
                           <div className="text-muted" style={{ fontSize: 10 }}>
@@ -758,16 +1041,31 @@ const Orders = () => {
                           {order.userId ?? "—"}
                         </td>
                         <td className="px-3 py-3 border-0 small text-muted">
-                          <div className="d-flex flex-column gap-1">
-                            <div className="d-flex align-items-center gap-1">
-                              <MapPin size={12} className="text-danger" />
-                              <span>{fmtAddress(order.pickupAddress)}</span>
+                          {serviceModeTab === "OUTSTATION" && hubRoute ? (
+                            <div className="d-flex align-items-center gap-1 fw-semibold text-dark">
+                              <span
+                                className="badge rounded-pill"
+                                style={{
+                                  backgroundColor: "#EFF6FF",
+                                  color: "#1D4ED8",
+                                  fontSize: 11,
+                                }}
+                              >
+                                {hubRoute}
+                              </span>
                             </div>
-                            <div className="d-flex align-items-center gap-1">
-                              <MapPin size={12} className="text-success" />
-                              <span>{fmtAddress(order.dropAddress)}</span>
+                          ) : (
+                            <div className="d-flex flex-column gap-1">
+                              <div className="d-flex align-items-center gap-1">
+                                <MapPin size={12} className="text-danger" />
+                                <span>{fmtAddress(order.pickupAddress)}</span>
+                              </div>
+                              <div className="d-flex align-items-center gap-1">
+                                <MapPin size={12} className="text-success" />
+                                <span>{fmtAddress(order.dropAddress)}</span>
+                              </div>
                             </div>
-                          </div>
+                          )}
                         </td>
                         <td className="px-3 py-3 border-0 small">
                           {order.serviceMode ?? "—"}
@@ -940,13 +1238,17 @@ const Orders = () => {
                       <div className="col-6 col-md-4">
                         <p className="text-muted mb-1">Origin hub</p>
                         <p className="fw-bold mb-0">
-                          {detail.originHubId ?? "—"}
+                          {detail.originHubCity
+                            ? `${detail.originHubCity}${detail.originHubName ? ` (${detail.originHubName})` : ""}`
+                            : detail.originHubId ?? "—"}
                         </p>
                       </div>
                       <div className="col-6 col-md-4">
                         <p className="text-muted mb-1">Destination hub</p>
                         <p className="fw-bold mb-0">
-                          {detail.destinationHubId ?? "—"}
+                          {detail.destinationHubCity
+                            ? `${detail.destinationHubCity}${detail.destinationHubName ? ` (${detail.destinationHubName})` : ""}`
+                            : detail.destinationHubId ?? "—"}
                         </p>
                       </div>
                     </div>
@@ -1137,13 +1439,13 @@ const Orders = () => {
                       <h6 className="fw-bold mb-3">Outstation milestones</h6>
                       <div className="d-flex flex-wrap gap-2">
                         {[
-                          "Confirmed",
-                          "Picked Up",
-                          "At Origin Hub",
-                          "In Transit",
-                          "At Destination Hub",
-                          "Out For Delivery/Ready For Pickup",
-                          "Delivered",
+                          "Order Confirmed",
+                          "Parcel Picked Up",
+                          "Arrived Origin Hub",
+                          "Dispatched",
+                          "Arrived Destination Hub",
+                          "Ready/Out For Delivery",
+                          "Collected/Delivered",
                         ].map((stepLabel, index) => {
                           const progressIndex = getOutstationProgressIndex(
                             detail?.status,
