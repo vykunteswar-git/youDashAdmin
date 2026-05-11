@@ -58,6 +58,25 @@ const ORDER_STATUSES = [
   "EXPIRED",
   "FAILED",
 ];
+const OUTSTATION_NEXT_STATUS = {
+  ORDER_CREATED: "RIDER_ASSIGNED",
+  RIDER_ASSIGNED: "PICKUP_CONFIRMED",
+  PICKUP_CONFIRMED: "PARCEL_PICKED_UP",
+  PARCEL_PICKED_UP: "ARRIVED_ORIGIN_HUB",
+  ARRIVED_ORIGIN_HUB: "DISPATCHED_TO_DESTINATION",
+  DISPATCHED_TO_DESTINATION: "ARRIVED_DESTINATION_HUB",
+  ARRIVED_DESTINATION_HUB: "DELIVERY_RIDER_ASSIGNED",
+  DELIVERY_RIDER_ASSIGNED: "READY_FOR_PICKUP",
+  READY_FOR_PICKUP: "COLLECTED_BY_CUSTOMER",
+  // Legacy
+  CONFIRMED: "PICKED_UP",
+  PICKED_UP: "ARRIVED_ORIGIN_HUB",
+  AT_ORIGIN_HUB: "IN_TRANSIT",
+  IN_TRANSIT: "AT_DESTINATION_HUB",
+  AT_DESTINATION_HUB: "OUT_FOR_DELIVERY",
+  OUT_FOR_DELIVERY: "DELIVERED",
+};
+
 const OUTSTATION_BULK_STATUSES = [
   "RIDER_ASSIGNED",
   "PICKUP_CONFIRMED",
@@ -541,6 +560,52 @@ const Orders = () => {
     return m;
   }, [modeFilteredOrders]);
 
+  const statusGroups = useMemo(() => {
+    if (serviceModeTab !== "OUTSTATION" || routeFilter === "All Routes") return [];
+    const groups = {};
+    for (const o of filteredOrders) {
+      const s = String(o.status || "").toUpperCase().trim();
+      if (!groups[s]) groups[s] = [];
+      groups[s].push(o);
+    }
+    return Object.entries(groups).sort(([a], [b]) => {
+      const ai = getOutstationProgressIndex(a);
+      const bi = getOutstationProgressIndex(b);
+      if (ai === -1 && bi === -1) return 0;
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
+  }, [filteredOrders, serviceModeTab, routeFilter]);
+
+  const runGroupAdvance = async (groupOrders, nextStatus) => {
+    if (!nextStatus || groupOrders.length === 0) return;
+    setBulkBusy(true);
+    let succeeded = 0;
+    let failed = 0;
+    try {
+      for (const o of groupOrders) {
+        const id = o.id ?? o.orderId;
+        try {
+          await orderService.updateStatus(id, { status: nextStatus });
+          succeeded++;
+        } catch {
+          failed++;
+        }
+      }
+      await loadOrders();
+      if (failed === 0) {
+        setApiSuccess(
+          `Advanced ${succeeded} order${succeeded !== 1 ? "s" : ""} → ${formatStatusLabel(nextStatus)}.`,
+        );
+      } else {
+        setApiError(`${succeeded} advanced, ${failed} failed.`);
+      }
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   const runBulkStatusUpdate = async () => {
     if (selectedOrderIds.size === 0 || !bulkStatus) return;
     setBulkBusy(true);
@@ -761,6 +826,7 @@ const Orders = () => {
           className="dashboard-card border-0 shadow-sm mb-4 py-3"
           style={{ borderRadius: 14 }}
         >
+          {/* Row 1: mode toggle, status filter, search */}
           <div className="d-flex flex-wrap align-items-center gap-2">
             {/* Mode toggle */}
             <div
@@ -797,56 +863,28 @@ const Orders = () => {
               })}
             </div>
 
-            {/* Status dropdown */}
-            <select
-              className="form-select form-select-sm border fw-semibold text-secondary"
-              style={{
-                width: "auto",
-                minWidth: 170,
-                borderRadius: 8,
-                borderColor: "#E5E7EB",
-                fontSize: 13,
-              }}
-              value={statusTab}
-              onChange={(e) => setStatusTab(e.target.value)}
-            >
-              <option value="All">
-                All statuses ({statusCounts.All ?? 0})
-              </option>
-              {ORDER_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {formatStatusLabel(s)} ({statusCounts[s] ?? 0})
-                </option>
-              ))}
-            </select>
-
-            {/* Route filter — outstation only */}
-            {serviceModeTab === "OUTSTATION" && availableRoutes.length > 0 && (
+            {/* Status dropdown — hidden in outstation grouped-route view */}
+            {!(serviceModeTab === "OUTSTATION" && routeFilter !== "All Routes") && (
               <select
                 className="form-select form-select-sm border fw-semibold text-secondary"
                 style={{
                   width: "auto",
-                  minWidth: 200,
+                  minWidth: 170,
                   borderRadius: 8,
                   borderColor: "#E5E7EB",
                   fontSize: 13,
                 }}
-                value={routeFilter}
-                onChange={(e) => setRouteFilter(e.target.value)}
+                value={statusTab}
+                onChange={(e) => setStatusTab(e.target.value)}
               >
-                <option value="All Routes">All routes ({modeFilteredOrders.length})</option>
-                {availableRoutes.map((route) => {
-                  const count = modeFilteredOrders.filter((o) => {
-                    const orig = String(o.originHubCity || "").trim();
-                    const dest = String(o.destinationHubCity || "").trim();
-                    return orig && dest && `${orig} → ${dest}` === route;
-                  }).length;
-                  return (
-                    <option key={route} value={route}>
-                      {route} ({count})
-                    </option>
-                  );
-                })}
+                <option value="All">
+                  All statuses ({statusCounts.All ?? 0})
+                </option>
+                {ORDER_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {formatStatusLabel(s)} ({statusCounts[s] ?? 0})
+                  </option>
+                ))}
               </select>
             )}
 
@@ -885,19 +923,88 @@ const Orders = () => {
               </button>
             )}
           </div>
+
+          {/* Row 2: hub route chips — outstation only */}
+          {serviceModeTab === "OUTSTATION" && (
+            <div
+              className="d-flex flex-wrap gap-2 mt-3 pt-3"
+              style={{ borderTop: "1px solid #F1F5F9" }}
+            >
+              <button
+                type="button"
+                className="btn btn-sm fw-semibold px-3"
+                style={{
+                  borderRadius: 20,
+                  fontSize: 12,
+                  backgroundColor:
+                    routeFilter === "All Routes" ? "#111827" : "#F1F5F9",
+                  color: routeFilter === "All Routes" ? "#fff" : "#64748B",
+                  border: "none",
+                }}
+                onClick={() => setRouteFilter("All Routes")}
+              >
+                All routes
+                <span className="ms-1 opacity-75">
+                  ({modeFilteredOrders.length})
+                </span>
+              </button>
+              {availableRoutes.length === 0 ? (
+                <span className="small text-muted align-self-center">
+                  No hub routes found — hub city data may be missing on orders.
+                </span>
+              ) : (
+                availableRoutes.map((route) => {
+                  const count = modeFilteredOrders.filter((o) => {
+                    const orig = String(o.originHubCity || "").trim();
+                    const dest = String(o.destinationHubCity || "").trim();
+                    return orig && dest && `${orig} → ${dest}` === route;
+                  }).length;
+                  const active = routeFilter === route;
+                  return (
+                    <button
+                      key={route}
+                      type="button"
+                      className="btn btn-sm fw-semibold px-3 d-flex align-items-center gap-1"
+                      style={{
+                        borderRadius: 20,
+                        fontSize: 12,
+                        backgroundColor: active ? "#1D4ED8" : "#EFF6FF",
+                        color: active ? "#fff" : "#1D4ED8",
+                        border: "none",
+                        whiteSpace: "nowrap",
+                      }}
+                      onClick={() => setRouteFilter(active ? "All Routes" : route)}
+                    >
+                      <span>{route}</span>
+                      <span
+                        className="rounded-pill px-1"
+                        style={{
+                          backgroundColor: active
+                            ? "rgba(255,255,255,0.25)"
+                            : "rgba(29,78,216,0.12)",
+                          fontSize: 11,
+                        }}
+                      >
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Bulk action bar — outstation only */}
-        {serviceModeTab === "OUTSTATION" && (
+        {/* Bulk action bar — shown when orders are selected across groups */}
+        {serviceModeTab === "OUTSTATION" && selectedOrderIds.size > 0 && (
           <div
             className="dashboard-card border-0 shadow-sm mb-3 py-2 px-3"
-            style={{ borderRadius: 12 }}
+            style={{ borderRadius: 12, borderLeft: "3px solid #E51818" }}
           >
             <div className="d-flex flex-wrap align-items-center gap-3">
-              <span className="small fw-semibold text-muted">
-                {selectedOrderIds.size > 0
-                  ? `${selectedOrderIds.size} order${selectedOrderIds.size !== 1 ? "s" : ""} selected`
-                  : "Select orders to bulk-update"}
+              <span className="small fw-semibold" style={{ color: "#E51818" }}>
+                {selectedOrderIds.size} order
+                {selectedOrderIds.size !== 1 ? "s" : ""} selected
               </span>
               <select
                 className="form-select form-select-sm border"
@@ -915,136 +1022,294 @@ const Orders = () => {
               <button
                 type="button"
                 className="btn btn-sm fw-semibold text-white border-0 d-flex align-items-center gap-2"
-                style={{
-                  backgroundColor:
-                    selectedOrderIds.size === 0 ? "#9CA3AF" : "#E51818",
-                  borderRadius: 8,
-                  fontSize: 13,
-                }}
-                disabled={bulkBusy || selectedOrderIds.size === 0}
+                style={{ backgroundColor: "#E51818", borderRadius: 8, fontSize: 13 }}
+                disabled={bulkBusy}
                 onClick={runBulkStatusUpdate}
               >
-                {bulkBusy ? (
-                  <span className="spinner-border spinner-border-sm" />
-                ) : null}
-                Update {selectedOrderIds.size > 0 ? selectedOrderIds.size : ""}{" "}
-                selected
+                {bulkBusy ? <span className="spinner-border spinner-border-sm" /> : null}
+                Update {selectedOrderIds.size} selected
               </button>
-              {selectedOrderIds.size > 0 && (
-                <button
-                  type="button"
-                  className="btn btn-sm btn-light d-flex align-items-center gap-1"
-                  style={{ borderRadius: 8, fontSize: 12 }}
-                  onClick={() => setSelectedOrderIds(new Set())}
-                  disabled={bulkBusy}
-                >
-                  <X size={12} />
-                  Clear selection
-                </button>
-              )}
+              <button
+                type="button"
+                className="btn btn-sm btn-light d-flex align-items-center gap-1"
+                style={{ borderRadius: 8, fontSize: 12 }}
+                onClick={() => setSelectedOrderIds(new Set())}
+                disabled={bulkBusy}
+              >
+                <X size={12} />
+                Clear
+              </button>
             </div>
           </div>
         )}
 
-        <div className="dashboard-card p-0 overflow-hidden border-0 shadow-sm">
-          <div className="table-responsive">
-            <table className="table mb-0 table-hover align-middle">
-              <thead className="bg-light">
-                <tr>
-                  {serviceModeTab === "OUTSTATION" && (
-                    <th className="px-3 py-3 border-0" style={{ width: 40 }}>
+        {/* Grouped view — when a specific route chip is selected */}
+        {serviceModeTab === "OUTSTATION" && routeFilter !== "All Routes" ? (
+          <div className="d-flex flex-column gap-3">
+            {loading ? (
+              <div className="dashboard-card border-0 shadow-sm text-center py-5 text-muted small">
+                Loading…
+              </div>
+            ) : statusGroups.length === 0 ? (
+              <div className="dashboard-card border-0 shadow-sm text-center py-5 text-muted small">
+                No orders on this route.
+              </div>
+            ) : (
+              statusGroups.map(([status, groupOrders]) => {
+                const nextStatus = OUTSTATION_NEXT_STATUS[status];
+                const groupIds = groupOrders.map((o) => o.id ?? o.orderId);
+                const allGroupSelected =
+                  groupIds.length > 0 &&
+                  groupIds.every((id) => selectedOrderIds.has(id));
+                const someGroupSelected = groupIds.some((id) =>
+                  selectedOrderIds.has(id),
+                );
+                const isException = OUTSTATION_EXCEPTION_STATUSES.includes(status);
+                return (
+                  <div
+                    key={status}
+                    className="dashboard-card border-0 shadow-sm"
+                    style={{
+                      borderLeft: isException
+                        ? "3px solid #EF4444"
+                        : "3px solid #E5E7EB",
+                    }}
+                  >
+                    {/* Group header */}
+                    <div className="d-flex flex-wrap align-items-center gap-3 mb-3">
                       <input
                         type="checkbox"
-                        className="form-check-input"
-                        checked={
-                          filteredOrders.length > 0 &&
-                          filteredOrders.every((o) =>
-                            selectedOrderIds.has(o.id ?? o.orderId),
-                          )
-                        }
-                        onChange={toggleSelectAll}
-                        title="Select all visible"
+                        className="form-check-input flex-shrink-0"
+                        checked={allGroupSelected}
+                        ref={(el) => {
+                          if (el)
+                            el.indeterminate =
+                              someGroupSelected && !allGroupSelected;
+                        }}
+                        onChange={() => {
+                          setSelectedOrderIds((prev) => {
+                            const next = new Set(prev);
+                            if (allGroupSelected) {
+                              groupIds.forEach((id) => next.delete(id));
+                            } else {
+                              groupIds.forEach((id) => next.add(id));
+                            }
+                            return next;
+                          });
+                        }}
                       />
-                    </th>
-                  )}
-                  <th className="px-4 py-3 text-muted small border-0">ORDER</th>
-                  <th className="px-3 py-3 text-muted small border-0">USER</th>
-                  <th className="px-3 py-3 text-muted small border-0">
-                    {serviceModeTab === "OUTSTATION" ? "HUB ROUTE" : "ROUTE"}
-                  </th>
-                  <th className="px-3 py-3 text-muted small border-0">MODE</th>
-                  <th className="px-3 py-3 text-muted small border-0">
-                    STATUS
-                  </th>
-                  <th className="px-3 py-3 text-muted small border-0">RIDER</th>
-                  <th className="px-3 py-3 text-muted small border-0 text-end">
-                    TOTAL
-                  </th>
-                  <th className="px-4 py-3 border-0 w-1" />
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr>
-                    <td
-                      colSpan={serviceModeTab === "OUTSTATION" ? 9 : 8}
-                      className="text-center py-5 text-muted small"
-                    >
-                      Loading…
-                    </td>
-                  </tr>
-                ) : filteredOrders.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={serviceModeTab === "OUTSTATION" ? 9 : 8}
-                      className="text-center py-5 text-muted small"
-                    >
-                      No orders in this view.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredOrders.map((order) => {
-                    const id = order.id ?? order.orderId;
-                    const isSelected = selectedOrderIds.has(id);
-                    const hubOrig = String(order.originHubCity || "").trim();
-                    const hubDest = String(order.destinationHubCity || "").trim();
-                    const hubRoute = hubOrig && hubDest ? `${hubOrig} → ${hubDest}` : null;
-                    return (
-                      <tr
-                        key={id}
-                        className="cursor-pointer"
-                        role="button"
-                        onClick={() => openDetail(order)}
-                        style={isSelected ? { backgroundColor: "#FEF3F2" } : undefined}
+                      <span
+                        className={`status-badge status-${statusBadgeClass(status)}`}
+                        style={{ fontSize: 12 }}
                       >
-                        {serviceModeTab === "OUTSTATION" && (
-                          <td
-                            className="px-3 py-3 border-0"
-                            onClick={(e) => toggleOrderSelection(id, e)}
+                        {formatStatusLabel(status)}
+                      </span>
+                      <span className="small text-muted fw-semibold">
+                        {groupOrders.length} order
+                        {groupOrders.length !== 1 ? "s" : ""}
+                      </span>
+                      <div className="ms-auto d-flex gap-2 flex-wrap">
+                        {nextStatus && !isException && (
+                          <button
+                            type="button"
+                            className="btn btn-sm fw-semibold d-flex align-items-center gap-1"
+                            style={{
+                              backgroundColor: "#EFF6FF",
+                              color: "#1D4ED8",
+                              borderRadius: 8,
+                              fontSize: 12,
+                              border: "none",
+                            }}
+                            disabled={bulkBusy}
+                            onClick={() =>
+                              runGroupAdvance(groupOrders, nextStatus)
+                            }
+                          >
+                            {bulkBusy ? (
+                              <span className="spinner-border spinner-border-sm" style={{ width: 12, height: 12 }} />
+                            ) : (
+                              <ChevronRight size={13} />
+                            )}
+                            Advance all → {formatStatusLabel(nextStatus)}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Order rows */}
+                    <div className="d-flex flex-column gap-2">
+                      {groupOrders.map((order) => {
+                        const id = order.id ?? order.orderId;
+                        const isSelected = selectedOrderIds.has(id);
+                        return (
+                          <div
+                            key={id}
+                            className="d-flex align-items-center gap-3 px-3 py-2 rounded-3"
+                            style={{
+                              backgroundColor: isSelected ? "#FEF3F2" : "#F8FAFC",
+                              cursor: "pointer",
+                            }}
                           >
                             <input
                               type="checkbox"
-                              className="form-check-input"
+                              className="form-check-input flex-shrink-0"
                               checked={isSelected}
-                              onChange={() => {}}
+                              onChange={(e) => toggleOrderSelection(id, e)}
+                              onClick={(e) => e.stopPropagation()}
                             />
-                          </td>
-                        )}
-                        <td className="px-4 py-3 border-0">
-                          <span className="fw-bold small">#{id}</span>
-                          <div className="text-muted" style={{ fontSize: 10 }}>
-                            <Clock size={10} className="me-1" />
-                            {formatWhen(order.createdAt)}
+                            <div
+                              className="d-flex flex-column flex-grow-1"
+                              onClick={() => openDetail(order)}
+                            >
+                              <div className="d-flex align-items-center gap-2">
+                                <span className="fw-bold small">#{id}</span>
+                                <span className="text-muted" style={{ fontSize: 11 }}>
+                                  User #{order.userId ?? "—"}
+                                </span>
+                                {order.riderId && (
+                                  <span
+                                    className="badge rounded-pill"
+                                    style={{
+                                      backgroundColor: "#F0FDF4",
+                                      color: "#15803D",
+                                      fontSize: 10,
+                                    }}
+                                  >
+                                    <Truck size={9} className="me-1" />
+                                    Rider #{order.riderId}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="d-flex align-items-center gap-2 mt-1">
+                                <Clock size={10} className="text-muted" />
+                                <span className="text-muted" style={{ fontSize: 11 }}>
+                                  {formatWhen(order.createdAt)}
+                                </span>
+                                {fmtMoney(order.totalAmount) !== "—" && (
+                                  <span className="text-muted" style={{ fontSize: 11 }}>
+                                    · {fmtMoney(order.totalAmount)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-light flex-shrink-0"
+                              style={{ borderRadius: 8, fontSize: 12 }}
+                              onClick={() => openDetail(order)}
+                            >
+                              View
+                            </button>
                           </div>
-                        </td>
-                        <td className="px-3 py-3 border-0 small">
-                          {order.userId ?? "—"}
-                        </td>
-                        <td className="px-3 py-3 border-0 small text-muted">
-                          {serviceModeTab === "OUTSTATION" && hubRoute ? (
-                            <div className="d-flex align-items-center gap-1 fw-semibold text-dark">
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        ) : (
+          /* Flat table — "All Routes" or INCITY */
+          <div className="dashboard-card p-0 overflow-hidden border-0 shadow-sm">
+            <div className="table-responsive">
+              <table className="table mb-0 table-hover align-middle">
+                <thead className="bg-light">
+                  <tr>
+                    {serviceModeTab === "OUTSTATION" && (
+                      <th className="px-3 py-3 border-0" style={{ width: 40 }}>
+                        <input
+                          type="checkbox"
+                          className="form-check-input"
+                          checked={
+                            filteredOrders.length > 0 &&
+                            filteredOrders.every((o) =>
+                              selectedOrderIds.has(o.id ?? o.orderId),
+                            )
+                          }
+                          onChange={toggleSelectAll}
+                          title="Select all visible"
+                        />
+                      </th>
+                    )}
+                    <th className="px-4 py-3 text-muted small border-0">ORDER</th>
+                    <th className="px-3 py-3 text-muted small border-0">USER</th>
+                    <th className="px-3 py-3 text-muted small border-0">
+                      {serviceModeTab === "OUTSTATION" ? "HUB ROUTE" : "ROUTE"}
+                    </th>
+                    <th className="px-3 py-3 text-muted small border-0">MODE</th>
+                    <th className="px-3 py-3 text-muted small border-0">STATUS</th>
+                    <th className="px-3 py-3 text-muted small border-0">RIDER</th>
+                    <th className="px-3 py-3 text-muted small border-0 text-end">
+                      TOTAL
+                    </th>
+                    <th className="px-4 py-3 border-0 w-1" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td
+                        colSpan={serviceModeTab === "OUTSTATION" ? 9 : 8}
+                        className="text-center py-5 text-muted small"
+                      >
+                        Loading…
+                      </td>
+                    </tr>
+                  ) : filteredOrders.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={serviceModeTab === "OUTSTATION" ? 9 : 8}
+                        className="text-center py-5 text-muted small"
+                      >
+                        No orders in this view.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredOrders.map((order) => {
+                      const id = order.id ?? order.orderId;
+                      const isSelected = selectedOrderIds.has(id);
+                      const hubOrig = String(order.originHubCity || "").trim();
+                      const hubDest = String(order.destinationHubCity || "").trim();
+                      const hubRoute =
+                        hubOrig && hubDest ? `${hubOrig} → ${hubDest}` : null;
+                      return (
+                        <tr
+                          key={id}
+                          className="cursor-pointer"
+                          role="button"
+                          onClick={() => openDetail(order)}
+                          style={
+                            isSelected ? { backgroundColor: "#FEF3F2" } : undefined
+                          }
+                        >
+                          {serviceModeTab === "OUTSTATION" && (
+                            <td
+                              className="px-3 py-3 border-0"
+                              onClick={(e) => toggleOrderSelection(id, e)}
+                            >
+                              <input
+                                type="checkbox"
+                                className="form-check-input"
+                                checked={isSelected}
+                                onChange={() => {}}
+                              />
+                            </td>
+                          )}
+                          <td className="px-4 py-3 border-0">
+                            <span className="fw-bold small">#{id}</span>
+                            <div className="text-muted" style={{ fontSize: 10 }}>
+                              <Clock size={10} className="me-1" />
+                              {formatWhen(order.createdAt)}
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 border-0 small">
+                            {order.userId ?? "—"}
+                          </td>
+                          <td className="px-3 py-3 border-0 small text-muted">
+                            {serviceModeTab === "OUTSTATION" && hubRoute ? (
                               <span
-                                className="badge rounded-pill"
+                                className="badge rounded-pill fw-semibold"
                                 style={{
                                   backgroundColor: "#EFF6FF",
                                   color: "#1D4ED8",
@@ -1053,54 +1318,55 @@ const Orders = () => {
                               >
                                 {hubRoute}
                               </span>
-                            </div>
-                          ) : (
-                            <div className="d-flex flex-column gap-1">
-                              <div className="d-flex align-items-center gap-1">
-                                <MapPin size={12} className="text-danger" />
-                                <span>{fmtAddress(order.pickupAddress)}</span>
+                            ) : (
+                              <div className="d-flex flex-column gap-1">
+                                <div className="d-flex align-items-center gap-1">
+                                  <MapPin size={12} className="text-danger" />
+                                  <span>{fmtAddress(order.pickupAddress)}</span>
+                                </div>
+                                <div className="d-flex align-items-center gap-1">
+                                  <MapPin size={12} className="text-success" />
+                                  <span>{fmtAddress(order.dropAddress)}</span>
+                                </div>
                               </div>
-                              <div className="d-flex align-items-center gap-1">
-                                <MapPin size={12} className="text-success" />
-                                <span>{fmtAddress(order.dropAddress)}</span>
-                              </div>
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-3 py-3 border-0 small">
-                          {order.serviceMode ?? "—"}
-                        </td>
-                        <td className="px-3 py-3 border-0">
-                          <span
-                            className={`status-badge status-${statusBadgeClass(
-                              order.status,
-                            )}`}
-                            style={{ fontSize: 11 }}
-                          >
-                            {formatStatusLabel(order.status)}
-                          </span>
-                        </td>
-                        <td className="px-3 py-3 border-0 small text-muted">
-                          {order.riderId ?? "—"}
-                        </td>
-                        <td className="px-3 py-3 border-0 text-end fw-bold small">
-                          {fmtMoney(order.totalAmount)}
-                        </td>
-                        <td className="px-4 py-3 border-0 text-muted">
-                          <ChevronRight size={18} />
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                            )}
+                          </td>
+                          <td className="px-3 py-3 border-0 small">
+                            {order.serviceMode ?? "—"}
+                          </td>
+                          <td className="px-3 py-3 border-0">
+                            <span
+                              className={`status-badge status-${statusBadgeClass(
+                                order.status,
+                              )}`}
+                              style={{ fontSize: 11 }}
+                            >
+                              {formatStatusLabel(order.status)}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 border-0 small text-muted">
+                            {order.riderId ?? "—"}
+                          </td>
+                          <td className="px-3 py-3 border-0 text-end fw-bold small">
+                            {fmtMoney(order.totalAmount)}
+                          </td>
+                          <td className="px-4 py-3 border-0 text-muted">
+                            <ChevronRight size={18} />
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        )}
 
         <p className="text-muted small mt-3 mb-0">
-          Showing {filteredOrders.length} of {modeFilteredOrders.length}{" "}
-          {serviceModeTab === "INCITY" ? "incity orders" : "outstation orders"}
+          {serviceModeTab === "OUTSTATION" && routeFilter !== "All Routes"
+            ? `${filteredOrders.length} order${filteredOrders.length !== 1 ? "s" : ""} on ${routeFilter}`
+            : `Showing ${filteredOrders.length} of ${modeFilteredOrders.length} ${serviceModeTab === "INCITY" ? "incity" : "outstation"} orders`}
         </p>
       </div>
 

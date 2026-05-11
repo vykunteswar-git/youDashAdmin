@@ -4,7 +4,7 @@ const API_BASE_URL =
   (typeof import.meta !== "undefined" &&
     import.meta.env?.VITE_API_BASE_URL &&
     String(import.meta.env.VITE_API_BASE_URL).trim()) ||
-  "http://192.168.31.54:8080";
+  "https://youdashexpress.com";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
