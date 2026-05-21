@@ -1,12 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Search,
-  CornerDownLeft,
-  ArrowUp,
-  ArrowDown,
-  Command,
-} from "lucide-react";
+import { Search, CornerDownLeft, ArrowUp, ArrowDown, Command } from "lucide-react";
 import { menuGroups, extraSearchRoutes } from "../config/adminNavConfig";
 import { filterAndRankNav, flattenNav } from "../utils/navSearch";
 
@@ -21,12 +15,12 @@ export default function GlobalSearchPalette({ open, onClose }) {
 
   const flatItems = useMemo(
     () => flattenNav(menuGroups, extraSearchRoutes),
-    [],
+    []
   );
 
   const results = useMemo(
     () => filterAndRankNav(flatItems, query, 14),
-    [flatItems, query],
+    [flatItems, query]
   );
 
   const go = useCallback(
@@ -34,7 +28,7 @@ export default function GlobalSearchPalette({ open, onClose }) {
       navigate(path);
       onClose();
     },
-    [navigate, onClose],
+    [navigate, onClose]
   );
 
   useEffect(() => {
@@ -84,9 +78,7 @@ export default function GlobalSearchPalette({ open, onClose }) {
 
   const isMac =
     typeof navigator !== "undefined" &&
-    /Mac|iPhone|iPod|iPad/i.test(
-      navigator.platform || navigator.userAgent || "",
-    );
+    /Mac|iPhone|iPod|iPad/i.test(navigator.platform || navigator.userAgent || "");
 
   return (
     <div
@@ -138,8 +130,7 @@ export default function GlobalSearchPalette({ open, onClose }) {
         >
           {results.length === 0 ? (
             <div className="p-4 text-center text-muted small">
-              No pages match “{query.trim()}”. Try another word or check
-              spelling.
+              No pages match “{query.trim()}”. Try another word or check spelling.
             </div>
           ) : (
             results.map((item, idx) => {
@@ -155,9 +146,7 @@ export default function GlobalSearchPalette({ open, onClose }) {
                   }`}
                   style={{
                     cursor: "pointer",
-                    borderLeft: active
-                      ? "3px solid #E51818"
-                      : "3px solid transparent",
+                    borderLeft: active ? "3px solid #E51818" : "3px solid transparent",
                   }}
                   onMouseEnter={() => setSelected(idx)}
                   onClick={() => go(item.path)}
@@ -176,21 +165,13 @@ export default function GlobalSearchPalette({ open, onClose }) {
                     </span>
                   ) : null}
                   <div className="flex-grow-1 min-w-0">
-                    <div className="fw-semibold small text-dark text-truncate">
-                      {item.label}
-                    </div>
-                    <div
-                      className="text-muted text-truncate"
-                      style={{ fontSize: 11 }}
-                    >
+                    <div className="fw-semibold small text-dark text-truncate">{item.label}</div>
+                    <div className="text-muted text-truncate" style={{ fontSize: 11 }}>
                       {item.group} · {item.path}
                     </div>
                   </div>
                   {active ? (
-                    <CornerDownLeft
-                      size={16}
-                      className="text-muted flex-shrink-0 d-none d-sm-block"
-                    />
+                    <CornerDownLeft size={16} className="text-muted flex-shrink-0 d-none d-sm-block" />
                   ) : null}
                 </button>
               );
@@ -199,10 +180,7 @@ export default function GlobalSearchPalette({ open, onClose }) {
         </div>
 
         <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 px-3 py-2 border-top bg-light small text-muted">
-          <span
-            className="d-flex align-items-center gap-1"
-            style={{ fontSize: 11 }}
-          >
+          <span className="d-flex align-items-center gap-1" style={{ fontSize: 11 }}>
             <ArrowUp size={12} />
             <ArrowDown size={12} />
             navigate
@@ -210,10 +188,7 @@ export default function GlobalSearchPalette({ open, onClose }) {
             <CornerDownLeft size={12} />
             open
           </span>
-          <span
-            className="d-flex align-items-center gap-1"
-            style={{ fontSize: 11 }}
-          >
+          <span className="d-flex align-items-center gap-1" style={{ fontSize: 11 }}>
             <Command size={12} />
             {isMac ? "K" : "Ctrl K"} to toggle
           </span>

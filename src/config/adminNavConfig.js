@@ -17,6 +17,7 @@ import {
   Tags,
   Percent,
   Wallet,
+  ArrowDownToLine,
   Flame,
   Smartphone,
 } from "lucide-react";
@@ -90,7 +91,13 @@ export const menuGroups = [
         path: "/wallet-admin",
         label: "Wallet & settlements",
         icon: Wallet,
-        keywords: ["wallet", "settlements", "payouts", "balance"],
+        keywords: ["wallet", "settlements", "payouts", "balance", "cod"],
+      },
+      {
+        path: "/withdrawal-requests",
+        label: "Withdrawal requests",
+        icon: ArrowDownToLine,
+        keywords: ["withdrawal", "payout", "bank", "approve", "reject", "wallet"],
       },
       { path: "/payments", label: "Payments", icon: CreditCard, keywords: ["gateway", "transactions"] },
       {

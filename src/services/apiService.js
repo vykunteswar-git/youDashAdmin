@@ -145,6 +145,13 @@ export function getAxiosErrorMessage(error, fallback = "Request failed.") {
   return error?.message || fallback;
 }
 
+/** 403 → fixed copy; otherwise ApiResponse message or fallback */
+export function getAdminHttpErrorMessage(error, fallback = "Request failed.") {
+  const status = error?.response?.status;
+  if (status === 403) return "Admin only";
+  return getAxiosErrorMessage(error, fallback);
+}
+
 /** Spring may return a bare array or { data: [...] } */
 export function unwrapList(res) {
   const d = res?.data;
@@ -328,14 +335,24 @@ export const commissionService = {
   saveConfig: (payload) => api.post("/admin/commission/config", payload),
 };
 
-/** AdminCodSettleRequestDTO; AdminWithdrawalApproveDTO */
+/** AdminCodSettleRequestDTO; rider withdrawal approval */
 export const walletAdminService = {
   codSettle: (payload) => api.post("/admin/cod/settle", payload),
-  listWithdrawalRequests: (params) =>
+  listWithdrawals: (status, page = 0, size = 50) =>
     api.get("/admin/withdraw/requests", {
-      params,
+      params: {
+        ...(status ? { status } : {}),
+        page,
+        size,
+      },
     }),
-  approveWithdrawal: (payload) => api.post("/admin/withdraw/approve", payload),
+  approveWithdrawal: (withdrawalId) =>
+    api.post("/admin/withdraw/approve", {
+      withdrawalId,
+      approve: true,
+    }),
+  rejectWithdrawal: (withdrawalId) =>
+    api.post("/admin/withdraw/reject", { withdrawalId }),
 };
 
 /** Admin coupon DTO: code, title, description, discountType PERCENT|FLAT, discountValue, optional caps & ISO validFrom/validTo, serviceMode, active */

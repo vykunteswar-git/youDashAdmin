@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useLocation } from "react-router-dom";
 import {
   Bike,
   Search,
@@ -61,6 +62,7 @@ function statusBadgeClass(status) {
 }
 
 const Riders = () => {
+  const location = useLocation();
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("All");
 
@@ -82,9 +84,11 @@ const Riders = () => {
         riderService.getPendingRiders(),
         riderService.getAvailableRiders(),
       ]);
-      setPendingRiders(unwrapList(pRes).map((r) => normalizeRider(r, "pending")));
+      setPendingRiders(
+        unwrapList(pRes).map((r) => normalizeRider(r, "pending")),
+      );
       setAvailableRiders(
-        unwrapList(aRes).map((r) => normalizeRider(r, "available"))
+        unwrapList(aRes).map((r) => normalizeRider(r, "available")),
       );
     } catch (e) {
       const msg =
@@ -109,11 +113,15 @@ const Riders = () => {
     try {
       const res = await riderService.listByStatus(status);
       setStatusFilteredRiders(
-        unwrapList(res).map((r) => normalizeRider(r, `status:${String(status).toLowerCase()}`))
+        unwrapList(res).map((r) =>
+          normalizeRider(r, `status:${String(status).toLowerCase()}`),
+        ),
       );
     } catch (e) {
       const msg =
-        e?.response?.data?.message || e?.message || "Failed to load riders by status.";
+        e?.response?.data?.message ||
+        e?.message ||
+        "Failed to load riders by status.";
       setError(msg);
       setStatusFilteredRiders([]);
     } finally {
@@ -127,8 +135,17 @@ const Riders = () => {
 
   const mergedList = useMemo(
     () => [...pendingRiders, ...availableRiders],
-    [pendingRiders, availableRiders]
+    [pendingRiders, availableRiders],
   );
+
+  useEffect(() => {
+    const highlightId = location.state?.highlightRiderId;
+    if (highlightId == null || loading) return;
+    const found = mergedList.find(
+      (r) => String(r.id) === String(highlightId)
+    );
+    if (found) setSelectedRider(found);
+  }, [location.state, loading, mergedList]);
 
   const avgRating = useMemo(() => {
     const nums = availableRiders
@@ -143,7 +160,14 @@ const Riders = () => {
     if (activeTab === "Pending") return pendingRiders;
     if (activeTab === "Available") return availableRiders;
     return mergedList;
-  }, [activeTab, pendingRiders, availableRiders, mergedList, statusFilter, statusFilteredRiders]);
+  }, [
+    activeTab,
+    pendingRiders,
+    availableRiders,
+    mergedList,
+    statusFilter,
+    statusFilteredRiders,
+  ]);
 
   const q = search.trim().toLowerCase();
   const filteredRiders = baseList.filter((rider) => {
@@ -165,7 +189,7 @@ const Riders = () => {
       setSelectedRider(null);
     } catch (e) {
       window.alert(
-        e?.response?.data?.message || e?.message || "Could not approve rider."
+        e?.response?.data?.message || e?.message || "Could not approve rider.",
       );
     } finally {
       setActionId(null);
@@ -181,7 +205,7 @@ const Riders = () => {
       setSelectedRider(null);
     } catch (e) {
       window.alert(
-        e?.response?.data?.message || e?.message || "Could not reject rider."
+        e?.response?.data?.message || e?.message || "Could not reject rider.",
       );
     } finally {
       setActionId(null);
@@ -209,7 +233,7 @@ const Riders = () => {
             color: "white",
             borderRadius: "12px",
             border: "none",
-            height: "44px"
+            height: "44px",
           }}
         >
           <UserPlus size={18} /> <span>Onboard New Rider</span>
@@ -219,23 +243,26 @@ const Riders = () => {
       <div className="row g-4 mb-4">
         <div className="col-12 col-md-4">
           <div
-            className="dashboard-card border-0 bg-primary-red text-white shadow-sm"
-            style={{ backgroundColor: "#E51818", borderRadius: "16px" }}
+            className="dashboard-card border-0 shadow-sm stat-card--brand"
+            style={{ borderRadius: "16px" }}
           >
             <div className="d-flex align-items-center gap-3 mb-2">
-              <div className="bg-white bg-opacity-25 p-2 rounded-3">
+              <div className="stat-card-icon-wrap p-2 rounded-3">
                 <Bike size={20} />
               </div>
-              <span className="small opacity-75 fw-bold">Available riders</span>
+              <span className="small stat-card-label">Available riders</span>
             </div>
             <h4 className="fw-bold mb-0">{availableRiders.length}</h4>
-            <small className="opacity-75" style={{ fontSize: "10px" }}>
+            <small className="stat-card-sub">
               Currently available for assignments
             </small>
           </div>
         </div>
         <div className="col-12 col-md-4">
-          <div className="dashboard-card border-0 bg-white shadow-sm border border-secondary border-opacity-10" style={{ borderRadius: "16px" }}>
+          <div
+            className="dashboard-card border-0 shadow-sm stat-card--emerald"
+            style={{ borderRadius: "16px" }}
+          >
             <div className="d-flex align-items-center gap-3 mb-2">
               <div className="bg-success bg-opacity-10 p-2 rounded-3 text-success">
                 <FileCheck size={20} />
@@ -249,7 +276,10 @@ const Riders = () => {
           </div>
         </div>
         <div className="col-12 col-md-4">
-          <div className="dashboard-card border-0 bg-white shadow-sm border border-secondary border-opacity-10" style={{ borderRadius: "16px" }}>
+          <div
+            className="dashboard-card border-0 shadow-sm stat-card--amber"
+            style={{ borderRadius: "16px" }}
+          >
             <div className="d-flex align-items-center gap-3 mb-2">
               <div className="bg-warning bg-opacity-10 p-2 rounded-3 text-warning">
                 <TrendingUp size={20} />
@@ -286,7 +316,10 @@ const Riders = () => {
         </div>
       ) : null}
 
-      <div className="dashboard-card p-0 overflow-hidden border-0 shadow-sm bg-white" style={{ borderRadius: "20px" }}>
+      <div
+        className="dashboard-card p-0 overflow-hidden border-0 shadow-sm yd-data-panel"
+        style={{ borderRadius: "20px" }}
+      >
         <div className="p-4 border-bottom d-flex flex-column flex-md-row gap-4">
           <div className="d-flex gap-2 overflow-auto custom-scrollbar">
             {tabs.map((tab) => (
@@ -298,8 +331,13 @@ const Riders = () => {
                 style={{
                   minWidth: "88px",
                   backgroundColor:
-                    statusFilter === "ALL" && activeTab === tab ? "#E51818" : "#F1F5F9",
-                  color: statusFilter === "ALL" && activeTab === tab ? "#fff" : "#64748B",
+                    statusFilter === "ALL" && activeTab === tab
+                      ? "#E51818"
+                      : "#F1F5F9",
+                  color:
+                    statusFilter === "ALL" && activeTab === tab
+                      ? "#fff"
+                      : "#64748B",
                   boxShadow:
                     statusFilter === "ALL" && activeTab === tab
                       ? "0 4px 12px rgba(229,24,24,0.3)"
@@ -334,7 +372,15 @@ const Riders = () => {
             </select>
           </div>
           <div className="search-container flex-grow-1 position-relative">
-            <Search size={18} className="text-muted position-absolute" style={{ left: "16px", top: "50%", transform: "translateY(-50%)" }} />
+            <Search
+              size={18}
+              className="text-muted position-absolute"
+              style={{
+                left: "16px",
+                top: "50%",
+                transform: "translateY(-50%)",
+              }}
+            />
             <input
               type="text"
               placeholder="Search by name, phone, or vehicle…"
@@ -350,7 +396,7 @@ const Riders = () => {
           <div className="col-12">
             <div className="table-responsive">
               <table className="table mb-0 table-hover">
-                <thead className="bg-light">
+                <thead>
                   <tr>
                     <th className="px-4 py-3 text-muted small border-0 fw-bold">
                       RIDER
@@ -382,8 +428,13 @@ const Riders = () => {
                         colSpan={7}
                         className="text-center py-5 text-muted small"
                       >
-                        <div className="spinner-border spinner-border-sm me-2 text-danger" role="status"></div>
-                        {statusLoading ? "Loading riders by status…" : "Loading riders…"}
+                        <div
+                          className="spinner-border spinner-border-sm me-2 text-danger"
+                          role="status"
+                        ></div>
+                        {statusLoading
+                          ? "Loading riders by status…"
+                          : "Loading riders…"}
                       </td>
                     </tr>
                   ) : filteredRiders.length === 0 ? (
@@ -398,7 +449,12 @@ const Riders = () => {
                   ) : (
                     filteredRiders.map((rider) => {
                       return (
-                        <tr key={`${rider.source}-${rider.id}`} className="align-middle" style={{ cursor: "pointer" }} onClick={() => setSelectedRider(rider)}>
+                        <tr
+                          key={`${rider.source}-${rider.id}`}
+                          className="align-middle"
+                          style={{ cursor: "pointer" }}
+                          onClick={() => setSelectedRider(rider)}
+                        >
                           <td className="px-4 py-3 border-0">
                             <div className="d-flex align-items-center gap-3">
                               <div
@@ -415,7 +471,9 @@ const Riders = () => {
                                 {riderInitials(rider.name)}
                               </div>
                               <div>
-                                <p className="mb-0 fw-bold small text-dark">{rider.name}</p>
+                                <p className="mb-0 fw-bold small text-dark">
+                                  {rider.name}
+                                </p>
                                 <small
                                   className="text-muted d-flex align-items-center gap-1"
                                   style={{ fontSize: "10px" }}
@@ -436,7 +494,8 @@ const Riders = () => {
                           <td className="px-3 py-3 border-0 small">
                             <span className="text-warning fw-bold">
                               ★{" "}
-                              {rider.rating != null && !Number.isNaN(rider.rating)
+                              {rider.rating != null &&
+                              !Number.isNaN(rider.rating)
                                 ? rider.rating
                                 : "—"}
                             </span>
@@ -444,7 +503,7 @@ const Riders = () => {
                           <td className="px-3 py-3 border-0 small">
                             <span
                               className={`status-badge status-${statusBadgeClass(
-                                rider.approvalStatus
+                                rider.approvalStatus,
                               )} p-1 px-3 fw-bold`}
                               style={{ fontSize: "10px", borderRadius: "20px" }}
                             >
@@ -485,11 +544,14 @@ const Riders = () => {
             zIndex: 1060,
             overflowY: "auto",
             backgroundColor: "#F8F9FB",
-            display: "block"
+            display: "block",
           }}
         >
           {/* Top Sticky Header */}
-          <div className="bg-white border-bottom px-4 py-3 sticky-top shadow-sm" style={{ zIndex: 1100 }}>
+          <div
+            className="bg-white border-bottom px-4 py-3 sticky-top shadow-sm"
+            style={{ zIndex: 1100 }}
+          >
             <div className="container-fluid d-flex justify-content-between align-items-center px-0">
               <div className="d-flex align-items-center gap-3">
                 <div
@@ -509,14 +571,16 @@ const Riders = () => {
                     {selectedRider.name}
                     <span
                       className={`status-badge status-${statusBadgeClass(
-                        selectedRider.approvalStatus
+                        selectedRider.approvalStatus,
                       )} p-1 px-2 fw-bold`}
                       style={{ fontSize: "10px", borderRadius: "10px" }}
                     >
                       {selectedRider.approvalStatus}
                     </span>
                   </h5>
-                  <small className="text-muted">Rider ID: {selectedRider.id} • {selectedRider.phone}</small>
+                  <small className="text-muted">
+                    Rider ID: {selectedRider.id} • {selectedRider.phone}
+                  </small>
                 </div>
               </div>
 
@@ -526,7 +590,11 @@ const Riders = () => {
                     <button
                       type="button"
                       className="btn btn-sm fw-bold px-4 rounded-3 d-flex align-items-center gap-2"
-                      style={{ backgroundColor: "#059669", color: "white", height: "40px" }}
+                      style={{
+                        backgroundColor: "#059669",
+                        color: "white",
+                        height: "40px",
+                      }}
                       disabled={actionId === selectedRider.id}
                       onClick={() => handleApprove(selectedRider.id)}
                     >
@@ -555,37 +623,78 @@ const Riders = () => {
             </div>
           </div>
 
-          <div className="container-fluid py-4 pb-5 px-4" style={{ maxWidth: "1200px" }}>
+          <div
+            className="container-fluid py-4 pb-5 px-4"
+            style={{ maxWidth: "1200px" }}
+          >
             <div className="row g-4">
               {/* Left Column: Basic Info & Profile */}
               <div className="col-12 col-lg-4">
                 <div className="bg-white rounded-4 shadow-sm p-4 mb-4 border-0">
-                  <h6 className="fw-bold mb-3 text-uppercase opacity-50 small letter-spacing-1">Personal Details</h6>
+                  <h6 className="fw-bold mb-3 text-uppercase opacity-50 small letter-spacing-1">
+                    Personal Details
+                  </h6>
 
                   <div className="d-flex flex-column gap-3">
                     {[
-                      { icon: Phone, label: "Phone Number", val: selectedRider.phone },
-                      { icon: User, label: "Full Name", val: selectedRider.name },
-                      { icon: MapPin, label: "Location/City", val: selectedRider.city || "—" },
-                      { icon: Calendar, label: "Joined Date", val: selectedRider.createdAt ? new Date(selectedRider.createdAt).toLocaleDateString() : "Pending Registration" },
+                      {
+                        icon: Phone,
+                        label: "Phone Number",
+                        val: selectedRider.phone,
+                      },
+                      {
+                        icon: User,
+                        label: "Full Name",
+                        val: selectedRider.name,
+                      },
+                      {
+                        icon: MapPin,
+                        label: "Location/City",
+                        val: selectedRider.city || "—",
+                      },
+                      {
+                        icon: Calendar,
+                        label: "Joined Date",
+                        val: selectedRider.createdAt
+                          ? new Date(
+                              selectedRider.createdAt,
+                            ).toLocaleDateString()
+                          : "Pending Registration",
+                      },
                     ].map((item, idx) => (
-                      <div key={idx} className="d-flex align-items-center gap-3 p-2 rounded-3" style={{ backgroundColor: "#F8F9FA" }}>
+                      <div
+                        key={idx}
+                        className="d-flex align-items-center gap-3 p-2 rounded-3"
+                        style={{ backgroundColor: "#F8F9FA" }}
+                      >
                         <div className="bg-white p-2 rounded-2 shadow-sm">
                           <item.icon size={16} className="text-danger" />
                         </div>
                         <div>
-                          <p className="text-muted mb-0" style={{ fontSize: "10px" }}>{item.label}</p>
+                          <p
+                            className="text-muted mb-0"
+                            style={{ fontSize: "10px" }}
+                          >
+                            {item.label}
+                          </p>
                           <p className="fw-bold small mb-0">{item.val}</p>
                         </div>
                       </div>
                     ))}
                   </div>
 
-                  <div className="mt-4 p-3 rounded-4 text-white shadow-sm" style={{ background: "linear-gradient(135deg, #1e293b, #334155)" }}>
+                  <div
+                    className="mt-4 p-3 rounded-4 text-white shadow-sm"
+                    style={{
+                      background: "linear-gradient(135deg, #1e293b, #334155)",
+                    }}
+                  >
                     <div className="d-flex justify-content-between align-items-center">
                       <div>
                         <p className="small opacity-75 mb-1">Rider Rating</p>
-                        <h3 className="fw-bold mb-0 text-warning">★ {selectedRider.rating || "New"}</h3>
+                        <h3 className="fw-bold mb-0 text-warning">
+                          ★ {selectedRider.rating || "New"}
+                        </h3>
                       </div>
                       <div className="bg-white bg-opacity-20 p-2 rounded-3">
                         <Star size={24} />
@@ -595,24 +704,41 @@ const Riders = () => {
                 </div>
 
                 <div className="bg-white rounded-4 shadow-sm p-4 border-0">
-                  <h6 className="fw-bold mb-3 text-uppercase opacity-50 small letter-spacing-1">Emergency Contact</h6>
-                  <div className="p-3 rounded-4 border-dashed" style={{ backgroundColor: "#FEF2F2", border: "2px dashed #FECACA" }}>
+                  <h6 className="fw-bold mb-3 text-uppercase opacity-50 small letter-spacing-1">
+                    Emergency Contact
+                  </h6>
+                  <div
+                    className="p-3 rounded-4 border-dashed"
+                    style={{
+                      backgroundColor: "#FEF2F2",
+                      border: "2px dashed #FECACA",
+                    }}
+                  >
                     <div className="d-flex align-items-center gap-3 mb-3">
                       <div className="bg-white p-2 rounded-3 text-danger shadow-sm">
                         <AlertTriangle size={20} />
                       </div>
                       <div>
-                        <p className="fw-bold mb-0 text-danger">{selectedRider.emergencyContactName || "Not Provided"}</p>
-                        <small className="text-muted">Primary Emergency Contact</small>
+                        <p className="fw-bold mb-0 text-danger">
+                          {selectedRider.emergencyContactName || "Not Provided"}
+                        </p>
+                        <small className="text-muted">
+                          Primary Emergency Contact
+                        </small>
                       </div>
                     </div>
                     <div className="d-flex flex-column gap-2">
                       <p className="mb-0 small d-flex align-items-center gap-2">
                         <Phone size={12} className="text-muted" />
-                        <span className="fw-bold">{selectedRider.emergencyContactPhone || selectedRider.emergencyContactNumber || "—"}</span>
+                        <span className="fw-bold">
+                          {selectedRider.emergencyContactPhone ||
+                            selectedRider.emergencyContactNumber ||
+                            "—"}
+                        </span>
                       </p>
                       <p className="mb-0 small d-flex align-items-center gap-2 text-muted">
-                        <User size={12} /> Relation: {selectedRider.emergencyContactRelation || "—"}
+                        <User size={12} /> Relation:{" "}
+                        {selectedRider.emergencyContactRelation || "—"}
                       </p>
                     </div>
                   </div>
@@ -623,21 +749,47 @@ const Riders = () => {
               <div className="col-12 col-lg-8">
                 {/* Vehicle Details */}
                 <div className="bg-white rounded-4 shadow-sm p-4 mb-4 border-0">
-                  <h6 className="fw-bold mb-3 text-uppercase opacity-50 small letter-spacing-1">Vehicle Information</h6>
+                  <h6 className="fw-bold mb-3 text-uppercase opacity-50 small letter-spacing-1">
+                    Vehicle Information
+                  </h6>
                   <div className="row g-3">
                     {[
-                      { label: "Vehicle Type", val: selectedRider.vehicleType, icon: Bike },
-                      { label: "Vehicle Model", val: selectedRider.vehicleModel || "—", icon: CreditCard },
-                      { label: "Vehicle Number", val: selectedRider.vehicleNumber || "—", icon: ShieldCheck },
-                      { label: "Registration State", val: selectedRider.vehicleState || "—", icon: FileText },
+                      {
+                        label: "Vehicle Type",
+                        val: selectedRider.vehicleType,
+                        icon: Bike,
+                      },
+                      {
+                        label: "Vehicle Model",
+                        val: selectedRider.vehicleModel || "—",
+                        icon: CreditCard,
+                      },
+                      {
+                        label: "Vehicle Number",
+                        val: selectedRider.vehicleNumber || "—",
+                        icon: ShieldCheck,
+                      },
+                      {
+                        label: "Registration State",
+                        val: selectedRider.vehicleState || "—",
+                        icon: FileText,
+                      },
                     ].map((v, i) => (
                       <div key={i} className="col-12 col-sm-6">
-                        <div className="p-3 rounded-4 d-flex align-items-center gap-3 border" style={{ backgroundColor: "#FDFDFD" }}>
+                        <div
+                          className="p-3 rounded-4 d-flex align-items-center gap-3 border"
+                          style={{ backgroundColor: "#FDFDFD" }}
+                        >
                           <div className="bg-danger bg-opacity-10 p-2 rounded-3 text-danger">
                             <v.icon size={20} />
                           </div>
                           <div>
-                            <p className="text-muted mb-0" style={{ fontSize: "10px" }}>{v.label}</p>
+                            <p
+                              className="text-muted mb-0"
+                              style={{ fontSize: "10px" }}
+                            >
+                              {v.label}
+                            </p>
                             <p className="fw-bold mb-0 small">{v.val}</p>
                           </div>
                         </div>
@@ -648,48 +800,109 @@ const Riders = () => {
 
                 {/* Uploaded Documents */}
                 <div className="bg-white rounded-4 shadow-sm p-4 border-0">
-                  <h6 className="fw-bold mb-4 text-uppercase opacity-50 small letter-spacing-1">Onboarding Documents</h6>
+                  <h6 className="fw-bold mb-4 text-uppercase opacity-50 small letter-spacing-1">
+                    Onboarding Documents
+                  </h6>
                   <div className="row g-4">
                     {[
-                      { label: "Selfie Image", url: selectedRider.selfieUrl || selectedRider.profileImage },
-                      { label: "DRIVING LICENSE", url: selectedRider.licenseImageUrl || selectedRider.licenseImage },
-                      { label: "AADHAR CARD", url: selectedRider.aadharImageUrl || selectedRider.aadharCardImage },
-                      { label: "PAN CARD", url: selectedRider.panImageUrl || selectedRider.panCardImage },
-                      { label: "Vehicle Registration", url: selectedRider.vehicleRegistrationImage },
-                    ].filter(doc => doc.url).length === 0 ? (
+                      {
+                        label: "Selfie Image",
+                        url:
+                          selectedRider.selfieUrl || selectedRider.profileImage,
+                      },
+                      {
+                        label: "DRIVING LICENSE",
+                        url:
+                          selectedRider.licenseImageUrl ||
+                          selectedRider.licenseImage,
+                      },
+                      {
+                        label: "AADHAR CARD",
+                        url:
+                          selectedRider.aadharImageUrl ||
+                          selectedRider.aadharCardImage,
+                      },
+                      {
+                        label: "PAN CARD",
+                        url:
+                          selectedRider.panImageUrl ||
+                          selectedRider.panCardImage,
+                      },
+                      {
+                        label: "Vehicle Registration",
+                        url: selectedRider.vehicleRegistrationImage,
+                      },
+                    ].filter((doc) => doc.url).length === 0 ? (
                       <div className="col-12 text-center py-5">
                         <div className="mb-3 text-muted opacity-25">
                           <ImageIcon size={64} />
                         </div>
-                        <p className="text-muted">No documents uploaded by the rider.</p>
+                        <p className="text-muted">
+                          No documents uploaded by the rider.
+                        </p>
                       </div>
                     ) : (
                       [
-                        { label: "Selfie Image", url: selectedRider.selfieUrl || selectedRider.profileImage },
-                        { label: "Driving License", url: selectedRider.licenseImageUrl || selectedRider.licenseImage },
-                        { label: "Aadhar Card", url: selectedRider.aadharImageUrl || selectedRider.aadharCardImage },
-                        { label: "PAN Card", url: selectedRider.panImageUrl || selectedRider.panCardImage },
-                        { label: "Vehicle Registration", url: selectedRider.vehicleRegistrationImage },
-                      ].filter(doc => doc.url).map((doc, i) => (
-                        <div key={i} className="col-12 col-md-6">
-                          <div className="card border-0 shadow-sm overflow-hidden rounded-4 h-100">
-                            <div className="bg-light p-2 text-center border-bottom">
-                              <span className="fw-bold text-uppercase small opacity-75" style={{ fontSize: "10px" }}>{doc.label}</span>
-                            </div>
-                            <div className="position-relative group" style={{ height: "220px", cursor: "zoom-in" }}>
-                              <img
-                                src={doc.url}
-                                alt={doc.label}
-                                className="w-100 h-100 object-fit-cover transition-all"
-                                onClick={() => window.open(doc.url, "_blank")}
-                              />
-                              <div className="position-absolute bottom-0 start-0 w-100 p-2 bg-dark bg-opacity-50 opacity-0 group-hover-opacity-100 transition-all">
-                                <small className="text-white">Click to view full size</small>
+                        {
+                          label: "Selfie Image",
+                          url:
+                            selectedRider.selfieUrl ||
+                            selectedRider.profileImage,
+                        },
+                        {
+                          label: "Driving License",
+                          url:
+                            selectedRider.licenseImageUrl ||
+                            selectedRider.licenseImage,
+                        },
+                        {
+                          label: "Aadhar Card",
+                          url:
+                            selectedRider.aadharImageUrl ||
+                            selectedRider.aadharCardImage,
+                        },
+                        {
+                          label: "PAN Card",
+                          url:
+                            selectedRider.panImageUrl ||
+                            selectedRider.panCardImage,
+                        },
+                        {
+                          label: "Vehicle Registration",
+                          url: selectedRider.vehicleRegistrationImage,
+                        },
+                      ]
+                        .filter((doc) => doc.url)
+                        .map((doc, i) => (
+                          <div key={i} className="col-12 col-md-6">
+                            <div className="card border-0 shadow-sm overflow-hidden rounded-4 h-100">
+                              <div className="bg-light p-2 text-center border-bottom">
+                                <span
+                                  className="fw-bold text-uppercase small opacity-75"
+                                  style={{ fontSize: "10px" }}
+                                >
+                                  {doc.label}
+                                </span>
+                              </div>
+                              <div
+                                className="position-relative group"
+                                style={{ height: "220px", cursor: "zoom-in" }}
+                              >
+                                <img
+                                  src={doc.url}
+                                  alt={doc.label}
+                                  className="w-100 h-100 object-fit-cover transition-all"
+                                  onClick={() => window.open(doc.url, "_blank")}
+                                />
+                                <div className="position-absolute bottom-0 start-0 w-100 p-2 bg-dark bg-opacity-50 opacity-0 group-hover-opacity-100 transition-all">
+                                  <small className="text-white">
+                                    Click to view full size
+                                  </small>
+                                </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      ))
+                        ))
                     )}
                   </div>
                 </div>

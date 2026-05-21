@@ -17,6 +17,7 @@ import DeliveryFee from "../pages/DeliveryFee";
 import RiderCommission from "../pages/RiderCommission";
 import RiderIncentives from "../pages/RiderIncentives";
 import WalletAdmin from "../pages/WalletAdmin";
+import WithdrawalRequests from "../pages/WithdrawalRequests";
 import Zones from "../pages/Zones";
 import Hubs from "../pages/Hubs";
 import HubRoutes from "../pages/HubRoutes";
@@ -95,6 +96,7 @@ const AppRoutes = () => {
         <Route path="rider-commission" element={<RiderCommission />} />
         <Route path="rider-incentives" element={<RiderIncentives />} />
         <Route path="wallet-admin" element={<WalletAdmin />} />
+        <Route path="withdrawal-requests" element={<WithdrawalRequests />} />
         <Route path="transactions" element={<Transactions />} />
         <Route path="reports" element={<Reports />} />
         <Route path="promotions" element={<Promotions />} />

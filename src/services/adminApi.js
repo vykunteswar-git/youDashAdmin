@@ -22,10 +22,8 @@ import {
 
 /**
  * @typedef {Object} WithdrawalRequestRow
- * @property {number} withdrawalId
+ * @property {number} id
  * @property {number|string} riderId
- * @property {string=} riderName
- * @property {string=} riderPhone
  * @property {number} amount
  * @property {"PENDING"|"APPROVED"|"REJECTED"|string} status
  * @property {string=} accountHolderName
