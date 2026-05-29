@@ -335,6 +335,21 @@ export const commissionService = {
   saveConfig: (payload) => api.post("/admin/commission/config", payload),
 };
 
+/** COD commission handover (bulk deposit by rider) */
+export const codHandoverService = {
+  listRiders: (params = {}) =>
+    api.get("/admin/cod/riders", {
+      params: {
+        ...(params.status ? { status: params.status } : {}),
+        ...(params.search ? { search: params.search } : {}),
+      },
+    }),
+  getRiderDetail: (riderId) => api.get(`/admin/cod/riders/${riderId}`),
+  confirmDeposit: (payload) => api.post("/admin/cod/deposit", payload),
+  updateHandoverLimit: (riderId, codHandoverLimit) =>
+    api.patch(`/admin/cod/riders/${riderId}/handover-limit`, { codHandoverLimit }),
+};
+
 /** AdminCodSettleRequestDTO; rider withdrawal approval */
 export const walletAdminService = {
   codSettle: (payload) => api.post("/admin/cod/settle", payload),

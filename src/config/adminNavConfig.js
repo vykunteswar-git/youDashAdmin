@@ -17,6 +17,7 @@ import {
   Tags,
   Percent,
   Wallet,
+  Banknote,
   ArrowDownToLine,
   Flame,
   Smartphone,
@@ -92,6 +93,12 @@ export const menuGroups = [
         label: "Wallet & settlements",
         icon: Wallet,
         keywords: ["wallet", "settlements", "payouts", "balance", "cod"],
+      },
+      {
+        path: "/cod-handover",
+        label: "COD handover",
+        icon: Banknote,
+        keywords: ["cod", "cash", "commission", "hub", "deposit", "handover"],
       },
       {
         path: "/withdrawal-requests",
