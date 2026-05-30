@@ -13,7 +13,7 @@ import Payments from "../pages/Payments";
 import Vehicles from "../pages/Vehicles";
 /* Legacy redirect only — same as App config; uncomment if you need /pricing as its own route */
 // import Pricing from "../pages/Pricing";
-import DeliveryFee from "../pages/DeliveryFee";
+import AppConfig from "../pages/AppConfig";
 import RiderCommission from "../pages/RiderCommission";
 import RiderIncentives from "../pages/RiderIncentives";
 import WalletAdmin from "../pages/WalletAdmin";
@@ -93,7 +93,8 @@ const AppRoutes = () => {
         <Route path="hub-routes" element={<HubRoutes />} />
         <Route path="categories" element={<Categories />} />
         {/* <Route path="pricing" element={<Pricing />} /> */}
-        <Route path="delivery-fee" element={<DeliveryFee />} />
+        <Route path="app-config" element={<AppConfig />} />
+        <Route path="delivery-fee" element={<Navigate to="/app-config" replace />} />
         <Route path="rider-commission" element={<RiderCommission />} />
         <Route path="rider-incentives" element={<RiderIncentives />} />
         <Route path="wallet-admin" element={<WalletAdmin />} />

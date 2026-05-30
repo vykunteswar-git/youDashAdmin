@@ -71,10 +71,10 @@ export const menuGroups = [
     title: "Finance",
     items: [
       {
-        path: "/delivery-fee",
+        path: "/app-config",
         label: "App config",
         icon: SlidersHorizontal,
-        keywords: ["pricing", "rates", "fees", "delivery fee", "configuration", "base fare"],
+        keywords: ["pricing", "rates", "fees", "platform fee", "configuration", "base fare", "leg tiers"],
       },
       {
         path: "/rider-commission",
@@ -178,11 +178,11 @@ export const menuGroups = [
  * Not integrated: /pricing is only a redirect; app config is the real screen.
  */
 export const extraSearchRoutes = [
-  /* {
-    path: "/pricing",
-    label: "Pricing (redirects to app config)",
+  {
+    path: "/delivery-fee",
+    label: "App config (legacy URL)",
     group: "Shortcuts",
     icon: SlidersHorizontal,
-    keywords: ["legacy pricing", "rates"],
-  }, */
+    keywords: ["delivery fee", "legacy"],
+  },
 ];
