@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { hubService, zoneService, unwrapList } from "../services/apiService";
 import HubLocationMapView from "../components/hubs/HubLocationMapView";
+import HubCorridorSlaPanel from "../components/hubs/HubCorridorSlaPanel";
 import { CoverageSummaryCards } from "../components/coverage/CoverageSummaryCards";
 import { StatusBadge, BookingImpactCard } from "../components/coverage/StatusBadge";
 import { hubRoleLabel } from "../components/coverage/coverageUtils";
@@ -254,7 +255,11 @@ const Hubs = () => {
               zone is paused (<Link to="/zone-routes">Zone routes</Link>).
             </li>
             <li>
-              <strong>Intake cutoff</strong> — per hub; corridor SLA on Zone routes.
+              <strong>Intake cutoff</strong> — per hub (when parcel must reach that warehouse).
+            </li>
+            <li>
+              <strong>Per-corridor delivery</strong> — edit each hub to set &quot;delivered
+              by&quot; per destination zone (e.g. each Vizag hub → Hyd).
             </li>
             <li>
               <strong>Zone active</strong> — enables in-city vehicles inside the zone.
@@ -594,11 +599,22 @@ const Hubs = () => {
                       disabled={saving}
                     />
                     <p className="text-muted small mb-0 mt-1">
-                      Last time a parcel can enter this hub for same-day corridor dispatch.
-                      Corridor delivery promise is set on{" "}
-                      <Link to="/zone-routes">Zone routes</Link>.
+                      Last time a parcel can enter <strong>this</strong> hub (pickup / drop-off).
                     </p>
                   </div>
+
+                  {editingId != null ? (
+                    <HubCorridorSlaPanel
+                      hubId={editingId}
+                      hubZoneId={form.zoneId}
+                      zones={zones}
+                    />
+                  ) : (
+                    <p className="small text-muted mb-3">
+                      Save the hub once, then edit it to set per-zone delivery times (e.g.
+                      Vizag hub → Hyderabad).
+                    </p>
+                  )}
 
                   <div className="mb-3 p-3 rounded-4 bg-light border">
                     <div className="form-check form-switch mb-2">

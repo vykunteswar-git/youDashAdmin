@@ -233,6 +233,14 @@ export const zoneRouteService = {
     api.put(`/admin/zone-routes/${encodeURIComponent(String(id))}`, payload),
 };
 
+/** Per-hub delivery promise to a destination zone (overrides zone SLA for that hub). */
+export const hubCorridorSlaService = {
+  list: (hubId) => api.get("/admin/hub-corridor-sla", { params: { hubId } }),
+  create: (payload) => api.post("/admin/hub-corridor-sla", payload),
+  update: (id, payload) =>
+    api.put(`/admin/hub-corridor-sla/${encodeURIComponent(String(id))}`, payload),
+};
+
 /** Corridor delivery SLA — zoneRouteId, deliveryType NEXT_DAY | HOURS, etc. */
 export const zoneRouteSlaService = {
   list: (zoneRouteId) =>

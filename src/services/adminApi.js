@@ -10,6 +10,7 @@ import {
   hubService,
   zoneRouteService,
   zoneRouteSlaService,
+  hubCorridorSlaService,
   incentiveAdminService,
   notificationAdminService,
   orderService,
@@ -47,6 +48,7 @@ export const adminApi = {
   hubs: hubService,
   zoneRoutes: zoneRouteService,
   zoneRouteSla: zoneRouteSlaService,
+  hubCorridorSla: hubCorridorSlaService,
   /** @deprecated Prefer zoneRoutes — hub-pair price overrides only */
   hubRoutes: hubRouteService,
   hubRouteSla: hubRouteSlaService,

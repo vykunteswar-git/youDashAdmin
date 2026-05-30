@@ -120,8 +120,8 @@ export default function ZoneRouteSlaPanel({ zoneRouteId, routeTitle, onClose }) 
           </h6>
           <p className="text-muted small mb-0">{routeTitle}</p>
           <p className="text-muted small mb-0 mt-1">
-            When parcels reach the origin hub in time. Set per-hub intake cutoffs on the{" "}
-            <strong>Hubs</strong> page.
+            Default delivery promise for all hubs in the origin zone. Override per warehouse
+            on <strong>Hubs</strong> → edit hub → Per-corridor delivery.
           </p>
         </div>
         <button type="button" className="btn btn-sm btn-light rounded-3" onClick={onClose}>
