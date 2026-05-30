@@ -22,33 +22,19 @@ import {
 import { adminSocketService } from "../services/adminSocketService";
 
 const ORDER_STATUSES = [
-  // INCITY
-  "PENDING",
-  "PENDING_ASSIGNMENT",
-  "ASSIGNED",
-  "CREATED",
-  "CONFIRMED",
-  "PICKED_UP",
-  "OUT_FOR_DELIVERY",
-  "DELIVERED",
-  // OUTSTATION new
-  "ORDER_CREATED",
+  "BOOKED",
+  "SEARCHING_RIDER",
+  "RIDER_ACCEPTED",
+  "PAYMENT_PENDING",
   "RIDER_ASSIGNED",
-  "PICKUP_CONFIRMED",
-  "PARCEL_PICKED_UP",
-  "ARRIVED_ORIGIN_HUB",
-  "DISPATCHED_TO_DESTINATION",
-  "ARRIVED_DESTINATION_HUB",
-  "DELIVERY_RIDER_ASSIGNED",
-  "READY_FOR_PICKUP",
-  "COLLECTED_BY_CUSTOMER",
-  // Legacy outstation
+  "PICKED_UP",
   "AT_ORIGIN_HUB",
-  "DEPARTED_ORIGIN_HUB",
   "IN_TRANSIT",
   "AT_DESTINATION_HUB",
-  "SORTED_AT_DESTINATION",
-  // Failure states
+  "OUT_FOR_DELIVERY",
+  "AWAITING_HUB_COLLECTION",
+  "DELIVERED",
+  "COLLECTED",
   "DELIVERY_FAILED",
   "FAILED_DELIVERY",
   "RETURN_INITIATED",
@@ -58,42 +44,89 @@ const ORDER_STATUSES = [
   "EXPIRED",
   "FAILED",
 ];
-const OUTSTATION_NEXT_STATUS = {
-  ORDER_CREATED: "RIDER_ASSIGNED",
-  RIDER_ASSIGNED: "PICKUP_CONFIRMED",
-  PICKUP_CONFIRMED: "PARCEL_PICKED_UP",
-  PARCEL_PICKED_UP: "ARRIVED_ORIGIN_HUB",
-  ARRIVED_ORIGIN_HUB: "DISPATCHED_TO_DESTINATION",
-  DISPATCHED_TO_DESTINATION: "ARRIVED_DESTINATION_HUB",
-  ARRIVED_DESTINATION_HUB: "DELIVERY_RIDER_ASSIGNED",
-  DELIVERY_RIDER_ASSIGNED: "READY_FOR_PICKUP",
-  READY_FOR_PICKUP: "COLLECTED_BY_CUSTOMER",
-  // Legacy
-  CONFIRMED: "PICKED_UP",
-  PICKED_UP: "ARRIVED_ORIGIN_HUB",
+
+/** Maps legacy DB/API values to canonical status (display + bulk advance). */
+function normalizeOrderStatus(status) {
+  const s = String(status || "").toUpperCase().trim();
+  return (
+    {
+      CREATED: "BOOKED",
+      ORDER_CREATED: "BOOKED",
+      CONFIRMED: "RIDER_ASSIGNED",
+      PICKUP_CONFIRMED: "RIDER_ASSIGNED",
+      PARCEL_PICKED_UP: "PICKED_UP",
+      ARRIVED_ORIGIN_HUB: "AT_ORIGIN_HUB",
+      DISPATCHED_TO_DESTINATION: "IN_TRANSIT",
+      DEPARTED_ORIGIN_HUB: "IN_TRANSIT",
+      ARRIVED_DESTINATION_HUB: "AT_DESTINATION_HUB",
+      SORTED_AT_DESTINATION: "AT_DESTINATION_HUB",
+      DELIVERY_RIDER_ASSIGNED: "OUT_FOR_DELIVERY",
+      READY_FOR_PICKUP: "AWAITING_HUB_COLLECTION",
+      COLLECTED_BY_CUSTOMER: "COLLECTED",
+      PENDING: "BOOKED",
+      PENDING_ASSIGNMENT: "BOOKED",
+      ASSIGNED: "RIDER_ASSIGNED",
+    }[s] ?? s
+  );
+}
+
+const OUTSTATION_NEXT_D2D = {
+  BOOKED: "RIDER_ASSIGNED",
+  RIDER_ASSIGNED: "PICKED_UP",
+  PICKED_UP: "AT_ORIGIN_HUB",
   AT_ORIGIN_HUB: "IN_TRANSIT",
   IN_TRANSIT: "AT_DESTINATION_HUB",
   AT_DESTINATION_HUB: "OUT_FOR_DELIVERY",
   OUT_FOR_DELIVERY: "DELIVERED",
 };
 
+const OUTSTATION_NEXT_D2H = {
+  BOOKED: "RIDER_ASSIGNED",
+  RIDER_ASSIGNED: "PICKED_UP",
+  PICKED_UP: "AT_ORIGIN_HUB",
+  AT_ORIGIN_HUB: "IN_TRANSIT",
+  IN_TRANSIT: "AT_DESTINATION_HUB",
+  AT_DESTINATION_HUB: "AWAITING_HUB_COLLECTION",
+  AWAITING_HUB_COLLECTION: "COLLECTED",
+};
+
+const OUTSTATION_NEXT_H2D = {
+  BOOKED: "AT_ORIGIN_HUB",
+  AT_ORIGIN_HUB: "IN_TRANSIT",
+  IN_TRANSIT: "AT_DESTINATION_HUB",
+  AT_DESTINATION_HUB: "OUT_FOR_DELIVERY",
+  OUT_FOR_DELIVERY: "DELIVERED",
+};
+
+function getOutstationNextStatus(order) {
+  const cur = normalizeOrderStatus(order?.status);
+  const type = String(order?.deliveryType || "DOOR_TO_DOOR").toUpperCase();
+  const map =
+    type === "DOOR_TO_HUB"
+      ? OUTSTATION_NEXT_D2H
+      : type === "HUB_TO_DOOR"
+        ? OUTSTATION_NEXT_H2D
+        : OUTSTATION_NEXT_D2D;
+  return map[cur] ?? null;
+}
+
 const OUTSTATION_BULK_STATUSES = [
   "RIDER_ASSIGNED",
-  "PICKUP_CONFIRMED",
-  "PARCEL_PICKED_UP",
-  "ARRIVED_ORIGIN_HUB",
-  "DISPATCHED_TO_DESTINATION",
-  "ARRIVED_DESTINATION_HUB",
-  "DELIVERY_RIDER_ASSIGNED",
-  "READY_FOR_PICKUP",
-  "COLLECTED_BY_CUSTOMER",
+  "PICKED_UP",
+  "AT_ORIGIN_HUB",
+  "IN_TRANSIT",
+  "AT_DESTINATION_HUB",
+  "OUT_FOR_DELIVERY",
+  "AWAITING_HUB_COLLECTION",
+  "COLLECTED",
+  "DELIVERED",
   "DELIVERY_FAILED",
   "CANCELLED",
 ];
 const STATUS_UPDATE_MAP = {
-  PENDING: "CREATED",
-  PENDING_ASSIGNMENT: "CREATED",
-  ASSIGNED: "CONFIRMED",
+  PENDING: "BOOKED",
+  PENDING_ASSIGNMENT: "BOOKED",
+  ASSIGNED: "RIDER_ASSIGNED",
 };
 
 /** Outstation statuses that require customer OTP (or admin override) on update. */
@@ -103,7 +136,8 @@ function outstationStatusRequiresOtp(status) {
     s === "PICKED_UP" ||
     s === "PARCEL_PICKED_UP" ||
     s === "DELIVERED" ||
-    s === "COLLECTED_BY_CUSTOMER"
+    s === "COLLECTED" ||
+    normalizeOrderStatus(s) === "COLLECTED"
   );
 }
 
@@ -111,7 +145,7 @@ function canConfirmHubDrop(order) {
   return (
     String(order?.serviceMode || "").toUpperCase() === "OUTSTATION" &&
     String(order?.deliveryType || "").toUpperCase() === "HUB_TO_DOOR" &&
-    String(order?.status || "").toUpperCase() === "CREATED"
+    normalizeOrderStatus(order?.status) === "BOOKED"
   );
 }
 
@@ -119,28 +153,20 @@ function canConfirmHubCollect(order) {
   return (
     String(order?.serviceMode || "").toUpperCase() === "OUTSTATION" &&
     String(order?.deliveryType || "").toUpperCase() === "DOOR_TO_HUB" &&
-    String(order?.status || "").toUpperCase() === "READY_FOR_PICKUP"
+    normalizeOrderStatus(order?.status) === "AWAITING_HUB_COLLECTION"
   );
 }
 const SERVICE_MODE_TABS = ["INCITY", "OUTSTATION"];
 const STATUS_LABEL_OVERRIDES = {
+  BOOKED: "Booked",
+  RIDER_ASSIGNED: "Rider Assigned",
   AT_ORIGIN_HUB: "At Origin Hub",
-  DEPARTED_ORIGIN_HUB: "Departed Origin Hub",
   AT_DESTINATION_HUB: "At Destination Hub",
-  SORTED_AT_DESTINATION: "Sorted At Destination",
   OUT_FOR_DELIVERY: "Out For Delivery",
-  READY_FOR_PICKUP: "Ready For Pickup",
+  AWAITING_HUB_COLLECTION: "Awaiting Hub Collection",
+  COLLECTED: "Collected At Hub",
   FAILED_DELIVERY: "Failed Delivery",
   DELIVERY_FAILED: "Delivery Failed",
-  ORDER_CREATED: "Order Created",
-  RIDER_ASSIGNED: "Rider Assigned",
-  PICKUP_CONFIRMED: "Pickup Confirmed",
-  PARCEL_PICKED_UP: "Parcel Picked Up",
-  ARRIVED_ORIGIN_HUB: "Arrived Origin Hub",
-  DISPATCHED_TO_DESTINATION: "Dispatched To Destination",
-  ARRIVED_DESTINATION_HUB: "Arrived Destination Hub",
-  DELIVERY_RIDER_ASSIGNED: "Delivery Rider Assigned",
-  COLLECTED_BY_CUSTOMER: "Collected By Customer",
   RETURN_INITIATED: "Return Initiated",
   RETURNED_TO_SENDER: "Returned To Sender",
 };
@@ -156,9 +182,7 @@ const OUTSTATION_EXCEPTION_STATUSES = [
 ];
 
 function formatStatusLabel(status) {
-  const normalized = String(status || "")
-    .toUpperCase()
-    .trim();
+  const normalized = normalizeOrderStatus(status);
   if (!normalized) return "—";
   if (STATUS_LABEL_OVERRIDES[normalized])
     return STATUS_LABEL_OVERRIDES[normalized];
@@ -169,43 +193,18 @@ function formatStatusLabel(status) {
     .join(" ");
 }
 
-function getOutstationProgressIndex(status) {
-  const normalized = String(status || "")
-    .toUpperCase()
-    .trim();
-  if (normalized === "DELIVERED" || normalized === "COLLECTED_BY_CUSTOMER") return 6;
-  if (
-    normalized === "READY_FOR_PICKUP" ||
-    normalized === "OUT_FOR_DELIVERY" ||
-    normalized === "DELIVERY_RIDER_ASSIGNED"
-  )
-    return 5;
-  if (
-    normalized === "AT_DESTINATION_HUB" ||
-    normalized === "SORTED_AT_DESTINATION" ||
-    normalized === "ARRIVED_DESTINATION_HUB"
-  )
-    return 4;
-  if (
-    normalized === "IN_TRANSIT" ||
-    normalized === "DEPARTED_ORIGIN_HUB" ||
-    normalized === "DISPATCHED_TO_DESTINATION"
-  )
-    return 3;
-  if (normalized === "AT_ORIGIN_HUB" || normalized === "ARRIVED_ORIGIN_HUB") return 2;
-  if (normalized === "PICKED_UP" || normalized === "PARCEL_PICKED_UP" || normalized === "PICKUP_CONFIRMED") return 1;
-  if (
-    normalized === "CONFIRMED" ||
-    normalized === "ASSIGNED" ||
-    normalized === "CREATED" ||
-    normalized === "ORDER_CREATED" ||
-    normalized === "RIDER_ASSIGNED" ||
-    normalized === "PENDING" ||
-    normalized === "PENDING_ASSIGNMENT"
-  ) {
-    return 0;
-  }
-  return -1;
+function getOutstationProgressIndex(status, deliveryType) {
+  const normalized = normalizeOrderStatus(status);
+  const type = String(deliveryType || "DOOR_TO_DOOR").toUpperCase();
+  const flow =
+    type === "DOOR_TO_HUB"
+      ? Object.keys(OUTSTATION_NEXT_D2H)
+      : type === "HUB_TO_DOOR"
+        ? ["BOOKED", "AT_ORIGIN_HUB", "IN_TRANSIT", "AT_DESTINATION_HUB", "OUT_FOR_DELIVERY"]
+        : Object.keys(OUTSTATION_NEXT_D2D);
+  if (normalized === "DELIVERED" || normalized === "COLLECTED") return flow.length;
+  const idx = flow.indexOf(normalized);
+  return idx >= 0 ? idx : -1;
 }
 
 function formatWhen(iso) {
@@ -221,7 +220,8 @@ function formatWhen(iso) {
 
 function statusBadgeClass(status) {
   const s = String(status || "").toUpperCase();
-  if (s === "DELIVERED" || s === "COLLECTED_BY_CUSTOMER") return "active";
+  if (s === "DELIVERED" || s === "COLLECTED" || normalizeOrderStatus(s) === "COLLECTED")
+    return "active";
   if (
     s === "CANCELLED" ||
     s === "FAILED_DELIVERY" ||
@@ -232,14 +232,9 @@ function statusBadgeClass(status) {
     s === "FAILED"
   )
     return "cancelled";
-  if (s === "ASSIGNED" || s === "CONFIRMED" || s === "RIDER_ASSIGNED") return "active";
-  if (
-    s === "CREATED" ||
-    s === "ORDER_CREATED" ||
-    s === "PENDING" ||
-    s === "PENDING_ASSIGNMENT"
-  )
-    return "pending";
+  if (s === "RIDER_ASSIGNED" || normalizeOrderStatus(s) === "RIDER_ASSIGNED")
+    return "active";
+  if (s === "BOOKED" || normalizeOrderStatus(s) === "BOOKED") return "pending";
   if (s === "RETURN_INITIATED") return "cancelled";
   return "info";
 }
@@ -259,7 +254,7 @@ const Orders = () => {
   const [availableRiders, setAvailableRiders] = useState([]);
   const [riderPick, setRiderPick] = useState("");
   const [assignRolePick, setAssignRolePick] = useState("DELIVERY");
-  const [statusPick, setStatusPick] = useState("CONFIRMED");
+  const [statusPick, setStatusPick] = useState("RIDER_ASSIGNED");
   const [statusOtp, setStatusOtp] = useState("");
   const [statusAdminOverride, setStatusAdminOverride] = useState(false);
   const [hubHandoverOtp, setHubHandoverOtp] = useState("");
@@ -386,14 +381,19 @@ const Orders = () => {
     }
   }, []);
 
-  const loadEligibleRidersForOrder = useCallback(async (order) => {
+  const loadEligibleRidersForOrder = useCallback(async (order, role) => {
     const id = order?.id ?? order?.orderId;
     if (id == null) {
       setAvailableRiders([]);
       return;
     }
+    const assignmentRole =
+      role ??
+      (String(order?.deliveryType || "").toUpperCase() === "DOOR_TO_HUB"
+        ? "PICKUP"
+        : "DELIVERY");
     try {
-      const res = await riderService.getEligibleRidersForOrder(id);
+      const res = await riderService.getEligibleRidersForOrder(id, assignmentRole);
       setAvailableRiders(unwrapList(res));
     } catch {
       setAvailableRiders([]);
@@ -404,6 +404,11 @@ const Orders = () => {
     loadOrders();
     loadRiders();
   }, [loadOrders, loadRiders]);
+
+  useEffect(() => {
+    if (detail == null || selectedId == null) return;
+    loadEligibleRidersForOrder(detail, assignRolePick);
+  }, [assignRolePick, detail, selectedId, loadEligibleRidersForOrder]);
 
   useEffect(() => {
     const unsubscribe = adminSocketService.subscribe((evt) => {
@@ -456,9 +461,9 @@ const Orders = () => {
     setSelectedId(id);
     setDetail(order);
     setRiderPick(order?.riderId != null ? String(order.riderId) : "");
-    setStatusPick(String(order?.status || "CONFIRMED").toUpperCase());
+    setStatusPick(normalizeOrderStatus(order?.status || "RIDER_ASSIGNED"));
     setAssignRolePick("DELIVERY");
-    await loadEligibleRidersForOrder(order);
+    await loadEligibleRidersForOrder(order, assignRolePick);
     setDetailLoading(true);
     try {
       const res = await orderService.getOrder(id);
@@ -466,8 +471,8 @@ const Orders = () => {
       if (entity && typeof entity === "object") {
         setDetail(entity);
         setRiderPick(entity.riderId != null ? String(entity.riderId) : "");
-        setStatusPick(String(entity.status || "CONFIRMED").toUpperCase());
-        await loadEligibleRidersForOrder(entity);
+        setStatusPick(normalizeOrderStatus(entity.status || "RIDER_ASSIGNED"));
+        await loadEligibleRidersForOrder(entity, assignRolePick);
       }
     } catch {
       // keep list row data
@@ -596,13 +601,14 @@ const Orders = () => {
     if (serviceModeTab !== "OUTSTATION" || routeFilter === "All Routes") return [];
     const groups = {};
     for (const o of filteredOrders) {
-      const s = String(o.status || "").toUpperCase().trim();
+      const s = normalizeOrderStatus(o.status);
       if (!groups[s]) groups[s] = [];
       groups[s].push(o);
     }
+    const deliveryType = filteredOrders[0]?.deliveryType;
     return Object.entries(groups).sort(([a], [b]) => {
-      const ai = getOutstationProgressIndex(a);
-      const bi = getOutstationProgressIndex(b);
+      const ai = getOutstationProgressIndex(a, deliveryType);
+      const bi = getOutstationProgressIndex(b, deliveryType);
       if (ai === -1 && bi === -1) return 0;
       if (ai === -1) return 1;
       if (bi === -1) return -1;
@@ -1096,7 +1102,7 @@ const Orders = () => {
               </div>
             ) : (
               statusGroups.map(([status, groupOrders]) => {
-                const nextStatus = OUTSTATION_NEXT_STATUS[status];
+                const nextStatus = getOutstationNextStatus(groupOrders[0]);
                 const groupIds = groupOrders.map((o) => o.id ?? o.orderId);
                 const allGroupSelected =
                   groupIds.length > 0 &&
@@ -1663,8 +1669,22 @@ const Orders = () => {
                     </h6>
                     <p className="text-muted small mb-3">
                       POST <code className="small">/assign-rider</code> with a
-                      rider id from the available pool.
+                      rider id from the available pool. For outstation{" "}
+                      <strong>hub → door</strong>, use <strong>Delivery rider</strong>{" "}
+                      after the parcel reaches the destination hub (riders are
+                      listed near Hyderabad, not Visakhapatnam).
                     </p>
+                    {String(detail?.serviceMode || "").toUpperCase() ===
+                      "OUTSTATION" &&
+                    String(detail?.deliveryType || "").toUpperCase() ===
+                      "HUB_TO_DOOR" &&
+                    normalizeOrderStatus(detail?.status) === "AT_DESTINATION_HUB" ? (
+                      <div className="alert alert-info small py-2 px-3 mb-3">
+                        Parcel is at the destination hub. Use <strong>Delivery rider</strong>,
+                        pick a rider online near the destination city, then assign — status
+                        becomes <strong>Out for delivery</strong>.
+                      </div>
+                    ) : null}
                     <div className="d-flex flex-column gap-2">
                       <div className="small text-muted">
                         Currently assigned rider:{" "}
@@ -1702,7 +1722,9 @@ const Orders = () => {
                           <button
                             type="button"
                             className="btn btn-sm btn-link p-0 ms-1 align-baseline"
-                            onClick={() => loadEligibleRidersForOrder(detail)}
+                            onClick={() =>
+                              loadEligibleRidersForOrder(detail, assignRolePick)
+                            }
                             disabled={actionBusy}
                           >
                             Retry
@@ -1949,6 +1971,7 @@ const Orders = () => {
                         ].map((stepLabel, index) => {
                           const progressIndex = getOutstationProgressIndex(
                             detail?.status,
+                            detail?.deliveryType,
                           );
                           const isCompleted = progressIndex > index;
                           const isCurrent = progressIndex === index;

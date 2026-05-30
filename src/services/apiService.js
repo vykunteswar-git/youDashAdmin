@@ -300,8 +300,10 @@ export const riderService = {
       params: status ? { status } : undefined,
     }),
   getAvailableRiders: () => api.get("/admin/riders/available"),
-  getEligibleRidersForOrder: (orderId) =>
-    api.get(`/admin/riders/eligible-for-order/${encodeURIComponent(String(orderId))}`),
+  getEligibleRidersForOrder: (orderId, role) =>
+    api.get(`/admin/riders/eligible-for-order/${encodeURIComponent(String(orderId))}`, {
+      params: role ? { role } : undefined,
+    }),
   approveRider: (id) =>
     api.post(`/admin/riders/${encodeURIComponent(String(id))}/approve`),
   rejectRider: (id) =>
