@@ -74,9 +74,9 @@ export function BookingImpactCard({ type, zoneActive, hubActive, zoneName }) {
       <div className="rounded-4 border border-info border-opacity-25 bg-info bg-opacity-10 p-3 small">
         <strong className="text-dark">Hub on · zone paused</strong>
         <p className="mb-0 mt-1 text-muted">
-          This hub stays available for <strong>outstation</strong> routes linked to{" "}
-          {zoneName || "its zone"}. It does <strong>not</strong> restore in-city delivery
-          while the zone is paused.
+          This hub stays available for <strong>outstation</strong> corridors from{" "}
+          {zoneName || "its zone"} (see <strong>Zone routes</strong>). It does{" "}
+          <strong>not</strong> restore in-city delivery while the zone is paused.
         </p>
       </div>
     );
@@ -87,7 +87,8 @@ export function BookingImpactCard({ type, zoneActive, hubActive, zoneName }) {
       <div className="rounded-4 border bg-light p-3 small text-muted">
         <strong>Hub is off</strong>
         <p className="mb-0 mt-1">
-          Turn the hub on when you want it used in quotes and hub routes.
+          Turn the hub on when you want it used in quotes and zone corridors. Set intake
+          cutoff in the hub editor.
         </p>
       </div>
     );
@@ -97,7 +98,8 @@ export function BookingImpactCard({ type, zoneActive, hubActive, zoneName }) {
     <div className="rounded-4 border border-success border-opacity-25 bg-success bg-opacity-10 p-3 small">
       <strong className="text-success">Hub operational</strong>
       <p className="mb-0 mt-1 text-muted">
-        Linked to an active zone — used for in-city and outstation pricing.
+        Linked to an active zone — in-city trips plus outstation via zone routes. Set
+        per-hub intake time in the editor.
       </p>
     </div>
   );

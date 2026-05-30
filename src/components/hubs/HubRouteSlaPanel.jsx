@@ -175,7 +175,7 @@ export default function HubRouteSlaPanel({
             <h5 className="fw-bold mb-0">Route SLAs</h5>
             <p className="text-muted small mb-0">{routeTitle}</p>
             <p className="text-muted mb-0" style={{ fontSize: 11 }}>
-              Hub route ID {hubRouteId} · ordered by priority
+              Legacy hub-pair SLA · route #{hubRouteId} · prefer Zone routes SLA
             </p>
           </div>
         </div>

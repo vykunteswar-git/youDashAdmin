@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { Link } from "react-router-dom";
 import {
   Save,
   RotateCcw,
@@ -503,7 +504,8 @@ const AppConfig = () => {
         >
           <Info size={16} className="text-warning flex-shrink-0" />
           <span>
-            Editing — save when done. Hub routes and vehicle fares are managed separately.
+            Editing — save when done. Zone corridors and vehicle fares are managed on
+            their own pages.
           </span>
         </div>
       ) : null}
@@ -576,8 +578,15 @@ const AppConfig = () => {
             id="section-outstation"
             icon={Route}
             title="Outstation"
-            subtitle="Pickup + hub route + drop + weight + GST + platform fee"
+            subtitle="Pickup + zone corridor (hub leg) + drop + weight + GST + platform fee"
           >
+            <div className="alert alert-light border rounded-4 small mb-3 py-2 px-3">
+              <Info size={16} className="me-2 text-primary" />
+              Corridor ₹/km and delivery SLA:{" "}
+              <Link to="/zone-routes">Zone routes</Link>. Per-hub last intake:{" "}
+              <Link to="/hubs">Hubs</Link>. Optional hub-pair price override:{" "}
+              <Link to="/hub-route-overrides">Hub pair overrides</Link>.
+            </div>
             <div className="row g-3 mb-3">
               <div className="col-12 col-md-6 col-lg-4">
                 <CompactFeeField
@@ -603,8 +612,8 @@ const AppConfig = () => {
               </div>
               <div className="col-12 col-md-6 col-lg-4">
                 <Field
-                  label="Default hub route"
-                  hint="Used when no custom Hub routes rate exists"
+                  label="Default corridor rate"
+                  hint="Used when no zone route (or hub override) exists"
                   prefix="₹"
                   suffix="/km"
                   value={form.defaultRouteRatePerKm}

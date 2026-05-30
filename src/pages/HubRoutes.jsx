@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { Link } from "react-router-dom";
 import {
   Route,
   Plus,
@@ -48,7 +49,7 @@ const HubRoutes = () => {
       setRows(unwrapList(res));
     } catch (e) {
       setError(
-        e?.response?.data?.message || e?.message || "Failed to load hub routes."
+        e?.response?.data?.message || e?.message || "Failed to load hub overrides."
       );
       setRows([]);
     } finally {
@@ -162,10 +163,11 @@ const HubRoutes = () => {
     <div className="container-fluid fade-in">
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3 mb-4">
         <div>
-          <h2 className="fw-bold mb-1">Hub routes</h2>
-          <p className="text-muted small mb-0">
-            Connect hubs with a rate per km. Map shows origin (green) and
-            destination (red).
+          <h2 className="fw-bold mb-1">Hub pair overrides</h2>
+          <p className="text-muted small mb-0" style={{ maxWidth: 640 }}>
+            Advanced: special ₹/km for one hub → one hub. Normal pricing uses{" "}
+            <Link to="/zone-routes">Zone routes</Link> (city pair) and{" "}
+            <Link to="/app-config">default corridor rate</Link>.
           </p>
         </div>
         <div className="d-flex gap-2">
@@ -188,7 +190,7 @@ const HubRoutes = () => {
             onClick={openCreate}
           >
             <Plus size={18} />
-            Add route
+            Add override
           </button>
         </div>
       </div>
@@ -223,7 +225,7 @@ const HubRoutes = () => {
               ) : rows.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="text-center py-5 text-muted small">
-                    No hub routes yet.
+                    No overrides — zone corridors handle most pricing.
                   </td>
                 </tr>
               ) : (
@@ -266,7 +268,7 @@ const HubRoutes = () => {
                         onClick={() =>
                           setSlaRouteId((cur) => (cur === r.id ? null : r.id))
                         }
-                        title="Delivery SLAs for this route"
+                        title="Legacy hub-pair SLAs (prefer Zone routes SLA)"
                       >
                         <Clock size={16} className="me-1" />
                         SLAs
@@ -320,7 +322,7 @@ const HubRoutes = () => {
             <div className="flex-shrink-0 border-bottom bg-white px-3 py-3 px-md-4 d-flex align-items-center justify-content-between gap-3 shadow-sm">
               <div>
                 <h5 className="fw-bold mb-0" id="hub-route-editor-title">
-                  {editingId != null ? "Edit hub route" : "New hub route"}
+                  {editingId != null ? "Edit hub override" : "New hub override"}
                 </h5>
                 <p className="text-muted small mb-0 d-none d-sm-block">
                   Map preview on the left — form on the right.

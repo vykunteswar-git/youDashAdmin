@@ -54,10 +54,10 @@ export const menuGroups = [
       { path: "/zones", label: "Zones", icon: MapPin, keywords: ["areas", "coverage", "map"] },
       { path: "/hubs", label: "Hubs", icon: Warehouse, keywords: ["warehouse", "depot"] },
       {
-        path: "/hub-routes",
-        label: "Hub routes",
+        path: "/zone-routes",
+        label: "Zone routes",
         icon: Waypoints,
-        keywords: ["routes", "sla", "between hubs"],
+        keywords: ["routes", "sla", "corridor", "zone pair", "hub routes"],
       },
       {
         path: "/categories",
@@ -184,5 +184,19 @@ export const extraSearchRoutes = [
     group: "Shortcuts",
     icon: SlidersHorizontal,
     keywords: ["delivery fee", "legacy"],
+  },
+  {
+    path: "/hub-routes",
+    label: "Zone routes (was hub routes)",
+    group: "Shortcuts",
+    icon: Waypoints,
+    keywords: ["hub routes", "corridor", "sla", "zone pair"],
+  },
+  {
+    path: "/hub-route-overrides",
+    label: "Hub pair overrides (advanced)",
+    group: "Shortcuts",
+    icon: Waypoints,
+    keywords: ["hub route override", "specific hub"],
   },
 ];

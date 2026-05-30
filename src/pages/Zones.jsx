@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { Link } from "react-router-dom";
 import {
   MapPin,
   Plus,
@@ -282,10 +283,17 @@ const Zones = () => {
           <p className="text-muted small mb-0" style={{ maxWidth: 560 }}>
             Service areas for the Parcel app. <strong>Active</strong> zones allow
             in-city booking; <strong>paused</strong> zones block local trips inside the
-            polygon (cross-city via hubs may still work).
+            polygon (cross-city via hubs may still work). Set corridor pricing on{" "}
+            <Link to="/zone-routes">Zone routes</Link>.
           </p>
         </div>
-        <div className="d-flex gap-2">
+        <div className="d-flex gap-2 flex-wrap">
+          <Link
+            to="/zone-routes"
+            className="btn btn-outline-secondary rounded-3 d-flex align-items-center gap-2"
+          >
+            Zone routes
+          </Link>
           <button
             type="button"
             className="btn btn-outline-secondary rounded-3 d-flex align-items-center gap-2"
@@ -585,7 +593,7 @@ const Zones = () => {
                   </div>
                   <p className="text-muted small mb-2">
                     Turn <strong>off</strong> to pause local bookings inside this zone.
-                    Hubs can stay on for cross-city routes.
+                    Hubs can stay on for cross-city corridors (Zone routes).
                   </p>
                   <BookingImpactCard
                     type="zone"

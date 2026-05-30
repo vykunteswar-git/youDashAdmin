@@ -33,6 +33,7 @@ const defaultForm = () => ({
   lat: String(HYDERABAD.lat),
   lng: String(HYDERABAD.lng),
   zoneId: "",
+  intakeCutoff: "",
   isActive: true,
 });
 
@@ -117,6 +118,7 @@ const Hubs = () => {
       lat: h.lat != null ? String(h.lat) : String(HYDERABAD.lat),
       lng: h.lng != null ? String(h.lng) : String(HYDERABAD.lng),
       zoneId: h.zoneId != null ? String(h.zoneId) : "",
+      intakeCutoff: h.intakeCutoff ?? "",
       isActive: Boolean(h.isActive),
     });
     setFlyToToken(0);
@@ -156,6 +158,7 @@ const Hubs = () => {
       lat,
       lng,
       zoneId,
+      intakeCutoff: form.intakeCutoff.trim() || null,
       isActive: Boolean(form.isActive),
     };
     setSaving(true);
@@ -247,8 +250,11 @@ const Hubs = () => {
               zone (local trips).
             </li>
             <li>
-              <strong>Hub active</strong> — still used for routes to other cities when
-              the zone is paused.
+              <strong>Hub active</strong> — still used for outstation corridors when the
+              zone is paused (<Link to="/zone-routes">Zone routes</Link>).
+            </li>
+            <li>
+              <strong>Intake cutoff</strong> — per hub; corridor SLA on Zone routes.
             </li>
             <li>
               <strong>Zone active</strong> — enables in-city vehicles inside the zone.
@@ -322,6 +328,7 @@ const Hubs = () => {
                 <th className="px-4 py-3 small text-muted border-0">HUB</th>
                 <th className="px-3 py-3 small text-muted border-0">CITY</th>
                 <th className="px-3 py-3 small text-muted border-0">ZONE</th>
+                <th className="px-3 py-3 small text-muted border-0">INTAKE CUTOFF</th>
                 <th className="px-3 py-3 small text-muted border-0">BOOKING ROLE</th>
                 <th className="px-3 py-3 small text-muted border-0">HUB</th>
                 <th className="px-4 py-3 small text-muted border-0 text-end">ACTIONS</th>
@@ -330,13 +337,13 @@ const Hubs = () => {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-5 text-muted small">
+                  <td colSpan={7} className="text-center py-5 text-muted small">
                     Loading hubs…
                   </td>
                 </tr>
               ) : filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-5 text-muted small">
+                  <td colSpan={7} className="text-center py-5 text-muted small">
                     {rows.length === 0 ? "No hubs yet." : "No hubs match this filter."}
                   </td>
                 </tr>
@@ -385,6 +392,9 @@ const Hubs = () => {
                         ) : (
                           <span className="text-danger fw-semibold">Not linked</span>
                         )}
+                      </td>
+                      <td className="px-3 py-3 border-0 small font-monospace">
+                        {h.intakeCutoff ? h.intakeCutoff : "—"}
                       </td>
                       <td className="px-3 py-3 border-0">
                         <span className="fw-semibold small d-block">{role.short}</span>
@@ -568,6 +578,26 @@ const Hubs = () => {
                         />
                       </div>
                     ) : null}
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="form-label small fw-semibold">
+                      Last intake cutoff (local time)
+                    </label>
+                    <input
+                      type="time"
+                      className="form-control border-0 bg-light rounded-3"
+                      value={form.intakeCutoff}
+                      onChange={(e) =>
+                        setForm({ ...form, intakeCutoff: e.target.value })
+                      }
+                      disabled={saving}
+                    />
+                    <p className="text-muted small mb-0 mt-1">
+                      Last time a parcel can enter this hub for same-day corridor dispatch.
+                      Corridor delivery promise is set on{" "}
+                      <Link to="/zone-routes">Zone routes</Link>.
+                    </p>
                   </div>
 
                   <div className="mb-3 p-3 rounded-4 bg-light border">

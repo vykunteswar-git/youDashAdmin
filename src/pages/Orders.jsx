@@ -924,7 +924,7 @@ const Orders = () => {
             )}
           </div>
 
-          {/* Row 2: hub route chips — outstation only */}
+          {/* Row 2: outstation hub-pair filters */}
           {serviceModeTab === "OUTSTATION" && (
             <div
               className="d-flex flex-wrap gap-2 mt-3 pt-3"
@@ -950,7 +950,7 @@ const Orders = () => {
               </button>
               {availableRoutes.length === 0 ? (
                 <span className="small text-muted align-self-center">
-                  No hub routes found — hub city data may be missing on orders.
+                  No hub-pair filters — origin/destination hub city missing on orders.
                 </span>
               ) : (
                 availableRoutes.map((route) => {
@@ -1235,7 +1235,7 @@ const Orders = () => {
                     <th className="px-4 py-3 text-muted small border-0">ORDER</th>
                     <th className="px-3 py-3 text-muted small border-0">USER</th>
                     <th className="px-3 py-3 text-muted small border-0">
-                      {serviceModeTab === "OUTSTATION" ? "HUB ROUTE" : "ROUTE"}
+                      {serviceModeTab === "OUTSTATION" ? "HUB PAIR" : "ROUTE"}
                     </th>
                     <th className="px-3 py-3 text-muted small border-0">MODE</th>
                     <th className="px-3 py-3 text-muted small border-0">STATUS</th>

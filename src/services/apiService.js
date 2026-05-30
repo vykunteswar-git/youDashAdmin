@@ -217,6 +217,7 @@ export const hubService = {
     api.put(`/admin/hubs/${encodeURIComponent(String(id))}`, payload),
 };
 
+/** Advanced hub-pair price override (prefer zoneRouteService for corridors). */
 export const hubRouteService = {
   list: () => api.get("/admin/hub-routes"),
   create: (payload) => api.post("/admin/hub-routes", payload),
@@ -224,7 +225,24 @@ export const hubRouteService = {
     api.put(`/admin/hub-routes/${encodeURIComponent(String(id))}`, payload),
 };
 
-/** HubRouteSLARequestDTO — hubRouteId, deliveryType NEXT_DAY | HOURS, priority, isActive, etc. */
+/** Primary outstation corridor pricing between zones. */
+export const zoneRouteService = {
+  list: () => api.get("/admin/zone-routes"),
+  create: (payload) => api.post("/admin/zone-routes", payload),
+  update: (id, payload) =>
+    api.put(`/admin/zone-routes/${encodeURIComponent(String(id))}`, payload),
+};
+
+/** Corridor delivery SLA — zoneRouteId, deliveryType NEXT_DAY | HOURS, etc. */
+export const zoneRouteSlaService = {
+  list: (zoneRouteId) =>
+    api.get("/admin/zone-route-sla", { params: { zoneRouteId } }),
+  create: (payload) => api.post("/admin/zone-route-sla", payload),
+  update: (id, payload) =>
+    api.put(`/admin/zone-route-sla/${encodeURIComponent(String(id))}`, payload),
+};
+
+/** Legacy hub-pair SLA (prefer zoneRouteSlaService). */
 export const hubRouteSlaService = {
   list: (hubRouteId) =>
     api.get("/admin/hub-route-sla", {

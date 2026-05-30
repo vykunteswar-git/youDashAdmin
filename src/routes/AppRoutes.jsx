@@ -21,6 +21,7 @@ import CodHandover from "../pages/CodHandover";
 import WithdrawalRequests from "../pages/WithdrawalRequests";
 import Zones from "../pages/Zones";
 import Hubs from "../pages/Hubs";
+import ZoneRoutes from "../pages/ZoneRoutes";
 import HubRoutes from "../pages/HubRoutes";
 import Categories from "../pages/Categories";
 import Transactions from "../pages/Transactions";
@@ -90,7 +91,9 @@ const AppRoutes = () => {
         <Route path="vehicles" element={<Vehicles />} />
         <Route path="zones" element={<Zones />} />
         <Route path="hubs" element={<Hubs />} />
-        <Route path="hub-routes" element={<HubRoutes />} />
+        <Route path="zone-routes" element={<ZoneRoutes />} />
+        <Route path="hub-route-overrides" element={<HubRoutes />} />
+        <Route path="hub-routes" element={<Navigate to="/zone-routes" replace />} />
         <Route path="categories" element={<Categories />} />
         {/* <Route path="pricing" element={<Pricing />} /> */}
         <Route path="app-config" element={<AppConfig />} />
