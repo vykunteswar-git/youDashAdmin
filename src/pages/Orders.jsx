@@ -95,6 +95,33 @@ const STATUS_UPDATE_MAP = {
   PENDING_ASSIGNMENT: "CREATED",
   ASSIGNED: "CONFIRMED",
 };
+
+/** Outstation statuses that require customer OTP (or admin override) on update. */
+function outstationStatusRequiresOtp(status) {
+  const s = String(status || "").toUpperCase();
+  return (
+    s === "PICKED_UP" ||
+    s === "PARCEL_PICKED_UP" ||
+    s === "DELIVERED" ||
+    s === "COLLECTED_BY_CUSTOMER"
+  );
+}
+
+function canConfirmHubDrop(order) {
+  return (
+    String(order?.serviceMode || "").toUpperCase() === "OUTSTATION" &&
+    String(order?.deliveryType || "").toUpperCase() === "HUB_TO_DOOR" &&
+    String(order?.status || "").toUpperCase() === "CREATED"
+  );
+}
+
+function canConfirmHubCollect(order) {
+  return (
+    String(order?.serviceMode || "").toUpperCase() === "OUTSTATION" &&
+    String(order?.deliveryType || "").toUpperCase() === "DOOR_TO_HUB" &&
+    String(order?.status || "").toUpperCase() === "READY_FOR_PICKUP"
+  );
+}
 const SERVICE_MODE_TABS = ["INCITY", "OUTSTATION"];
 const STATUS_LABEL_OVERRIDES = {
   AT_ORIGIN_HUB: "At Origin Hub",
@@ -233,6 +260,11 @@ const Orders = () => {
   const [riderPick, setRiderPick] = useState("");
   const [assignRolePick, setAssignRolePick] = useState("DELIVERY");
   const [statusPick, setStatusPick] = useState("CONFIRMED");
+  const [statusOtp, setStatusOtp] = useState("");
+  const [statusAdminOverride, setStatusAdminOverride] = useState(false);
+  const [hubHandoverOtp, setHubHandoverOtp] = useState("");
+  const [hubHandoverCodMode, setHubHandoverCodMode] = useState("CASH");
+  const [hubHandoverOverride, setHubHandoverOverride] = useState(false);
   const [routeFilter, setRouteFilter] = useState("All Routes");
   const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
   const [bulkStatus, setBulkStatus] = useState(OUTSTATION_BULK_STATUSES[0]);
@@ -1735,6 +1767,87 @@ const Orders = () => {
                     </div>
                   </div>
 
+                  {(canConfirmHubDrop(detail) || canConfirmHubCollect(detail)) && (
+                    <div className="dashboard-card border-0 shadow-sm mb-3">
+                      <h6 className="fw-bold mb-2">
+                        {canConfirmHubDrop(detail)
+                          ? "Confirm hub drop-off"
+                          : "Confirm hub collection"}
+                      </h6>
+                      <p className="text-muted small mb-3">
+                        {canConfirmHubDrop(detail)
+                          ? "Enter the drop-off OTP from the customer app. For COD, collect payment from the sender at the hub."
+                          : "Enter the collection OTP from the customer app (share with receiver)."}
+                      </p>
+                      <div className="d-flex flex-column gap-2">
+                        <input
+                          aria-label="Hub handover OTP"
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={6}
+                          className="form-control form-control-sm rounded-3"
+                          placeholder="6-digit OTP"
+                          value={hubHandoverOtp}
+                          onChange={(e) =>
+                            setHubHandoverOtp(
+                              e.target.value.replace(/\D/g, "").slice(0, 6),
+                            )
+                          }
+                          disabled={actionBusy || hubHandoverOverride}
+                        />
+                        {canConfirmHubDrop(detail) &&
+                        String(detail?.paymentType || "").toUpperCase() ===
+                          "COD" &&
+                        !(detail?.codAlreadyCollected === true) ? (
+                          <select
+                            aria-label="COD collection mode"
+                            className="form-select form-select-sm rounded-3"
+                            value={hubHandoverCodMode}
+                            onChange={(e) => setHubHandoverCodMode(e.target.value)}
+                            disabled={actionBusy || hubHandoverOverride}
+                          >
+                            <option value="CASH">COD — Cash from sender</option>
+                            <option value="QR">COD — UPI QR from sender</option>
+                          </select>
+                        ) : null}
+                        <label className="form-check small text-muted mb-0">
+                          <input
+                            type="checkbox"
+                            className="form-check-input"
+                            checked={hubHandoverOverride}
+                            onChange={(e) => setHubHandoverOverride(e.target.checked)}
+                            disabled={actionBusy}
+                          />
+                          Emergency override (skip OTP check)
+                        </label>
+                        <button
+                          type="button"
+                          className="btn btn-primary fw-semibold rounded-3 py-2"
+                          disabled={actionBusy}
+                          onClick={() =>
+                            runAction(() =>
+                              orderService.verifyHubHandover(selectedId, {
+                                type: canConfirmHubDrop(detail) ? "DROP" : "COLLECT",
+                                otp: hubHandoverOtp.trim() || undefined,
+                                adminOverride: hubHandoverOverride,
+                                codCollectionMode:
+                                  canConfirmHubDrop(detail) &&
+                                  String(detail?.paymentType || "").toUpperCase() ===
+                                    "COD"
+                                    ? hubHandoverCodMode
+                                    : undefined,
+                              }),
+                            )
+                          }
+                        >
+                          {canConfirmHubDrop(detail)
+                            ? "Confirm drop at hub"
+                            : "Confirm collection at hub"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="dashboard-card border-0 shadow-sm">
                     <h6 className="fw-bold mb-2">Update status</h6>
                     <p className="text-muted small mb-3">
@@ -1754,6 +1867,39 @@ const Orders = () => {
                           </option>
                         ))}
                       </select>
+                      {String(detail?.serviceMode || "").toUpperCase() ===
+                        "OUTSTATION" &&
+                      outstationStatusRequiresOtp(statusPick) ? (
+                        <>
+                          <input
+                            aria-label="OTP from customer"
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={6}
+                            className="form-control form-control-sm rounded-3"
+                            placeholder="6-digit OTP from customer app"
+                            value={statusOtp}
+                            onChange={(e) =>
+                              setStatusOtp(
+                                e.target.value.replace(/\D/g, "").slice(0, 6),
+                              )
+                            }
+                            disabled={actionBusy || statusAdminOverride}
+                          />
+                          <label className="form-check small text-muted mb-0">
+                            <input
+                              type="checkbox"
+                              className="form-check-input"
+                              checked={statusAdminOverride}
+                              onChange={(e) =>
+                                setStatusAdminOverride(e.target.checked)
+                              }
+                              disabled={actionBusy}
+                            />
+                            Emergency override (skip OTP check)
+                          </label>
+                        </>
+                      ) : null}
                       <button
                         aria-label="Update status"
                         type="button"
@@ -1768,6 +1914,14 @@ const Orders = () => {
                                 STATUS_UPDATE_MAP[
                                   String(statusPick || "").toUpperCase()
                                 ] ?? statusPick,
+                              ...(String(detail?.serviceMode || "").toUpperCase() ===
+                                "OUTSTATION" &&
+                              outstationStatusRequiresOtp(statusPick)
+                                ? {
+                                    otp: statusOtp.trim() || undefined,
+                                    adminOverride: statusAdminOverride,
+                                  }
+                                : {}),
                             }),
                           )
                         }

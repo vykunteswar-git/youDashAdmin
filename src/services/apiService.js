@@ -287,6 +287,8 @@ export const orderService = {
     ),
   updateStatus: (orderId, payload) =>
     api.post(`${orderPath(orderId)}/update-status`, payload),
+  verifyHubHandover: (orderId, payload) =>
+    api.post(`${orderPath(orderId)}/verify-hub-handover`, payload),
   notifyUser: (orderId, payload) =>
     api.post(`${orderPath(orderId)}/notify-user`, payload),
 };
