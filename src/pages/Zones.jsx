@@ -12,8 +12,11 @@ import {
   Undo2,
   Trash2,
 } from "lucide-react";
-import { zoneService, unwrapList } from "../services/apiService";
+import { zoneService, hubService, unwrapList } from "../services/apiService";
 import ZoneMapView from "../components/zones/ZoneMapView";
+import { CoverageSummaryCards } from "../components/coverage/CoverageSummaryCards";
+import { StatusBadge, BookingImpactCard } from "../components/coverage/StatusBadge";
+import { hubsByZoneId, zoneHubStats } from "../components/coverage/coverageUtils";
 
 const ZONE_TYPES = ["CIRCLE", "POLYGON"];
 
@@ -76,8 +79,16 @@ const defaultForm = () => ({
   polygonPoints: [],
 });
 
+const ZONE_FILTERS = [
+  { id: "all", label: "All zones" },
+  { id: "active", label: "Serving" },
+  { id: "paused", label: "Paused" },
+];
+
 const Zones = () => {
   const [rows, setRows] = useState([]);
+  const [hubs, setHubs] = useState([]);
+  const [zoneFilter, setZoneFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [editorOpen, setEditorOpen] = useState(false);
@@ -90,11 +101,16 @@ const Zones = () => {
     setLoading(true);
     setError("");
     try {
-      const res = await zoneService.list();
-      setRows(unwrapList(res));
+      const [zoneRes, hubRes] = await Promise.all([
+        zoneService.list(),
+        hubService.list(),
+      ]);
+      setRows(unwrapList(zoneRes));
+      setHubs(unwrapList(hubRes));
     } catch (e) {
       setError(e?.response?.data?.message || e?.message || "Failed to load zones.");
       setRows([]);
+      setHubs([]);
     } finally {
       setLoading(false);
     }
@@ -247,14 +263,26 @@ const Zones = () => {
   const mapCenterLat = Number.isFinite(centerLatNum) ? centerLatNum : HYDERABAD.lat;
   const mapCenterLng = Number.isFinite(centerLngNum) ? centerLngNum : HYDERABAD.lng;
 
+  const hubMap = hubsByZoneId(hubs);
+  const activeCount = rows.filter((z) => z.isActive).length;
+  const pausedCount = rows.length - activeCount;
+  const activeHubCount = hubs.filter((h) => h.isActive).length;
+
+  const filteredRows = rows.filter((z) => {
+    if (zoneFilter === "active") return Boolean(z.isActive);
+    if (zoneFilter === "paused") return !z.isActive;
+    return true;
+  });
+
   return (
     <div className="container-fluid fade-in">
-      <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3 mb-4">
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3 mb-3">
         <div>
           <h2 className="fw-bold mb-1">Zones</h2>
-          <p className="text-muted small mb-0">
-            Define service areas as a circle or polygon. Use the map when adding or
-            editing a zone.
+          <p className="text-muted small mb-0" style={{ maxWidth: 560 }}>
+            Service areas for the Parcel app. <strong>Active</strong> zones allow
+            in-city booking; <strong>paused</strong> zones block local trips inside the
+            polygon (cross-city via hubs may still work).
           </p>
         </div>
         <div className="d-flex gap-2">
@@ -288,6 +316,58 @@ const Zones = () => {
         </div>
       ) : null}
 
+      {!loading && !error ? (
+        <CoverageSummaryCards
+          items={[
+            {
+              key: "active",
+              label: "Serving zones",
+              value: activeCount,
+              color: "#198754",
+              hint: "In-city enabled",
+            },
+            {
+              key: "paused",
+              label: "Paused zones",
+              value: pausedCount,
+              color: pausedCount > 0 ? "#b45309" : "#111",
+              hint: "Local area off",
+            },
+            {
+              key: "hubs",
+              label: "Active hubs (all)",
+              value: activeHubCount,
+              hint: "Linked under Hubs",
+            },
+            {
+              key: "total",
+              label: "Total zones",
+              value: rows.length,
+            },
+          ]}
+        />
+      ) : null}
+
+      <div className="d-flex flex-wrap gap-2 mb-3">
+        {ZONE_FILTERS.map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            className={`btn btn-sm rounded-pill ${
+              zoneFilter === f.id
+                ? "text-white border-0"
+                : "btn-outline-secondary"
+            }`}
+            style={zoneFilter === f.id ? { backgroundColor: "#E51818" } : undefined}
+            onClick={() => setZoneFilter(f.id)}
+          >
+            {f.label}
+            {f.id === "active" ? ` (${activeCount})` : ""}
+            {f.id === "paused" ? ` (${pausedCount})` : ""}
+          </button>
+        ))}
+      </div>
+
       <div className="dashboard-card p-0 border-0 overflow-hidden shadow-sm">
         <div className="table-responsive">
           <table className="table table-hover mb-0 align-middle">
@@ -297,25 +377,28 @@ const Zones = () => {
                 <th className="px-3 py-3 small text-muted border-0">CITY</th>
                 <th className="px-3 py-3 small text-muted border-0">TYPE</th>
                 <th className="px-3 py-3 small text-muted border-0">DETAIL</th>
-                <th className="px-3 py-3 small text-muted border-0">ACTIVE</th>
+                <th className="px-3 py-3 small text-muted border-0">STATUS</th>
+                <th className="px-3 py-3 small text-muted border-0">HUBS</th>
                 <th className="px-4 py-3 small text-muted border-0 text-end">ACTIONS</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-5 text-muted small">
+                  <td colSpan={7} className="text-center py-5 text-muted small">
                     Loading zones…
                   </td>
                 </tr>
-              ) : rows.length === 0 ? (
+              ) : filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-5 text-muted small">
-                    No zones yet.
+                  <td colSpan={7} className="text-center py-5 text-muted small">
+                    {rows.length === 0 ? "No zones yet." : "No zones match this filter."}
                   </td>
                 </tr>
               ) : (
-                rows.map((z) => (
+                filteredRows.map((z) => {
+                  const hs = zoneHubStats(z, hubMap);
+                  return (
                   <tr key={z.id}>
                     <td className="px-4 py-3 border-0">
                       <div className="d-flex align-items-center gap-2">
@@ -351,13 +434,27 @@ const Zones = () => {
                       {summarizeZone(z)}
                     </td>
                     <td className="px-3 py-3 border-0">
-                      <span
-                        className={`badge rounded-pill ${
-                          z.isActive ? "bg-success bg-opacity-10 text-success" : "bg-secondary bg-opacity-10 text-secondary"
-                        }`}
-                      >
-                        {z.isActive ? "Yes" : "No"}
-                      </span>
+                      <StatusBadge
+                        variant={z.isActive ? "zoneActive" : "zonePaused"}
+                        size="sm"
+                      />
+                      <p className="mb-0 mt-1 text-muted" style={{ fontSize: 11 }}>
+                        {z.isActive
+                          ? "In-city on"
+                          : "Local trips blocked"}
+                      </p>
+                    </td>
+                    <td className="px-3 py-3 border-0 small">
+                      <span className="fw-semibold">{hs.active}</span>
+                      <span className="text-muted"> active</span>
+                      {hs.total > hs.active ? (
+                        <span className="text-muted"> · {hs.inactive} off</span>
+                      ) : null}
+                      {hs.total === 0 ? (
+                        <p className="mb-0 text-warning" style={{ fontSize: 11 }}>
+                          No hubs linked
+                        </p>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3 border-0 text-end">
                       <button
@@ -370,7 +467,8 @@ const Zones = () => {
                       </button>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -469,20 +567,31 @@ const Zones = () => {
                     placeholder="e.g. Hyderabad"
                   />
                 </div>
-                <div className="form-check form-switch mb-3">
-                  <input
-                    className="form-check-input"
-                    type="checkbox"
-                    id="zone-active"
-                    checked={form.isActive}
-                    onChange={(e) =>
-                      setForm({ ...form, isActive: e.target.checked })
-                    }
-                    disabled={saving}
+                <div className="mb-3 p-3 rounded-4 bg-light border">
+                  <div className="form-check form-switch mb-2">
+                    <input
+                      className="form-check-input"
+                      type="checkbox"
+                      id="zone-active"
+                      checked={form.isActive}
+                      onChange={(e) =>
+                        setForm({ ...form, isActive: e.target.checked })
+                      }
+                      disabled={saving}
+                    />
+                    <label className="form-check-label fw-semibold" htmlFor="zone-active">
+                      Zone is serving (active)
+                    </label>
+                  </div>
+                  <p className="text-muted small mb-2">
+                    Turn <strong>off</strong> to pause local bookings inside this zone.
+                    Hubs can stay on for cross-city routes.
+                  </p>
+                  <BookingImpactCard
+                    type="zone"
+                    zoneActive={form.isActive}
+                    zoneName={form.city || form.name || "this zone"}
                   />
-                  <label className="form-check-label small" htmlFor="zone-active">
-                    Active
-                  </label>
                 </div>
                 <div className="mb-3">
                   <label className="form-label small fw-semibold">Zone type</label>

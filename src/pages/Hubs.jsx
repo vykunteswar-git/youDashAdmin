@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { Link } from "react-router-dom";
 import {
   Warehouse,
   Plus,
@@ -8,11 +9,23 @@ import {
   RefreshCw,
   MapPin,
   Crosshair,
+  Info,
 } from "lucide-react";
 import { hubService, zoneService, unwrapList } from "../services/apiService";
 import HubLocationMapView from "../components/hubs/HubLocationMapView";
+import { CoverageSummaryCards } from "../components/coverage/CoverageSummaryCards";
+import { StatusBadge, BookingImpactCard } from "../components/coverage/StatusBadge";
+import { hubRoleLabel } from "../components/coverage/coverageUtils";
 
 const HYDERABAD = { lat: 17.4065, lng: 78.4772 };
+
+const HUB_FILTERS = [
+  { id: "all", label: "All hubs" },
+  { id: "operational", label: "Fully operational" },
+  { id: "crossCity", label: "Cross-city only" },
+  { id: "hubOff", label: "Hub off" },
+  { id: "noZone", label: "Missing zone" },
+];
 
 const defaultForm = () => ({
   name: "",
@@ -23,9 +36,33 @@ const defaultForm = () => ({
   isActive: true,
 });
 
+function zoneById(zones, id) {
+  return zones.find((z) => Number(z.id) === Number(id));
+}
+
+function matchesHubFilter(h, zones, filterId) {
+  const z = h.zoneId != null ? zoneById(zones, h.zoneId) : null;
+  const hubOn = Boolean(h.isActive);
+  const zoneOn = z ? Boolean(z.isActive) : false;
+
+  switch (filterId) {
+    case "operational":
+      return hubOn && zoneOn;
+    case "crossCity":
+      return hubOn && z && !zoneOn;
+    case "hubOff":
+      return !hubOn;
+    case "noZone":
+      return h.zoneId == null;
+    default:
+      return true;
+  }
+}
+
 const Hubs = () => {
   const [rows, setRows] = useState([]);
   const [zones, setZones] = useState([]);
+  const [hubFilter, setHubFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [editorOpen, setEditorOpen] = useState(false);
@@ -34,21 +71,16 @@ const Hubs = () => {
   const [saving, setSaving] = useState(false);
   const [flyToToken, setFlyToToken] = useState(0);
 
-  const loadZones = useCallback(async () => {
-    try {
-      const res = await zoneService.list();
-      setZones(unwrapList(res));
-    } catch {
-      setZones([]);
-    }
-  }, []);
-
-  const load = useCallback(async () => {
+  const loadAll = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const res = await hubService.list();
-      setRows(unwrapList(res));
+      const [hubRes, zoneRes] = await Promise.all([
+        hubService.list(),
+        zoneService.list(),
+      ]);
+      setRows(unwrapList(hubRes));
+      setZones(unwrapList(zoneRes));
     } catch (e) {
       setError(e?.response?.data?.message || e?.message || "Failed to load hubs.");
       setRows([]);
@@ -58,9 +90,8 @@ const Hubs = () => {
   }, []);
 
   useEffect(() => {
-    load();
-    loadZones();
-  }, [load, loadZones]);
+    loadAll();
+  }, [loadAll]);
 
   useEffect(() => {
     if (!editorOpen) return;
@@ -134,7 +165,7 @@ const Hubs = () => {
       } else {
         await hubService.create(payload);
       }
-      await load();
+      await loadAll();
       closeEditor();
     } catch (e) {
       window.alert(
@@ -145,10 +176,25 @@ const Hubs = () => {
     }
   };
 
-  const zoneName = (id) => {
-    const z = zones.find((x) => x.id === id);
-    return z ? z.name : `Zone #${id}`;
-  };
+  const selectedZone = useMemo(
+    () => (form.zoneId ? zoneById(zones, form.zoneId) : null),
+    [zones, form.zoneId]
+  );
+
+  const stats = useMemo(() => {
+    let operational = 0;
+    let crossCity = 0;
+    let off = 0;
+    for (const h of rows) {
+      const z = h.zoneId != null ? zoneById(zones, h.zoneId) : null;
+      if (!h.isActive) off++;
+      else if (z?.isActive) operational++;
+      else if (z) crossCity++;
+    }
+    return { operational, crossCity, off, total: rows.length };
+  }, [rows, zones]);
+
+  const filteredRows = rows.filter((h) => matchesHubFilter(h, zones, hubFilter));
 
   const mapLat = parseFloat(form.lat);
   const mapLng = parseFloat(form.lng);
@@ -157,21 +203,20 @@ const Hubs = () => {
 
   return (
     <div className="container-fluid fade-in">
-      <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3 mb-4">
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3 mb-3">
         <div>
           <h2 className="fw-bold mb-1">Hubs</h2>
-          <p className="text-muted small mb-0">
-            Place hubs on the map (same layout as Zones). Linked to a zone.
+          <p className="text-muted small mb-0" style={{ maxWidth: 560 }}>
+            Warehouse points for outstation legs. Each hub must link to a{" "}
+            <Link to="/zones">zone</Link>. Hub <strong>on</strong> + zone{" "}
+            <strong>paused</strong> = cross-city only; both on = in-city + outstation.
           </p>
         </div>
         <div className="d-flex gap-2">
           <button
             type="button"
             className="btn btn-outline-secondary rounded-3 d-flex align-items-center gap-2"
-            onClick={() => {
-              load();
-              loadZones();
-            }}
+            onClick={loadAll}
             disabled={loading}
           >
             <RefreshCw size={18} />
@@ -189,14 +234,85 @@ const Hubs = () => {
         </div>
       </div>
 
+      <div
+        className="alert alert-light border rounded-4 small d-flex gap-2 align-items-start mb-4"
+        role="note"
+      >
+        <Info size={18} className="text-primary flex-shrink-0 mt-1" />
+        <div>
+          <strong>Zone vs hub</strong>
+          <ul className="mb-0 ps-3 mt-1">
+            <li>
+              <strong>Zone paused</strong> — blocks pickup &amp; drop both inside that
+              zone (local trips).
+            </li>
+            <li>
+              <strong>Hub active</strong> — still used for routes to other cities when
+              the zone is paused.
+            </li>
+            <li>
+              <strong>Zone active</strong> — enables in-city vehicles inside the zone.
+            </li>
+          </ul>
+        </div>
+      </div>
+
       {error ? (
         <div className="alert alert-danger rounded-4 border-0 d-flex justify-content-between align-items-center">
           <span>{error}</span>
-          <button type="button" className="btn btn-sm btn-outline-danger" onClick={load}>
+          <button type="button" className="btn btn-sm btn-outline-danger" onClick={loadAll}>
             Retry
           </button>
         </div>
       ) : null}
+
+      {!loading && !error ? (
+        <CoverageSummaryCards
+          items={[
+            {
+              key: "op",
+              label: "Fully operational",
+              value: stats.operational,
+              color: "#198754",
+              hint: "Hub on + zone serving",
+            },
+            {
+              key: "cc",
+              label: "Cross-city only",
+              value: stats.crossCity,
+              color: stats.crossCity > 0 ? "#0d6efd" : "#111",
+              hint: "Hub on, zone paused",
+            },
+            {
+              key: "off",
+              label: "Hubs off",
+              value: stats.off,
+              hint: "Not in quotes",
+            },
+            {
+              key: "total",
+              label: "Total hubs",
+              value: stats.total,
+            },
+          ]}
+        />
+      ) : null}
+
+      <div className="d-flex flex-wrap gap-2 mb-3">
+        {HUB_FILTERS.map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            className={`btn btn-sm rounded-pill ${
+              hubFilter === f.id ? "text-white border-0" : "btn-outline-secondary"
+            }`}
+            style={hubFilter === f.id ? { backgroundColor: "#E51818" } : undefined}
+            onClick={() => setHubFilter(f.id)}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
 
       <div className="dashboard-card p-0 border-0 overflow-hidden shadow-sm">
         <div className="table-responsive">
@@ -205,9 +321,9 @@ const Hubs = () => {
               <tr>
                 <th className="px-4 py-3 small text-muted border-0">HUB</th>
                 <th className="px-3 py-3 small text-muted border-0">CITY</th>
-                <th className="px-3 py-3 small text-muted border-0">LOCATION</th>
                 <th className="px-3 py-3 small text-muted border-0">ZONE</th>
-                <th className="px-3 py-3 small text-muted border-0">ACTIVE</th>
+                <th className="px-3 py-3 small text-muted border-0">BOOKING ROLE</th>
+                <th className="px-3 py-3 small text-muted border-0">HUB</th>
                 <th className="px-4 py-3 small text-muted border-0 text-end">ACTIONS</th>
               </tr>
             </thead>
@@ -218,68 +334,80 @@ const Hubs = () => {
                     Loading hubs…
                   </td>
                 </tr>
-              ) : rows.length === 0 ? (
+              ) : filteredRows.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center py-5 text-muted small">
-                    No hubs yet.
+                    {rows.length === 0 ? "No hubs yet." : "No hubs match this filter."}
                   </td>
                 </tr>
               ) : (
-                rows.map((h) => (
-                  <tr key={h.id}>
-                    <td className="px-4 py-3 border-0">
-                      <div className="d-flex align-items-center gap-2">
-                        <div
-                          className="rounded-3 p-2 d-flex align-items-center justify-content-center"
-                          style={{ background: "rgba(229, 24, 24, 0.08)" }}
+                filteredRows.map((h) => {
+                  const z = h.zoneId != null ? zoneById(zones, h.zoneId) : null;
+                  const hubOn = Boolean(h.isActive);
+                  const zoneOn = z ? Boolean(z.isActive) : false;
+                  const role = hubRoleLabel(hubOn, zoneOn, Boolean(z));
+
+                  let hubBadge = "hubOff";
+                  if (hubOn && zoneOn) hubBadge = "hubActive";
+                  else if (hubOn && z && !zoneOn) hubBadge = "crossCity";
+
+                  return (
+                    <tr key={h.id}>
+                      <td className="px-4 py-3 border-0">
+                        <div className="d-flex align-items-center gap-2">
+                          <div
+                            className="rounded-3 p-2 d-flex align-items-center justify-content-center"
+                            style={{ background: "rgba(229, 24, 24, 0.08)" }}
+                          >
+                            <Warehouse size={18} style={{ color: "#E51818" }} />
+                          </div>
+                          <div>
+                            <p className="mb-0 fw-bold small">{h.name ?? "—"}</p>
+                            <p className="mb-0 text-muted font-monospace" style={{ fontSize: 10 }}>
+                              {h.lat != null && h.lng != null
+                                ? `${Number(h.lat).toFixed(4)}, ${Number(h.lng).toFixed(4)}`
+                                : "—"}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 border-0 small">{h.city ?? "—"}</td>
+                      <td className="px-3 py-3 border-0 small">
+                        {z ? (
+                          <div>
+                            <span className="fw-semibold">{z.name}</span>
+                            <div className="mt-1">
+                              <StatusBadge
+                                variant={zoneOn ? "zoneActive" : "zonePaused"}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-danger fw-semibold">Not linked</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-3 border-0">
+                        <span className="fw-semibold small d-block">{role.short}</span>
+                        <span className="text-muted" style={{ fontSize: 11 }}>
+                          {role.detail}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 border-0">
+                        <StatusBadge variant={hubBadge} />
+                      </td>
+                      <td className="px-4 py-3 border-0 text-end">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-light rounded-3"
+                          onClick={() => openEdit(h)}
                         >
-                          <Warehouse size={18} style={{ color: "#E51818" }} />
-                        </div>
-                        <div>
-                          <p className="mb-0 fw-bold small">{h.name ?? "—"}</p>
-                          <p className="mb-0 text-muted" style={{ fontSize: 11 }}>
-                            ID {h.id}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-3 py-3 border-0 small">{h.city ?? "—"}</td>
-                    <td className="px-3 py-3 border-0 small font-monospace text-muted">
-                      {h.lat != null && h.lng != null
-                        ? `${Number(h.lat).toFixed(5)}, ${Number(h.lng).toFixed(5)}`
-                        : "—"}
-                    </td>
-                    <td className="px-3 py-3 border-0 small">
-                      {h.zoneId != null ? (
-                        <>
-                          {zoneName(h.zoneId)}
-                          <span className="text-muted"> (#{h.zoneId})</span>
-                        </>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td className="px-3 py-3 border-0">
-                      <span
-                        className={`badge rounded-pill ${
-                          h.isActive ? "bg-success bg-opacity-10 text-success" : "bg-secondary bg-opacity-10 text-secondary"
-                        }`}
-                      >
-                        {h.isActive ? "Yes" : "No"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 border-0 text-end">
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-light rounded-3"
-                        onClick={() => openEdit(h)}
-                      >
-                        <Pencil size={16} className="me-1" />
-                        Edit
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                          <Pencil size={16} className="me-1" />
+                          Edit
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -417,7 +545,7 @@ const Hubs = () => {
                   <div className="mb-3">
                     <label className="form-label small fw-semibold d-flex align-items-center gap-2">
                       <MapPin size={14} />
-                      Zone
+                      Linked zone
                     </label>
                     <select
                       className="form-select border-0 bg-light rounded-3"
@@ -428,25 +556,42 @@ const Hubs = () => {
                       <option value="">Select zone…</option>
                       {zones.map((z) => (
                         <option key={z.id} value={String(z.id)}>
-                          {z.name} (#{z.id}) — {z.city}
+                          {z.name} — {z.city}
+                          {z.isActive ? " · Serving" : " · Paused"}
                         </option>
                       ))}
                     </select>
+                    {selectedZone ? (
+                      <div className="mt-2">
+                        <StatusBadge
+                          variant={selectedZone.isActive ? "zoneActive" : "zonePaused"}
+                        />
+                      </div>
+                    ) : null}
                   </div>
-                  <div className="form-check form-switch mb-4">
-                    <input
-                      className="form-check-input"
-                      type="checkbox"
-                      id="hub-active"
-                      checked={form.isActive}
-                      onChange={(e) =>
-                        setForm({ ...form, isActive: e.target.checked })
-                      }
-                      disabled={saving}
+
+                  <div className="mb-3 p-3 rounded-4 bg-light border">
+                    <div className="form-check form-switch mb-2">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        id="hub-active"
+                        checked={form.isActive}
+                        onChange={(e) =>
+                          setForm({ ...form, isActive: e.target.checked })
+                        }
+                        disabled={saving}
+                      />
+                      <label className="form-check-label fw-semibold" htmlFor="hub-active">
+                        Hub is active
+                      </label>
+                    </div>
+                    <BookingImpactCard
+                      type="hub"
+                      hubActive={form.isActive}
+                      zoneActive={selectedZone ? Boolean(selectedZone.isActive) : false}
+                      zoneName={selectedZone?.city || selectedZone?.name}
                     />
-                    <label className="form-check-label small" htmlFor="hub-active">
-                      Active
-                    </label>
                   </div>
 
                   <div className="d-flex flex-column flex-sm-row gap-2 pt-2 border-top">
