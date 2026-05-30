@@ -3,9 +3,7 @@ import {
   Save,
   RotateCcw,
   Pencil,
-  SlidersHorizontal,
   Percent,
-  Banknote,
   Route,
   Weight,
   Plus,
@@ -13,8 +11,6 @@ import {
   MapPin,
   Truck,
   Info,
-  ArrowRight,
-  Package,
 } from "lucide-react";
 import { appConfigService, unwrapEntity } from "../services/apiService";
 
@@ -97,16 +93,18 @@ function Section({ id, icon: Icon, title, subtitle, children }) {
       className="dashboard-card border-0 shadow-sm mb-4"
       style={{ scrollMarginTop: "5rem" }}
     >
-      <div className="d-flex align-items-start gap-3 mb-4 pb-3 border-bottom">
+      <div className="d-flex align-items-center gap-3 mb-4 pb-3 border-bottom">
         <div
           className="rounded-3 p-2 d-flex align-items-center justify-content-center flex-shrink-0"
           style={{ background: "rgba(229, 24, 24, 0.08)" }}
         >
-          <Icon size={22} style={{ color: BRAND }} />
+          <Icon size={20} style={{ color: BRAND }} />
         </div>
-        <div>
-          <h5 className="fw-bold mb-1">{title}</h5>
-          <p className="text-muted small mb-0">{subtitle}</p>
+        <div className="min-w-0">
+          <h5 className="fw-bold mb-0">{title}</h5>
+          {subtitle ? (
+            <p className="text-muted small mb-0 mt-1">{subtitle}</p>
+          ) : null}
         </div>
       </div>
       {children}
@@ -114,54 +112,99 @@ function Section({ id, icon: Icon, title, subtitle, children }) {
   );
 }
 
-function Field({ label, hint, suffix, value, onChange, disabled, example }) {
+function FieldLabel({ children, hint }) {
   return (
-    <div className="mb-0">
-      <label className="form-label fw-semibold mb-1">{label}</label>
-      {hint ? <p className="text-muted small mb-2">{hint}</p> : null}
+    <label
+      className="form-label fw-semibold mb-2 d-flex align-items-center gap-1"
+      style={{ fontSize: 13, color: "#374151" }}
+    >
+      {children}
+      {hint ? (
+        <span
+          className="d-inline-flex align-items-center justify-content-center rounded-circle text-white"
+          style={{
+            width: 15,
+            height: 15,
+            fontSize: 10,
+            cursor: "help",
+            background: "#94a3b8",
+            flexShrink: 0,
+          }}
+          title={hint}
+        >
+          ?
+        </span>
+      ) : null}
+    </label>
+  );
+}
+
+function Field({
+  label,
+  hint,
+  prefix,
+  suffix,
+  value,
+  onChange,
+  disabled,
+  placeholder,
+  step = "0.01",
+  min = "0",
+}) {
+  return (
+    <div>
+      <FieldLabel hint={hint}>{label}</FieldLabel>
       <div className="input-group">
+        {prefix ? (
+          <span
+            className="input-group-text rounded-start-3 border-end-0 text-muted"
+            style={{ background: "#f8fafc", fontSize: 13 }}
+          >
+            {prefix}
+          </span>
+        ) : null}
         <input
           type="number"
-          step="0.01"
-          min="0"
-          className="form-control border-0 bg-light rounded-start-3"
+          step={step}
+          min={min}
+          className={`form-control py-2 ${prefix ? "rounded-0 border-start-0" : "rounded-start-3"} ${suffix ? "rounded-0 border-end-0" : "rounded-end-3"}`}
+          style={{ background: "#fff", fontSize: 15 }}
           value={value}
           onChange={onChange}
           disabled={disabled}
+          placeholder={placeholder}
         />
-        <span className="input-group-text border-0 bg-light text-muted small rounded-end-3">
-          {suffix}
-        </span>
+        {suffix ? (
+          <span
+            className="input-group-text rounded-end-3 border-start-0 text-muted"
+            style={{ background: "#f8fafc", fontSize: 13, minWidth: 56 }}
+          >
+            {suffix}
+          </span>
+        ) : null}
       </div>
-      {example ? (
-        <p className="small text-muted mb-0 mt-2">
-          <span className="text-secondary">Example:</span> {example}
-        </p>
-      ) : null}
     </div>
   );
 }
 
-function ServiceFeeCard({ title, badge, description, fieldLabel, value, onChange, disabled }) {
+function CompactFeeField({ badge, label, hint, value, onChange, disabled }) {
   return (
-    <div className="h-100 p-3 p-md-4 rounded-4 border bg-white">
-      <div className="d-flex justify-content-between align-items-start mb-2">
-        <span
-          className="badge rounded-pill"
-          style={{ background: "rgba(229, 24, 24, 0.1)", color: BRAND }}
-        >
-          {badge}
-        </span>
-      </div>
-      <h6 className="fw-bold mb-1">{title}</h6>
-      <p className="text-muted small mb-3">{description}</p>
+    <div className="p-3 p-md-4 rounded-4 border bg-white h-100">
+      <span
+        className="badge rounded-pill mb-3"
+        style={{ background: "rgba(229, 24, 24, 0.1)", color: BRAND }}
+      >
+        {badge}
+      </span>
       <Field
-        label={fieldLabel}
-        suffix="₹ flat"
+        label={label}
+        hint={hint}
+        prefix="₹"
+        suffix="flat"
         value={value}
         onChange={onChange}
         disabled={disabled}
-        example="Added once per order on top of fare + GST"
+        placeholder="0"
       />
     </div>
   );
@@ -169,7 +212,6 @@ function ServiceFeeCard({ title, badge, description, fieldLabel, value, onChange
 
 function WeightBandsEditor({
   title,
-  legLabel,
   tiers,
   legKey,
   isEditing,
@@ -183,96 +225,100 @@ function WeightBandsEditor({
 
   return (
     <div className="h-100">
-      <h6 className="fw-bold mb-1">{title}</h6>
-      <p className="text-muted small mb-3">{legLabel}</p>
-
-      <div
-        className="rounded-3 px-3 py-2 mb-3 small"
-        style={{ background: "#f8fafc", border: "1px solid #e2e8f0" }}
-      >
-        <span className="text-muted">Preview at </span>
-        <strong>{previewWeight} kg</strong>
-        <span className="text-muted"> → </span>
-        <strong style={{ color: BRAND }}>
-          ₹{preview.rate}/km
-          {preview.matched
-            ? ` (band ${preview.min}–${preview.max} kg)`
-            : " (fallback)"}
-        </strong>
+      <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h6 className="fw-bold mb-0">{title}</h6>
+        <span className="small text-muted">
+          Preview {previewWeight} kg →{" "}
+          <strong style={{ color: BRAND }}>
+            ₹{preview.rate}/km
+            {preview.matched ? ` (${preview.min}–${preview.max} kg)` : " (fallback)"}
+          </strong>
+        </span>
       </div>
 
-      <div className="d-flex flex-column gap-2">
-        {tiers.map((row, idx) => (
-          <div
-            key={`${legKey}-${idx}`}
-            className="rounded-3 p-3 bg-light border border-light-subtle"
-          >
-            <div className="d-flex justify-content-between align-items-center mb-2">
-              <span className="badge text-bg-secondary rounded-pill">
-                Band {idx + 1}
-              </span>
-              {isEditing && tiers.length > 1 ? (
-                <button
-                  type="button"
-                  className="btn btn-sm btn-link text-danger p-0"
-                  onClick={() => onRemove(legKey, idx)}
-                  aria-label="Remove band"
-                >
-                  <Trash2 size={16} />
-                </button>
-              ) : null}
-            </div>
-            <div className="row g-2">
-              <div className="col-4">
-                <label className="form-label small text-muted mb-0">From kg</label>
-                <input
-                  type="number"
-                  step="0.5"
-                  min="0"
-                  className="form-control form-control-sm"
-                  value={row.minWeightKg}
-                  disabled={!isEditing}
-                  onChange={(e) =>
-                    onChange(legKey, idx, "minWeightKg", e.target.value)
-                  }
-                />
-              </div>
-              <div className="col-4">
-                <label className="form-label small text-muted mb-0">Up to kg</label>
-                <input
-                  type="number"
-                  step="0.5"
-                  min="0"
-                  className="form-control form-control-sm"
-                  value={row.maxWeightKg}
-                  disabled={!isEditing}
-                  onChange={(e) =>
-                    onChange(legKey, idx, "maxWeightKg", e.target.value)
-                  }
-                />
-              </div>
-              <div className="col-4">
-                <label className="form-label small text-muted mb-0">₹/km</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  className="form-control form-control-sm"
-                  value={row.ratePerKm}
-                  disabled={!isEditing}
-                  onChange={(e) =>
-                    onChange(legKey, idx, "ratePerKm", e.target.value)
-                  }
-                />
-              </div>
-            </div>
-            <p className="small text-muted mb-0 mt-2">
-              Applies when weight is ≥ {row.minWeightKg || "0"} kg and &lt;{" "}
-              {row.maxWeightKg || "?"} kg
-            </p>
-          </div>
-        ))}
+      <div className="table-responsive rounded-3 border">
+        <table className="table table-sm mb-0 align-middle">
+          <thead style={{ background: "#f8fafc" }}>
+            <tr className="small text-muted">
+              <th className="ps-3 py-2 fw-semibold" style={{ width: "28%" }}>
+                From (kg)
+              </th>
+              <th className="py-2 fw-semibold" style={{ width: "28%" }}>
+                Up to (kg)
+              </th>
+              <th className="py-2 fw-semibold" style={{ width: "28%" }}>
+                Rate
+              </th>
+              <th className="pe-3 py-2" style={{ width: "16%" }} />
+            </tr>
+          </thead>
+          <tbody>
+            {tiers.map((row, idx) => (
+              <tr key={`${legKey}-${idx}`}>
+                <td className="ps-3">
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    className="form-control form-control-sm py-2"
+                    value={row.minWeightKg}
+                    disabled={!isEditing}
+                    placeholder="0"
+                    onChange={(e) =>
+                      onChange(legKey, idx, "minWeightKg", e.target.value)
+                    }
+                  />
+                </td>
+                <td>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    className="form-control form-control-sm py-2"
+                    value={row.maxWeightKg}
+                    disabled={!isEditing}
+                    placeholder="10"
+                    onChange={(e) =>
+                      onChange(legKey, idx, "maxWeightKg", e.target.value)
+                    }
+                  />
+                </td>
+                <td>
+                  <div className="input-group input-group-sm">
+                    <span className="input-group-text">₹</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="form-control py-2"
+                      value={row.ratePerKm}
+                      disabled={!isEditing}
+                      placeholder="0"
+                      onChange={(e) =>
+                        onChange(legKey, idx, "ratePerKm", e.target.value)
+                      }
+                    />
+                    <span className="input-group-text">/km</span>
+                  </div>
+                </td>
+                <td className="pe-3 text-end">
+                  {isEditing && tiers.length > 1 ? (
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-link text-danger p-1"
+                      onClick={() => onRemove(legKey, idx)}
+                      aria-label="Remove band"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  ) : null}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
+
       {isEditing ? (
         <button
           type="button"
@@ -280,40 +326,9 @@ function WeightBandsEditor({
           onClick={() => onAdd(legKey)}
         >
           <Plus size={16} />
-          Add weight band
+          Add band
         </button>
       ) : null}
-    </div>
-  );
-}
-
-function OutstationFormulaStrip() {
-  const steps = [
-    { label: "Pickup km", sub: "× pickup ₹/km" },
-    { label: "+ Hub km", sub: "× hub route ₹/km" },
-    { label: "+ Drop km", sub: "× drop ₹/km" },
-    { label: "+ Weight", sub: "× ₹/kg" },
-    { label: "+ GST %", sub: "on subtotal" },
-    { label: "+ Platform ₹", sub: "outstation flat" },
-  ];
-  return (
-    <div
-      className="rounded-4 p-3 mb-4 d-flex flex-wrap align-items-center gap-2 small"
-      style={{ background: "linear-gradient(135deg, #fff5f5 0%, #f8fafc 100%)" }}
-    >
-      <Package size={18} style={{ color: BRAND }} className="flex-shrink-0" />
-      <span className="fw-semibold text-dark me-1">Outstation total =</span>
-      {steps.map((s, i) => (
-        <span key={s.label} className="d-inline-flex align-items-center gap-1">
-          {i > 0 ? <ArrowRight size={14} className="text-muted" /> : null}
-          <span
-            className="badge rounded-pill bg-white text-dark border px-2 py-2"
-            title={s.sub}
-          >
-            {s.label}
-          </span>
-        </span>
-      ))}
     </div>
   );
 }
@@ -434,11 +449,9 @@ const AppConfig = () => {
     <div className="container-fluid fade-in pb-5" style={{ maxWidth: 1080 }}>
       <div className="d-flex flex-column flex-lg-row justify-content-between align-items-lg-start gap-3 mb-4">
         <div>
-          <h2 className="fw-bold mb-2">App config</h2>
-          <p className="text-muted mb-2" style={{ maxWidth: 520 }}>
-            Controls how the <strong>Parcel app</strong> calculates prices when
-            customers get a quote. Changes apply on the next booking — no app
-            update needed.
+          <h2 className="fw-bold mb-1">App config</h2>
+          <p className="text-muted small mb-2">
+            Parcel app pricing — applies to new quotes immediately.
           </p>
           {!loading && !loadError ? (
             <div className="d-flex flex-wrap gap-2">
@@ -478,23 +491,20 @@ const AppConfig = () => {
             ) : (
               <Pencil size={18} />
             )}
-            {isEditing ? "Save all" : "Edit pricing"}
+            {isEditing ? "Save" : "Edit"}
           </button>
         </div>
       </div>
 
       {isEditing ? (
         <div
-          className="alert border-0 rounded-4 mb-4 d-flex align-items-start gap-2"
+          className="alert border-0 rounded-3 mb-4 py-2 px-3 d-flex align-items-center gap-2 small"
           style={{ background: "#fff8e6" }}
         >
-          <Info size={20} className="text-warning flex-shrink-0 mt-1" />
-          <div className="small">
-            <strong>Editing mode.</strong> Update fields below, then click{" "}
-            <strong>Save all</strong>. Hub-specific route rates are still managed
-            under <strong>Hub routes</strong>; vehicle fares under{" "}
-            <strong>Vehicles</strong>.
-          </div>
+          <Info size={16} className="text-warning flex-shrink-0" />
+          <span>
+            Editing — save when done. Hub routes and vehicle fares are managed separately.
+          </span>
         </div>
       ) : null}
 
@@ -514,26 +524,21 @@ const AppConfig = () => {
             style={{ width: "2.5rem", height: "2.5rem" }}
             role="status"
           />
-          <p className="text-muted small mb-0">Loading pricing settings…</p>
+          <p className="text-muted small mb-0">Loading…</p>
         </div>
       ) : (
         <>
-          <Section
-            id="section-tax"
-            icon={Percent}
-            title="Tax (all orders)"
-            subtitle="GST is calculated on the fare subtotal before the platform fee is added."
-          >
-            <div className="row">
-              <div className="col-12 col-md-6 col-lg-4">
+          <Section id="section-tax" icon={Percent} title="Tax">
+            <div className="row g-3">
+              <div className="col-12 col-sm-6 col-lg-4">
                 <Field
-                  label="GST rate"
-                  hint="Shown on customer receipt and added to subtotal."
+                  label="GST"
+                  hint="Applied to fare subtotal before platform fee"
                   suffix="%"
                   value={form.gstPercent}
                   onChange={handleChange("gstPercent")}
                   disabled={!isEditing}
-                  example="18% on ₹100 subtotal → ₹18 GST"
+                  placeholder="18"
                 />
               </div>
             </div>
@@ -542,108 +547,98 @@ const AppConfig = () => {
           <Section
             id="section-incity"
             icon={MapPin}
-            title="In-city (same zone)"
-            subtitle="Customer pickup and drop are in the same service zone. Fare is mainly from the vehicle; platform fee is a flat add-on."
+            title="In-city"
+            subtitle="Same-zone deliveries"
           >
             <div className="row g-3">
               <div className="col-12 col-md-6">
-                <ServiceFeeCard
-                  title="Platform fee"
+                <CompactFeeField
                   badge="In-city"
-                  description="Fixed charge added to every local delivery after vehicle fare + GST."
-                  fieldLabel="Amount per order"
+                  label="Platform fee"
+                  hint="Flat fee per local order"
                   value={form.incityPlatformFee}
                   onChange={handleChange("incityPlatformFee")}
                   disabled={!isEditing}
                 />
               </div>
               <div className="col-12 col-md-6">
-                <div className="h-100 p-3 p-md-4 rounded-4 bg-light border border-light-subtle">
-                  <h6 className="fw-bold mb-2 d-flex align-items-center gap-2">
-                    <Truck size={18} className="text-muted" />
-                    Vehicle pricing
-                  </h6>
+                <div className="h-100 p-3 p-md-4 rounded-4 bg-light border border-light-subtle d-flex align-items-center gap-3">
+                  <Truck size={20} className="text-muted flex-shrink-0" />
                   <p className="text-muted small mb-0">
-                    Base fare and ₹/km per bike, auto, or truck are configured
-                    on the <strong>Vehicles</strong> page. This screen only sets
-                    the extra platform fee and GST for in-city quotes.
+                    Vehicle base fare and ₹/km are set on <strong>Vehicles</strong>.
                   </p>
                 </div>
               </div>
             </div>
-            <p className="small text-muted mb-0 mt-3">
-              <strong>Customer sees:</strong> Vehicle price + GST + in-city platform
-              fee = estimated total on each vehicle card.
-            </p>
           </Section>
 
           <Section
             id="section-outstation"
             icon={Route}
-            title="Outstation (between zones / cities)"
-            subtitle="Price is built from distance legs, weight, GST, and a separate platform fee."
+            title="Outstation"
+            subtitle="Pickup + hub route + drop + weight + GST + platform fee"
           >
-            <OutstationFormulaStrip />
-
-            <div className="row g-3 mb-4">
-              <div className="col-12 col-md-6">
-                <ServiceFeeCard
-                  title="Platform fee"
+            <div className="row g-3 mb-3">
+              <div className="col-12 col-md-6 col-lg-4">
+                <CompactFeeField
                   badge="Outstation"
-                  description="Fixed charge added after all leg costs and GST. Different from in-city fee."
-                  fieldLabel="Amount per order"
+                  label="Platform fee"
+                  hint="Flat fee per outstation order"
                   value={form.outstationPlatformFee}
                   onChange={handleChange("outstationPlatformFee")}
                   disabled={!isEditing}
                 />
               </div>
-            </div>
-
-            <div className="row g-4">
-              <div className="col-12 col-md-4">
+              <div className="col-12 col-md-6 col-lg-4">
                 <Field
-                  label="Weight charge"
-                  hint="Extra ₹ per kg of parcel (all outstation modes)."
-                  suffix="₹/kg"
+                  label="Weight rate"
+                  hint="Per kg surcharge on outstation orders"
+                  prefix="₹"
+                  suffix="/kg"
                   value={form.perKgRate}
                   onChange={handleChange("perKgRate")}
                   disabled={!isEditing}
-                  example="12 kg × ₹5/kg = ₹60"
+                  placeholder="5"
                 />
               </div>
-              <div className="col-12 col-md-4">
+              <div className="col-12 col-md-6 col-lg-4">
                 <Field
-                  label="Default hub-to-hub rate"
-                  hint="Used when no custom rate exists on Hub routes for that pair."
-                  suffix="₹/km"
+                  label="Default hub route"
+                  hint="Used when no custom Hub routes rate exists"
+                  prefix="₹"
+                  suffix="/km"
                   value={form.defaultRouteRatePerKm}
                   onChange={handleChange("defaultRouteRatePerKm")}
                   disabled={!isEditing}
+                  placeholder="12"
                 />
               </div>
-              <div className="col-12 col-md-4">
-                <div className="p-3 rounded-4 bg-light border h-100">
-                  <p className="small fw-semibold mb-2">Fallback leg rates</p>
-                  <p className="text-muted small mb-3">
-                    Only used if parcel weight does not fall in any band below.
-                  </p>
-                  <Field
-                    label="Pickup fallback"
-                    suffix="₹/km"
-                    value={form.pickupRatePerKm}
-                    onChange={handleChange("pickupRatePerKm")}
-                    disabled={!isEditing}
-                  />
-                  <div className="mt-3">
-                    <Field
-                      label="Drop fallback"
-                      suffix="₹/km"
-                      value={form.dropRatePerKm}
-                      onChange={handleChange("dropRatePerKm")}
-                      disabled={!isEditing}
-                    />
-                  </div>
-                </div>
+            </div>
+
+            <div className="row g-3">
+              <div className="col-12 col-md-6">
+                <Field
+                  label="Pickup fallback"
+                  hint="₹/km when weight is outside all pickup bands"
+                  prefix="₹"
+                  suffix="/km"
+                  value={form.pickupRatePerKm}
+                  onChange={handleChange("pickupRatePerKm")}
+                  disabled={!isEditing}
+                  placeholder="10"
+                />
+              </div>
+              <div className="col-12 col-md-6">
+                <Field
+                  label="Drop fallback"
+                  hint="₹/km when weight is outside all drop bands"
+                  prefix="₹"
+                  suffix="/km"
+                  value={form.dropRatePerKm}
+                  onChange={handleChange("dropRatePerKm")}
+                  disabled={!isEditing}
+                  placeholder="10"
+                />
               </div>
             </div>
           </Section>
@@ -651,41 +646,21 @@ const AppConfig = () => {
           <Section
             id="section-bands"
             icon={Weight}
-            title="Outstation ₹/km by parcel weight"
-            subtitle="Heavier parcels can use higher pickup and drop rates. Door-to-hub skips drop km; hub-to-door skips pickup km."
+            title="Weight bands"
+            subtitle="₹/km by parcel weight — min inclusive, max exclusive"
           >
-            <div
-              className="alert alert-light border rounded-4 mb-4 small"
-              role="note"
-            >
-              <strong>How weight bands work</strong>
-              <ul className="mb-2 ps-3">
-                <li>
-                  <strong>From kg</strong> = included (e.g. 10 means 10 kg counts
-                  in this band).
-                </li>
-                <li>
-                  <strong>Up to kg</strong> = excluded (e.g. 20 means 19.9 kg is
-                  still in this band; exactly 20 kg moves to the next band).
-                </li>
-                <li>
-                  Example: bands 0→10 at ₹10/km and 10→20 at ₹30/km → an{" "}
-                  <strong>8 kg</strong> parcel uses ₹10/km; a <strong>15 kg</strong>{" "}
-                  parcel uses ₹30/km.
-                </li>
-              </ul>
-              <div className="d-flex flex-wrap align-items-center gap-2">
-                <label className="fw-semibold mb-0">Try preview weight:</label>
+            <div className="d-flex flex-wrap align-items-center gap-2 mb-4">
+              <span className="small fw-semibold text-muted">Preview weight</span>
+              <div className="input-group input-group-sm" style={{ width: 120 }}>
                 <input
                   type="number"
                   step="0.5"
                   min="0"
-                  className="form-control form-control-sm"
-                  style={{ width: 100 }}
+                  className="form-control py-2"
                   value={previewWeight}
                   onChange={(e) => setPreviewWeight(e.target.value)}
                 />
-                <span className="text-muted">kg</span>
+                <span className="input-group-text">kg</span>
               </div>
             </div>
 
@@ -693,7 +668,6 @@ const AppConfig = () => {
               <div className="col-12 col-lg-6">
                 <WeightBandsEditor
                   title="Pickup leg"
-                  legLabel="Customer address → origin hub (first mile)"
                   tiers={form.pickupLegTiers}
                   legKey="pickupLegTiers"
                   isEditing={isEditing}
@@ -707,7 +681,6 @@ const AppConfig = () => {
               <div className="col-12 col-lg-6">
                 <WeightBandsEditor
                   title="Drop leg"
-                  legLabel="Destination hub → customer address (last mile)"
                   tiers={form.dropLegTiers}
                   legKey="dropLegTiers"
                   isEditing={isEditing}
@@ -720,11 +693,6 @@ const AppConfig = () => {
               </div>
             </div>
           </Section>
-
-          <p className="text-muted small text-center mb-0">
-            Config record #{form.id || "1"} · Saved settings apply to new quotes
-            immediately
-          </p>
         </>
       )}
     </div>
