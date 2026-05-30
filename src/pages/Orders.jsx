@@ -659,10 +659,18 @@ const Orders = () => {
   const fmtMoney = (n) =>
     n == null || Number.isNaN(Number(n))
       ? "—"
-      : `₹${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+      : `₹${Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
   const fmtAddress = (s) => {
     const v = String(s || "").trim();
     return v || "—";
+  };
+  const fmtYesNo = (v) => (v === true ? "Yes" : v === false ? "No" : "—");
+  const parcelHandlingTags = (d) => {
+    const tags = [];
+    if (d?.isFragile) tags.push("Fragile");
+    if (d?.containsLiquid) tags.push("Contains liquid");
+    if (d?.containsBattery) tags.push("Contains battery");
+    return tags;
   };
   const isAnyBusy = loading || detailLoading || actionBusy;
 
@@ -1477,6 +1485,78 @@ const Orders = () => {
                       Order details
                     </h6>
                     <div className="row g-3 small">
+                      <div className="col-12">
+                        <p className="text-muted mb-1">Package contents</p>
+                        <p className="fw-bold mb-0">
+                          {fmtAddress(detail.packageContents)}
+                        </p>
+                      </div>
+                      <div className="col-6 col-md-4">
+                        <p className="text-muted mb-1">Declared value</p>
+                        <p className="fw-bold mb-0">
+                          {fmtMoney(detail.declaredValue)}
+                        </p>
+                      </div>
+                      <div className="col-6 col-md-4">
+                        <p className="text-muted mb-1">Pieces</p>
+                        <p className="fw-bold mb-0">
+                          {detail.pieceCount != null
+                            ? detail.pieceCount
+                            : "—"}
+                        </p>
+                      </div>
+                      <div className="col-6 col-md-4">
+                        <p className="text-muted mb-1">Category ID</p>
+                        <p className="fw-bold mb-0">
+                          {detail.categoryId ?? "—"}
+                        </p>
+                      </div>
+                      <div className="col-12">
+                        <p className="text-muted mb-1">Special handling</p>
+                        {parcelHandlingTags(detail).length > 0 ? (
+                          <div className="d-flex flex-wrap gap-2">
+                            {parcelHandlingTags(detail).map((tag) => (
+                              <span
+                                key={tag}
+                                className="badge rounded-pill text-bg-light border text-dark"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="fw-bold mb-0">—</p>
+                        )}
+                      </div>
+                      <div className="col-6 col-md-4">
+                        <p className="text-muted mb-1">
+                          Prohibited items confirmed
+                        </p>
+                        <p className="fw-bold mb-0">
+                          {fmtYesNo(detail.prohibitedItemsAccepted)}
+                        </p>
+                      </div>
+                      <div className="col-6 col-md-4">
+                        <p className="text-muted mb-1">
+                          Parcel declaration confirmed
+                        </p>
+                        <p className="fw-bold mb-0">
+                          {fmtYesNo(detail.parcelDeclarationAccepted)}
+                        </p>
+                      </div>
+                      {detail.imageUrl ? (
+                        <div className="col-12">
+                          <p className="text-muted mb-1">Package photo</p>
+                          <a
+                            href={detail.imageUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="small"
+                          >
+                            View photo
+                          </a>
+                        </div>
+                      ) : null}
                       <div className="col-6 col-md-4">
                         <p className="text-muted mb-1">Weight</p>
                         <p className="fw-bold mb-0">
