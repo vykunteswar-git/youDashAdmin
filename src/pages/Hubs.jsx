@@ -599,7 +599,8 @@ const Hubs = () => {
                       disabled={saving}
                     />
                     <p className="text-muted small mb-0 mt-1">
-                      Last time a parcel can enter <strong>this</strong> hub (pickup / drop-off).
+                      Optional latest handover if you do <strong>not</strong> use dispatch
+                      slots below (one deadline for all buses).
                     </p>
                   </div>
 
