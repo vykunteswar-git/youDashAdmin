@@ -1616,7 +1616,7 @@ const Orders = () => {
                     ) : null}
                     {needsPickupRiderAssign(detail) ? (
                       <div className="alert alert-info small py-2 px-3 mb-3">
-                        Order is booked. Use <strong>Pickup rider</strong> to assign a rider near the sender.
+                        Order is booked. Use <strong>Pickup rider</strong> to assign a rider in the origin zone.
                       </div>
                     ) : null}
                     <div className="d-flex flex-column gap-2">
