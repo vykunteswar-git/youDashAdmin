@@ -294,12 +294,8 @@ const Orders = () => {
       (String(order?.deliveryType || "").toUpperCase() === "DOOR_TO_HUB"
         ? "PICKUP"
         : "DELIVERY");
-    const useFullRiderPool =
-      assignmentRole === "DELIVERY" || assignmentRole === "BOTH";
     try {
-      const res = useFullRiderPool
-        ? await riderService.listByStatus("APPROVED")
-        : await riderService.getEligibleRidersForOrder(id, assignmentRole);
+      const res = await riderService.getEligibleRidersForOrder(id, assignmentRole);
       setAvailableRiders(unwrapList(res));
     } catch {
       setAvailableRiders([]);
