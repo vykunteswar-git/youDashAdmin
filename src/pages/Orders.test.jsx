@@ -133,34 +133,18 @@ describe("Orders page status and address behavior", () => {
     expect(updateBtn).toHaveTextContent("No valid next status");
   });
 
-  it("shows outstation next-action guidance at destination hub", async () => {
+  it("shows address text as primary and hides coords unless needed", async () => {
     await renderAndOpenDetail({
-      deliveryType: "DOOR_TO_DOOR",
-      status: "AT_DESTINATION_HUB",
-      adminSelectableNextStatuses: ["FAILED_DELIVERY"],
-      allowedNextStatuses: ["FAILED_DELIVERY"],
+      pickupAddress: "123 Main Street, Bengaluru",
+      dropAddress: "",
+      dropLat: 12.5555,
+      dropLng: 77.4444,
     });
 
-    expect(screen.getByText("Next action")).toBeInTheDocument();
-    expect(
-      screen.getByText(/Assign delivery rider — status becomes Out for Delivery automatically/i),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("option", { name: "Out For Delivery" }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("shows COD mode when confirming pickup for outstation COD order", async () => {
-    await renderAndOpenDetail({
-      deliveryType: "DOOR_TO_DOOR",
-      status: "RIDER_ASSIGNED",
-      paymentType: "COD",
-      codAlreadyCollected: false,
-      adminSelectableNextStatuses: ["PICKED_UP"],
+    await waitFor(() => {
+      expect(screen.getByText("123 Main Street, Bengaluru")).toBeInTheDocument();
     });
-
-    expect(
-      screen.getByLabelText("COD collection mode at pickup"),
-    ).toBeInTheDocument();
+    expect(screen.queryByText("12.9716, 77.5946")).not.toBeInTheDocument();
+    expect(screen.getByText("12.5555, 77.4444")).toBeInTheDocument();
   });
 });

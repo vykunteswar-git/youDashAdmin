@@ -116,6 +116,7 @@ const OUTSTATION_BULK_STATUSES = [
   "AT_ORIGIN_HUB",
   "IN_TRANSIT",
   "AT_DESTINATION_HUB",
+  "OUT_FOR_DELIVERY",
   "AWAITING_HUB_COLLECTION",
   "COLLECTED",
   "DELIVERED",
@@ -154,80 +155,6 @@ function canConfirmHubCollect(order) {
     String(order?.deliveryType || "").toUpperCase() === "DOOR_TO_HUB" &&
     normalizeOrderStatus(order?.status) === "AWAITING_HUB_COLLECTION"
   );
-}
-
-function isOutstationDoorDeliveryType(deliveryType) {
-  const type = String(deliveryType || "").toUpperCase();
-  return type === "DOOR_TO_DOOR" || type === "HUB_TO_DOOR";
-}
-
-function needsDeliveryRiderAssign(order) {
-  return (
-    String(order?.serviceMode || "").toUpperCase() === "OUTSTATION" &&
-    isOutstationDoorDeliveryType(order?.deliveryType) &&
-    normalizeOrderStatus(order?.status) === "AT_DESTINATION_HUB"
-  );
-}
-
-function needsPickupRiderAssign(order) {
-  const type = String(order?.deliveryType || "").toUpperCase();
-  return (
-    String(order?.serviceMode || "").toUpperCase() === "OUTSTATION" &&
-    (type === "DOOR_TO_DOOR" || type === "DOOR_TO_HUB") &&
-    normalizeOrderStatus(order?.status) === "BOOKED"
-  );
-}
-
-function resolveSuggestedAssignRole(order) {
-  if (needsDeliveryRiderAssign(order)) return "DELIVERY";
-  if (needsPickupRiderAssign(order)) return "PICKUP";
-  const type = String(order?.deliveryType || "").toUpperCase();
-  if (type === "DOOR_TO_HUB") return "PICKUP";
-  return "DELIVERY";
-}
-
-function canRecordPickupCod(order, targetStatus) {
-  const type = String(order?.deliveryType || "").toUpperCase();
-  return (
-    String(order?.serviceMode || "").toUpperCase() === "OUTSTATION" &&
-    (type === "DOOR_TO_DOOR" || type === "DOOR_TO_HUB") &&
-    String(targetStatus || "").toUpperCase() === "PICKED_UP" &&
-    String(order?.paymentType || "").toUpperCase() === "COD" &&
-    !(order?.codAlreadyCollected === true)
-  );
-}
-
-function getOutstationNextAdminAction(order) {
-  if (!order || String(order?.serviceMode || "").toUpperCase() !== "OUTSTATION") {
-    return null;
-  }
-  const status = normalizeOrderStatus(order?.status);
-  const type = String(order?.deliveryType || "DOOR_TO_DOOR").toUpperCase();
-  if (needsPickupRiderAssign(order)) {
-    return "Assign pickup rider — order is booked and waiting for pickup.";
-  }
-  if (canConfirmHubDrop(order)) {
-    return "Confirm hub drop-off — sender drops at origin hub (COD + drop OTP if COD).";
-  }
-  if (status === "RIDER_ASSIGNED" && (type === "DOOR_TO_DOOR" || type === "DOOR_TO_HUB")) {
-    return "Confirm picked up — pickup OTP from sender; record COD from sender if applicable.";
-  }
-  if (status === "PICKED_UP") return "Mark at origin hub — parcel received at origin hub.";
-  if (status === "AT_ORIGIN_HUB") return "Mark in transit — parcel dispatched on route.";
-  if (status === "IN_TRANSIT") return "Mark at destination hub — parcel arrived at destination city.";
-  if (needsDeliveryRiderAssign(order)) {
-    return "Assign delivery rider — status becomes Out for Delivery automatically.";
-  }
-  if (status === "AT_DESTINATION_HUB" && type === "DOOR_TO_HUB") {
-    return "Mark awaiting hub collection — receiver collects at destination hub.";
-  }
-  if (canConfirmHubCollect(order)) {
-    return "Confirm hub collection — receiver OTP at destination hub.";
-  }
-  if (status === "OUT_FOR_DELIVERY") {
-    return "Mark delivered — delivery OTP from receiver (COD already collected from sender).";
-  }
-  return null;
 }
 const SERVICE_MODE_TABS = ["INCITY", "OUTSTATION"];
 const STATUS_LABEL_OVERRIDES = {
@@ -330,7 +257,6 @@ const Orders = () => {
   const [statusPick, setStatusPick] = useState("RIDER_ASSIGNED");
   const [statusOtp, setStatusOtp] = useState("");
   const [statusAdminOverride, setStatusAdminOverride] = useState(false);
-  const [pickupCodMode, setPickupCodMode] = useState("CASH");
   const [hubHandoverOtp, setHubHandoverOtp] = useState("");
   const [hubHandoverCodMode, setHubHandoverCodMode] = useState("CASH");
   const [hubHandoverOverride, setHubHandoverOverride] = useState(false);
@@ -483,20 +409,6 @@ const Orders = () => {
     if (detail == null || selectedId == null) return;
     loadEligibleRidersForOrder(detail, assignRolePick);
   }, [assignRolePick, detail, selectedId, loadEligibleRidersForOrder]);
-
-  useEffect(() => {
-    if (detail == null) return;
-    setAssignRolePick(resolveSuggestedAssignRole(detail));
-  }, [detail?.id, detail?.status, detail?.deliveryType, detail?.serviceMode]);
-
-  useEffect(() => {
-    if (selectedId == null) return undefined;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [selectedId]);
 
   useEffect(() => {
     const unsubscribe = adminSocketService.subscribe((evt) => {
@@ -798,8 +710,7 @@ const Orders = () => {
     if (d?.containsBattery) tags.push("Contains battery");
     return tags;
   };
-  const isListBusy = loading && selectedId == null;
-  const isPageOverlayBusy = isListBusy;
+  const isAnyBusy = loading || detailLoading || actionBusy;
 
   return (
     <>
@@ -822,7 +733,7 @@ const Orders = () => {
           </div>
         ) : null}
 
-        {isPageOverlayBusy ? (
+        {isAnyBusy ? (
           <div
             className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
             style={{
@@ -834,7 +745,11 @@ const Orders = () => {
             <div className="bg-white rounded-4 shadow px-4 py-3 d-flex align-items-center gap-3">
               <span className="spinner-border spinner-border-sm text-danger" />
               <span className="small fw-semibold text-muted">
-                Loading orders...
+                {actionBusy
+                  ? "Processing request..."
+                  : detailLoading
+                    ? "Loading order details..."
+                    : "Loading orders..."}
               </span>
             </div>
           </div>
@@ -1505,17 +1420,12 @@ const Orders = () => {
         <div
           className="position-fixed top-0 start-0 w-100 h-100 fade-in d-flex flex-column"
           style={{
-            zIndex: 1100,
-            minHeight: "100vh",
-            height: "100vh",
-            backgroundColor: "#F8F9FB",
+            zIndex: 1050,
+            background: "linear-gradient(180deg, #F1F5F9 0%, #F8FAFC 100%)",
           }}
         >
-          <div
-            className="bg-white border-bottom shadow-sm px-3 py-3 px-lg-4 flex-shrink-0"
-            style={{ zIndex: 10 }}
-          >
-            <div className="container-fluid px-0 d-flex justify-content-between align-items-start gap-3">
+          <div className="bg-white border-bottom shadow-sm px-3 py-3 px-md-4 sticky-top">
+            <div className="d-flex justify-content-between align-items-start gap-3">
               <div>
                 <h4 className="fw-bold mb-1 d-flex flex-wrap align-items-center gap-2">
                   Order #{selectedId}
@@ -1533,8 +1443,6 @@ const Orders = () => {
                 <p className="text-muted small mb-0">
                   User #{detail.userId ?? "—"} · {detail.serviceMode ?? "—"} ·{" "}
                   {formatWhen(detail.createdAt)}
-                  {detail.deliveryType ? ` · ${detail.deliveryType}` : ""}
-                  {detail.paymentType ? ` · ${detail.paymentType}` : ""}
                 </p>
               </div>
               <button
@@ -1549,19 +1457,18 @@ const Orders = () => {
             </div>
           </div>
 
-          <div className="flex-grow-1 overflow-auto">
-            <div className="container-fluid px-3 px-lg-4 py-4 pb-5">
+          <div className="flex-grow-1 overflow-auto px-3 py-4 px-md-4 pb-5">
+            <div className="mx-auto" style={{ maxWidth: 1100 }}>
               <div className="row g-4">
-                <div className="col-12 col-xxl-8">
+                <div className="col-12 col-lg-7">
                   <div className="dashboard-card border-0 shadow-sm mb-4">
                     <h6 className="fw-bold mb-3 d-flex align-items-center gap-2 text-uppercase small text-muted letter-spacing">
                       <Navigation size={18} style={{ color: "#E51818" }} />
                       Locations
                     </h6>
-                    <div className="row g-3">
-                      <div className="col-12 col-md-6">
-                        <div className="p-3 rounded-3 bg-light h-100">
-                          <p className="text-muted mb-1 small">Pickup</p>
+                    <div className="d-flex flex-column gap-3">
+                      <div className="p-3 rounded-3 bg-light">
+                        <p className="text-muted mb-1 small">Pickup</p>
                         <p className="mb-1 small">
                           {fmtAddress(detail.pickupAddress)}
                         </p>
@@ -1584,10 +1491,8 @@ const Orders = () => {
                           </a>
                         ) : null}
                       </div>
-                      </div>
-                      <div className="col-12 col-md-6">
-                        <div className="p-3 rounded-3 bg-light h-100">
-                          <p className="text-muted mb-1 small">Drop</p>
+                      <div className="p-3 rounded-3 bg-light">
+                        <p className="text-muted mb-1 small">Drop</p>
                         <p className="mb-1 small">
                           {fmtAddress(detail.dropAddress)}
                         </p>
@@ -1608,7 +1513,6 @@ const Orders = () => {
                             Open in Maps
                           </a>
                         ) : null}
-                      </div>
                       </div>
                     </div>
                   </div>
@@ -1735,17 +1639,7 @@ const Orders = () => {
                   </div>
                 </div>
 
-                <div
-                  className="col-12 col-xxl-4 d-flex flex-column gap-4"
-                  style={{ alignSelf: "flex-start" }}
-                >
-                  <div
-                    className="d-flex flex-column gap-4"
-                    style={{
-                      position: "sticky",
-                      top: 0,
-                    }}
-                  >
+                <div className="col-12 col-lg-5 d-flex flex-column gap-4">
                   <div className="dashboard-card border-0 shadow-sm">
                     <h6 className="fw-bold mb-3 d-flex align-items-center gap-2">
                       <CreditCard size={18} /> Amounts
@@ -1769,46 +1663,26 @@ const Orders = () => {
                     </div>
                   </div>
 
-                  {String(detail?.serviceMode || "").toUpperCase() === "OUTSTATION" &&
-                  getOutstationNextAdminAction(detail) ? (
-                    <div className="dashboard-card border-0 shadow-sm border border-primary border-opacity-25 mb-3">
-                      <h6 className="fw-bold mb-2">Next action</h6>
-                      <p className="text-muted small mb-2">
-                        {getOutstationNextAdminAction(detail)}
-                      </p>
-                      {String(detail?.paymentType || "").toUpperCase() === "COD" ? (
-                        <span
-                          className={`badge rounded-pill fw-semibold ${
-                            detail?.codAlreadyCollected
-                              ? "bg-success-subtle text-success"
-                              : "bg-warning-subtle text-warning"
-                          }`}
-                        >
-                          COD {detail?.codAlreadyCollected ? "collected from sender" : "pending — collect from sender"}
-                        </span>
-                      ) : null}
-                    </div>
-                  ) : null}
-
                   <div className="dashboard-card border-0 shadow-sm border border-warning border-opacity-25">
                     <h6 className="fw-bold mb-2 d-flex align-items-center gap-2">
                       <User size={18} /> Assign rider
                     </h6>
                     <p className="text-muted small mb-3">
-                      Pickup rider for door pickup (Door to Door / Door to Hub).
-                      Delivery rider at destination hub for door delivery (Door to Door / Hub to Door).
-                      Out for Delivery is set automatically when a delivery rider is assigned.
+                      POST <code className="small">/assign-rider</code> with a
+                      rider id from the available pool. For outstation{" "}
+                      <strong>hub → door</strong>, use <strong>Delivery rider</strong>{" "}
+                      after the parcel reaches the destination hub (riders are
+                      listed near Hyderabad, not Visakhapatnam).
                     </p>
-                    {needsDeliveryRiderAssign(detail) ? (
+                    {String(detail?.serviceMode || "").toUpperCase() ===
+                      "OUTSTATION" &&
+                    String(detail?.deliveryType || "").toUpperCase() ===
+                      "HUB_TO_DOOR" &&
+                    normalizeOrderStatus(detail?.status) === "AT_DESTINATION_HUB" ? (
                       <div className="alert alert-info small py-2 px-3 mb-3">
                         Parcel is at the destination hub. Use <strong>Delivery rider</strong>,
-                        pick a rider near the destination city, then assign — status becomes{" "}
-                        <strong>Out for delivery</strong>. Do not use Update status for this step.
-                      </div>
-                    ) : null}
-                    {needsPickupRiderAssign(detail) ? (
-                      <div className="alert alert-info small py-2 px-3 mb-3">
-                        Order is booked. Use <strong>Pickup rider</strong> to assign a rider near the sender.
+                        pick a rider online near the destination city, then assign — status
+                        becomes <strong>Out for delivery</strong>.
                       </div>
                     ) : null}
                     <div className="d-flex flex-column gap-2">
@@ -1999,7 +1873,7 @@ const Orders = () => {
                   <div className="dashboard-card border-0 shadow-sm">
                     <h6 className="fw-bold mb-2">Update status</h6>
                     <p className="text-muted small mb-3">
-                      Hub transit and delivery milestones. Out for Delivery is only via Assign rider at destination hub.
+                      Only valid next statuses are shown.
                     </p>
                     <div className="d-flex flex-column gap-2">
                       <select
@@ -2048,18 +1922,6 @@ const Orders = () => {
                           </label>
                         </>
                       ) : null}
-                      {canRecordPickupCod(detail, statusPick) && !statusAdminOverride ? (
-                        <select
-                          aria-label="COD collection mode at pickup"
-                          className="form-select form-select-sm rounded-3"
-                          value={pickupCodMode}
-                          onChange={(e) => setPickupCodMode(e.target.value)}
-                          disabled={actionBusy}
-                        >
-                          <option value="CASH">COD — Cash from sender</option>
-                          <option value="QR">COD — UPI QR from sender</option>
-                        </select>
-                      ) : null}
                       <button
                         aria-label="Update status"
                         type="button"
@@ -2081,10 +1943,6 @@ const Orders = () => {
                                     otp: statusOtp.trim() || undefined,
                                     adminOverride: statusAdminOverride,
                                   }
-                                : {}),
-                              ...(canRecordPickupCod(detail, statusPick) &&
-                              !statusAdminOverride
-                                ? { codCollectionMode: pickupCodMode }
                                 : {}),
                             }),
                           )
@@ -2154,7 +2012,6 @@ const Orders = () => {
                       Working…
                     </p>
                   ) : null}
-                  </div>
                 </div>
               </div>
             </div>
