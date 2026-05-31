@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { createPortal } from "react-dom";
 import {
   Search,
   RefreshCw,
@@ -317,15 +316,6 @@ const Orders = () => {
     if (detail == null) return;
     setAssignRolePick(resolveSuggestedAssignRole(detail));
   }, [detail?.id, detail?.status, detail?.deliveryType, detail?.serviceMode]);
-
-  useEffect(() => {
-    if (selectedId == null) return undefined;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [selectedId]);
 
   useEffect(() => {
     const unsubscribe = adminSocketService.subscribe((evt) => {
@@ -654,6 +644,8 @@ const Orders = () => {
           </div>
         ) : null}
 
+        {!(detail && selectedId != null) && (
+        <>
         <div className="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3 mb-4">
           <div>
             <h2 className="fw-bold mb-1">Orders</h2>
@@ -1315,34 +1307,22 @@ const Orders = () => {
             ? `${filteredOrders.length} order${filteredOrders.length !== 1 ? "s" : ""} on ${routeFilter}`
             : `Showing ${filteredOrders.length} of ${modeFilteredOrders.length} ${serviceModeTab === "INCITY" ? "incity" : "outstation"} orders`}
         </p>
-      </div>
+        </>
+        )}
 
-      {detail &&
-        selectedId != null &&
-        createPortal(
-        <div
-          className="position-fixed d-flex flex-column overflow-hidden fade-in yd-admin-modal-layer"
-          style={{
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            width: "100vw",
-            height: "100dvh",
-            maxHeight: "100dvh",
-            margin: 0,
-            backgroundColor: "#F8F9FB",
-          }}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="order-detail-title"
-        >
-          <div
-            className="bg-white border-bottom shadow-sm px-3 py-3 px-lg-4 flex-shrink-0"
-            style={{ zIndex: 10 }}
-          >
-            <div className="container-fluid px-0 d-flex justify-content-between align-items-start gap-3">
+      {detail && selectedId != null && (
+        <div className="order-detail-panel fade-in pb-4">
+          <div className="dashboard-card border-0 shadow-sm mb-4">
+            <div className="d-flex justify-content-between align-items-start gap-3">
               <div>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-light rounded-pill mb-2 d-inline-flex align-items-center gap-1"
+                  onClick={closeDetail}
+                >
+                  <ChevronRight size={14} style={{ transform: "rotate(180deg)" }} />
+                  Back to orders
+                </button>
                 <h4
                   id="order-detail-title"
                   className="fw-bold mb-1 d-flex flex-wrap align-items-center gap-2"
@@ -1371,16 +1351,15 @@ const Orders = () => {
                 className="btn btn-danger rounded-circle p-2 border-0 d-flex align-items-center justify-content-center flex-shrink-0"
                 style={{ width: 40, height: 40, backgroundColor: "#E51818" }}
                 onClick={closeDetail}
-                aria-label="Close"
+                aria-label="Close order details"
               >
                 <X size={20} className="text-white" />
               </button>
             </div>
           </div>
 
-          <div className="flex-grow-1 overflow-auto min-h-0">
-            <div className="container-fluid px-3 px-lg-4 py-4 pb-5">
-              <div className="row g-4">
+          <div className="pb-3">
+            <div className="row g-4">
                 <div className="col-12 col-xxl-8">
                   <div className="dashboard-card border-0 shadow-sm mb-4">
                     <h6 className="fw-bold mb-3 d-flex align-items-center gap-2 text-uppercase small text-muted letter-spacing">
@@ -1986,9 +1965,8 @@ const Orders = () => {
               </div>
             </div>
           </div>
-        </div>,
-        document.body,
       )}
+      </div>
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
