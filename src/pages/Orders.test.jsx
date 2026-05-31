@@ -10,6 +10,7 @@ const apiMocks = vi.hoisted(() => ({
   assignRider: vi.fn(),
   getAvailableRiders: vi.fn(),
   getEligibleRidersForOrder: vi.fn(),
+  listByStatus: vi.fn(),
   sendBroadcast: vi.fn(),
 }));
 
@@ -23,6 +24,7 @@ vi.mock("../services/apiService", () => ({
   riderService: {
     getAvailableRiders: apiMocks.getAvailableRiders,
     getEligibleRidersForOrder: apiMocks.getEligibleRidersForOrder,
+    listByStatus: apiMocks.listByStatus,
   },
   notificationAdminService: {
     sendBroadcast: apiMocks.sendBroadcast,
@@ -80,6 +82,7 @@ async function renderAndOpenDetail(detailOverrides = {}) {
   apiMocks.getOrder.mockResolvedValue({ data: buildDetail(detailOverrides) });
   apiMocks.getAvailableRiders.mockResolvedValue({ data: [] });
   apiMocks.getEligibleRidersForOrder.mockResolvedValue({ data: [] });
+  apiMocks.listByStatus.mockResolvedValue({ data: [] });
 
   render(<Orders />);
   await screen.findByText("#1");

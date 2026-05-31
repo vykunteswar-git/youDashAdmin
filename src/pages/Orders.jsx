@@ -294,8 +294,12 @@ const Orders = () => {
       (String(order?.deliveryType || "").toUpperCase() === "DOOR_TO_HUB"
         ? "PICKUP"
         : "DELIVERY");
+    const useFullRiderPool =
+      assignmentRole === "DELIVERY" || assignmentRole === "BOTH";
     try {
-      const res = await riderService.getEligibleRidersForOrder(id, assignmentRole);
+      const res = useFullRiderPool
+        ? await riderService.listByStatus("APPROVED")
+        : await riderService.getEligibleRidersForOrder(id, assignmentRole);
       setAvailableRiders(unwrapList(res));
     } catch {
       setAvailableRiders([]);
@@ -1603,15 +1607,15 @@ const Orders = () => {
                       <User size={18} /> Assign rider
                     </h6>
                     <p className="text-muted small mb-3">
-                      Pickup rider for door pickup (Door to Door / Door to Hub).
-                      Delivery rider at destination hub for door delivery (Door to Door / Hub to Door).
+                      Pickup rider for door pickup (Door to Door / Door to Hub) — nearby online riders.
+                      Delivery rider for door delivery (Door to Door / Hub to Door) — any approved rider.
                       Out for Delivery is set automatically when a delivery rider is assigned.
                     </p>
                     {needsDeliveryRiderAssign(detail) ? (
                       <div className="alert alert-info small py-2 px-3 mb-3">
                         Parcel is at the destination hub. Use <strong>Delivery rider</strong>,
-                        pick a rider near the destination city, then assign — status becomes{" "}
-                        <strong>Out for delivery</strong>. Do not use Update status for this step.
+                        select any approved rider, then assign — status becomes{" "}
+                        <strong>Out for delivery</strong>.
                       </div>
                     ) : null}
                     {needsPickupRiderAssign(detail) ? (
@@ -1652,7 +1656,7 @@ const Orders = () => {
                       </select>
                       {availableRiders.length === 0 ? (
                         <div className="alert alert-light border small mb-0 py-2 px-3">
-                          No eligible riders found for this order.
+                          No approved riders found.
                           <button
                             type="button"
                             className="btn btn-sm btn-link p-0 ms-1 align-baseline"
