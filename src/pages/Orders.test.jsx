@@ -10,6 +10,7 @@ const apiMocks = vi.hoisted(() => ({
   assignRider: vi.fn(),
   getAvailableRiders: vi.fn(),
   getEligibleRidersForOrder: vi.fn(),
+  listByStatus: vi.fn(),
   sendBroadcast: vi.fn(),
 }));
 
@@ -23,6 +24,7 @@ vi.mock("../services/apiService", () => ({
   riderService: {
     getAvailableRiders: apiMocks.getAvailableRiders,
     getEligibleRidersForOrder: apiMocks.getEligibleRidersForOrder,
+    listByStatus: apiMocks.listByStatus,
   },
   notificationAdminService: {
     sendBroadcast: apiMocks.sendBroadcast,
@@ -80,6 +82,7 @@ async function renderAndOpenDetail(detailOverrides = {}) {
   apiMocks.getOrder.mockResolvedValue({ data: buildDetail(detailOverrides) });
   apiMocks.getAvailableRiders.mockResolvedValue({ data: [] });
   apiMocks.getEligibleRidersForOrder.mockResolvedValue({ data: [] });
+  apiMocks.listByStatus.mockResolvedValue({ data: [] });
 
   render(<Orders />);
   await screen.findByText("#1");
@@ -133,18 +136,34 @@ describe("Orders page status and address behavior", () => {
     expect(updateBtn).toHaveTextContent("No valid next status");
   });
 
-  it("shows address text as primary and hides coords unless needed", async () => {
+  it("shows outstation next-action guidance at destination hub", async () => {
     await renderAndOpenDetail({
-      pickupAddress: "123 Main Street, Bengaluru",
-      dropAddress: "",
-      dropLat: 12.5555,
-      dropLng: 77.4444,
+      deliveryType: "DOOR_TO_DOOR",
+      status: "AT_DESTINATION_HUB",
+      adminSelectableNextStatuses: ["FAILED_DELIVERY"],
+      allowedNextStatuses: ["FAILED_DELIVERY"],
     });
 
-    await waitFor(() => {
-      expect(screen.getByText("123 Main Street, Bengaluru")).toBeInTheDocument();
+    expect(screen.getByText("Next action")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Assign delivery rider — status becomes Out for Delivery automatically/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("option", { name: "Out For Delivery" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows COD mode when confirming pickup for outstation COD order", async () => {
+    await renderAndOpenDetail({
+      deliveryType: "DOOR_TO_DOOR",
+      status: "RIDER_ASSIGNED",
+      paymentType: "COD",
+      codAlreadyCollected: false,
+      adminSelectableNextStatuses: ["PICKED_UP"],
     });
-    expect(screen.queryByText("12.9716, 77.5946")).not.toBeInTheDocument();
-    expect(screen.getByText("12.5555, 77.4444")).toBeInTheDocument();
+
+    expect(
+      screen.getByLabelText("COD collection mode at pickup"),
+    ).toBeInTheDocument();
   });
 });

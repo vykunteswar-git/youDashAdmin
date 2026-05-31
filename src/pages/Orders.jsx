@@ -20,132 +20,30 @@ import {
   unwrapEntity,
 } from "../services/apiService";
 import { adminSocketService } from "../services/adminSocketService";
+import {
+  CANONICAL_ORDER_STATUSES,
+  OUTSTATION_BULK_STATUSES,
+  OUTSTATION_EXCEPTION_STATUSES,
+  canonicalOrderStatus,
+  toApiOrderStatus,
+  formatStatusLabel,
+  getOutstationPrimaryNextStatus,
+  getOutstationMilestoneLabels,
+  getOutstationProgressIndex,
+  resolveAdminNextStatuses,
+  countOrdersByCanonicalStatus,
+  orderMatchesStatusTab,
+  statusBadgeClass,
+  outstationStatusRequiresOtp,
+} from "../utils/orderStatusUtils";
 
-const ORDER_STATUSES = [
-  "BOOKED",
-  "SEARCHING_RIDER",
-  "RIDER_ACCEPTED",
-  "PAYMENT_PENDING",
-  "RIDER_ASSIGNED",
-  "PICKED_UP",
-  "AT_ORIGIN_HUB",
-  "IN_TRANSIT",
-  "AT_DESTINATION_HUB",
-  "OUT_FOR_DELIVERY",
-  "AWAITING_HUB_COLLECTION",
-  "DELIVERED",
-  "COLLECTED",
-  "DELIVERY_FAILED",
-  "FAILED_DELIVERY",
-  "RETURN_INITIATED",
-  "RETURNED_TO_SENDER",
-  "RETURNED",
-  "CANCELLED",
-  "EXPIRED",
-  "FAILED",
-];
-
-/** Maps legacy DB/API values to canonical status (display + bulk advance). */
-function normalizeOrderStatus(status) {
-  const s = String(status || "").toUpperCase().trim();
-  return (
-    {
-      CREATED: "BOOKED",
-      ORDER_CREATED: "BOOKED",
-      CONFIRMED: "RIDER_ASSIGNED",
-      PICKUP_CONFIRMED: "RIDER_ASSIGNED",
-      PARCEL_PICKED_UP: "PICKED_UP",
-      ARRIVED_ORIGIN_HUB: "AT_ORIGIN_HUB",
-      DISPATCHED_TO_DESTINATION: "IN_TRANSIT",
-      DEPARTED_ORIGIN_HUB: "IN_TRANSIT",
-      ARRIVED_DESTINATION_HUB: "AT_DESTINATION_HUB",
-      SORTED_AT_DESTINATION: "AT_DESTINATION_HUB",
-      DELIVERY_RIDER_ASSIGNED: "OUT_FOR_DELIVERY",
-      READY_FOR_PICKUP: "AWAITING_HUB_COLLECTION",
-      COLLECTED_BY_CUSTOMER: "COLLECTED",
-      PENDING: "BOOKED",
-      PENDING_ASSIGNMENT: "BOOKED",
-      ASSIGNED: "RIDER_ASSIGNED",
-    }[s] ?? s
-  );
-}
-
-const OUTSTATION_NEXT_D2D = {
-  BOOKED: "RIDER_ASSIGNED",
-  RIDER_ASSIGNED: "PICKED_UP",
-  PICKED_UP: "AT_ORIGIN_HUB",
-  AT_ORIGIN_HUB: "IN_TRANSIT",
-  IN_TRANSIT: "AT_DESTINATION_HUB",
-  AT_DESTINATION_HUB: "OUT_FOR_DELIVERY",
-  OUT_FOR_DELIVERY: "DELIVERED",
-};
-
-const OUTSTATION_NEXT_D2H = {
-  BOOKED: "RIDER_ASSIGNED",
-  RIDER_ASSIGNED: "PICKED_UP",
-  PICKED_UP: "AT_ORIGIN_HUB",
-  AT_ORIGIN_HUB: "IN_TRANSIT",
-  IN_TRANSIT: "AT_DESTINATION_HUB",
-  AT_DESTINATION_HUB: "AWAITING_HUB_COLLECTION",
-  AWAITING_HUB_COLLECTION: "COLLECTED",
-};
-
-const OUTSTATION_NEXT_H2D = {
-  BOOKED: "AT_ORIGIN_HUB",
-  AT_ORIGIN_HUB: "IN_TRANSIT",
-  IN_TRANSIT: "AT_DESTINATION_HUB",
-  AT_DESTINATION_HUB: "OUT_FOR_DELIVERY",
-  OUT_FOR_DELIVERY: "DELIVERED",
-};
-
-function getOutstationNextStatus(order) {
-  const cur = normalizeOrderStatus(order?.status);
-  const type = String(order?.deliveryType || "DOOR_TO_DOOR").toUpperCase();
-  const map =
-    type === "DOOR_TO_HUB"
-      ? OUTSTATION_NEXT_D2H
-      : type === "HUB_TO_DOOR"
-        ? OUTSTATION_NEXT_H2D
-        : OUTSTATION_NEXT_D2D;
-  return map[cur] ?? null;
-}
-
-const OUTSTATION_BULK_STATUSES = [
-  "RIDER_ASSIGNED",
-  "PICKED_UP",
-  "AT_ORIGIN_HUB",
-  "IN_TRANSIT",
-  "AT_DESTINATION_HUB",
-  "OUT_FOR_DELIVERY",
-  "AWAITING_HUB_COLLECTION",
-  "COLLECTED",
-  "DELIVERED",
-  "DELIVERY_FAILED",
-  "CANCELLED",
-];
-const STATUS_UPDATE_MAP = {
-  PENDING: "BOOKED",
-  PENDING_ASSIGNMENT: "BOOKED",
-  ASSIGNED: "RIDER_ASSIGNED",
-};
-
-/** Outstation statuses that require customer OTP (or admin override) on update. */
-function outstationStatusRequiresOtp(status) {
-  const s = String(status || "").toUpperCase();
-  return (
-    s === "PICKED_UP" ||
-    s === "PARCEL_PICKED_UP" ||
-    s === "DELIVERED" ||
-    s === "COLLECTED" ||
-    normalizeOrderStatus(s) === "COLLECTED"
-  );
-}
+const SERVICE_MODE_TABS = ["INCITY", "OUTSTATION"];
 
 function canConfirmHubDrop(order) {
   return (
     String(order?.serviceMode || "").toUpperCase() === "OUTSTATION" &&
     String(order?.deliveryType || "").toUpperCase() === "HUB_TO_DOOR" &&
-    normalizeOrderStatus(order?.status) === "BOOKED"
+    canonicalOrderStatus(order?.status) === "BOOKED"
   );
 }
 
@@ -153,58 +51,82 @@ function canConfirmHubCollect(order) {
   return (
     String(order?.serviceMode || "").toUpperCase() === "OUTSTATION" &&
     String(order?.deliveryType || "").toUpperCase() === "DOOR_TO_HUB" &&
-    normalizeOrderStatus(order?.status) === "AWAITING_HUB_COLLECTION"
+    canonicalOrderStatus(order?.status) === "AWAITING_HUB_COLLECTION"
   );
 }
-const SERVICE_MODE_TABS = ["INCITY", "OUTSTATION"];
-const STATUS_LABEL_OVERRIDES = {
-  BOOKED: "Booked",
-  RIDER_ASSIGNED: "Rider Assigned",
-  AT_ORIGIN_HUB: "At Origin Hub",
-  AT_DESTINATION_HUB: "At Destination Hub",
-  OUT_FOR_DELIVERY: "Out For Delivery",
-  AWAITING_HUB_COLLECTION: "Awaiting Hub Collection",
-  COLLECTED: "Collected At Hub",
-  FAILED_DELIVERY: "Failed Delivery",
-  DELIVERY_FAILED: "Delivery Failed",
-  RETURN_INITIATED: "Return Initiated",
-  RETURNED_TO_SENDER: "Returned To Sender",
-};
-const OUTSTATION_EXCEPTION_STATUSES = [
-  "DELIVERY_FAILED",
-  "FAILED_DELIVERY",
-  "RETURN_INITIATED",
-  "RETURNED_TO_SENDER",
-  "RETURNED",
-  "CANCELLED",
-  "EXPIRED",
-  "FAILED",
-];
 
-function formatStatusLabel(status) {
-  const normalized = normalizeOrderStatus(status);
-  if (!normalized) return "—";
-  if (STATUS_LABEL_OVERRIDES[normalized])
-    return STATUS_LABEL_OVERRIDES[normalized];
-  return normalized
-    .split("_")
-    .filter(Boolean)
-    .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
-    .join(" ");
+function isOutstationDoorDeliveryType(deliveryType) {
+  const type = String(deliveryType || "").toUpperCase();
+  return type === "DOOR_TO_DOOR" || type === "HUB_TO_DOOR";
 }
 
-function getOutstationProgressIndex(status, deliveryType) {
-  const normalized = normalizeOrderStatus(status);
-  const type = String(deliveryType || "DOOR_TO_DOOR").toUpperCase();
-  const flow =
-    type === "DOOR_TO_HUB"
-      ? Object.keys(OUTSTATION_NEXT_D2H)
-      : type === "HUB_TO_DOOR"
-        ? ["BOOKED", "AT_ORIGIN_HUB", "IN_TRANSIT", "AT_DESTINATION_HUB", "OUT_FOR_DELIVERY"]
-        : Object.keys(OUTSTATION_NEXT_D2D);
-  if (normalized === "DELIVERED" || normalized === "COLLECTED") return flow.length;
-  const idx = flow.indexOf(normalized);
-  return idx >= 0 ? idx : -1;
+function needsDeliveryRiderAssign(order) {
+  return (
+    String(order?.serviceMode || "").toUpperCase() === "OUTSTATION" &&
+    isOutstationDoorDeliveryType(order?.deliveryType) &&
+    canonicalOrderStatus(order?.status) === "AT_DESTINATION_HUB"
+  );
+}
+
+function needsPickupRiderAssign(order) {
+  const type = String(order?.deliveryType || "").toUpperCase();
+  return (
+    String(order?.serviceMode || "").toUpperCase() === "OUTSTATION" &&
+    (type === "DOOR_TO_DOOR" || type === "DOOR_TO_HUB") &&
+    canonicalOrderStatus(order?.status) === "BOOKED"
+  );
+}
+
+function resolveSuggestedAssignRole(order) {
+  if (needsDeliveryRiderAssign(order)) return "DELIVERY";
+  if (needsPickupRiderAssign(order)) return "PICKUP";
+  const type = String(order?.deliveryType || "").toUpperCase();
+  if (type === "DOOR_TO_HUB") return "PICKUP";
+  return "DELIVERY";
+}
+
+function canRecordPickupCod(order, targetStatus) {
+  const type = String(order?.deliveryType || "").toUpperCase();
+  return (
+    String(order?.serviceMode || "").toUpperCase() === "OUTSTATION" &&
+    (type === "DOOR_TO_DOOR" || type === "DOOR_TO_HUB") &&
+    String(canonicalOrderStatus(targetStatus)) === "PICKED_UP" &&
+    String(order?.paymentType || "").toUpperCase() === "COD" &&
+    !(order?.codAlreadyCollected === true)
+  );
+}
+
+function getOutstationNextAdminAction(order) {
+  if (!order || String(order?.serviceMode || "").toUpperCase() !== "OUTSTATION") {
+    return null;
+  }
+  const status = canonicalOrderStatus(order?.status);
+  const type = String(order?.deliveryType || "DOOR_TO_DOOR").toUpperCase();
+  if (needsPickupRiderAssign(order)) {
+    return "Assign pickup rider — order is booked and waiting for pickup.";
+  }
+  if (canConfirmHubDrop(order)) {
+    return "Confirm hub drop-off — sender drops at origin hub (COD + drop OTP if COD).";
+  }
+  if (status === "RIDER_ASSIGNED" && (type === "DOOR_TO_DOOR" || type === "DOOR_TO_HUB")) {
+    return "Confirm picked up — pickup OTP from sender; record COD from sender if applicable.";
+  }
+  if (status === "PICKED_UP") return "Mark at origin hub — parcel received at origin hub.";
+  if (status === "AT_ORIGIN_HUB") return "Mark in transit — parcel dispatched on route.";
+  if (status === "IN_TRANSIT") return "Mark at destination hub — parcel arrived at destination city.";
+  if (needsDeliveryRiderAssign(order)) {
+    return "Assign delivery rider — status becomes Out for Delivery automatically.";
+  }
+  if (status === "AT_DESTINATION_HUB" && type === "DOOR_TO_HUB") {
+    return "Mark awaiting hub collection — receiver collects at destination hub.";
+  }
+  if (canConfirmHubCollect(order)) {
+    return "Confirm hub collection — receiver OTP at destination hub.";
+  }
+  if (status === "OUT_FOR_DELIVERY") {
+    return "Mark delivered — delivery OTP from receiver (COD already collected from sender).";
+  }
+  return null;
 }
 
 function formatWhen(iso) {
@@ -216,27 +138,6 @@ function formatWhen(iso) {
   } catch {
     return String(iso);
   }
-}
-
-function statusBadgeClass(status) {
-  const s = String(status || "").toUpperCase();
-  if (s === "DELIVERED" || s === "COLLECTED" || normalizeOrderStatus(s) === "COLLECTED")
-    return "active";
-  if (
-    s === "CANCELLED" ||
-    s === "FAILED_DELIVERY" ||
-    s === "DELIVERY_FAILED" ||
-    s === "RETURNED" ||
-    s === "RETURNED_TO_SENDER" ||
-    s === "EXPIRED" ||
-    s === "FAILED"
-  )
-    return "cancelled";
-  if (s === "RIDER_ASSIGNED" || normalizeOrderStatus(s) === "RIDER_ASSIGNED")
-    return "active";
-  if (s === "BOOKED" || normalizeOrderStatus(s) === "BOOKED") return "pending";
-  if (s === "RETURN_INITIATED") return "cancelled";
-  return "info";
 }
 
 const Orders = () => {
@@ -257,6 +158,7 @@ const Orders = () => {
   const [statusPick, setStatusPick] = useState("RIDER_ASSIGNED");
   const [statusOtp, setStatusOtp] = useState("");
   const [statusAdminOverride, setStatusAdminOverride] = useState(false);
+  const [pickupCodMode, setPickupCodMode] = useState("CASH");
   const [hubHandoverOtp, setHubHandoverOtp] = useState("");
   const [hubHandoverCodMode, setHubHandoverCodMode] = useState("CASH");
   const [hubHandoverOverride, setHubHandoverOverride] = useState(false);
@@ -392,8 +294,12 @@ const Orders = () => {
       (String(order?.deliveryType || "").toUpperCase() === "DOOR_TO_HUB"
         ? "PICKUP"
         : "DELIVERY");
+    const useFullRiderPool =
+      assignmentRole === "DELIVERY" || assignmentRole === "BOTH";
     try {
-      const res = await riderService.getEligibleRidersForOrder(id, assignmentRole);
+      const res = useFullRiderPool
+        ? await riderService.listByStatus("APPROVED")
+        : await riderService.getEligibleRidersForOrder(id, assignmentRole);
       setAvailableRiders(unwrapList(res));
     } catch {
       setAvailableRiders([]);
@@ -409,6 +315,11 @@ const Orders = () => {
     if (detail == null || selectedId == null) return;
     loadEligibleRidersForOrder(detail, assignRolePick);
   }, [assignRolePick, detail, selectedId, loadEligibleRidersForOrder]);
+
+  useEffect(() => {
+    if (detail == null) return;
+    setAssignRolePick(resolveSuggestedAssignRole(detail));
+  }, [detail?.id, detail?.status, detail?.deliveryType, detail?.serviceMode]);
 
   useEffect(() => {
     const unsubscribe = adminSocketService.subscribe((evt) => {
@@ -461,7 +372,7 @@ const Orders = () => {
     setSelectedId(id);
     setDetail(order);
     setRiderPick(order?.riderId != null ? String(order.riderId) : "");
-    setStatusPick(normalizeOrderStatus(order?.status || "RIDER_ASSIGNED"));
+    setStatusPick(canonicalOrderStatus(order?.status || "RIDER_ASSIGNED"));
     setAssignRolePick("DELIVERY");
     await loadEligibleRidersForOrder(order, assignRolePick);
     setDetailLoading(true);
@@ -471,7 +382,7 @@ const Orders = () => {
       if (entity && typeof entity === "object") {
         setDetail(entity);
         setRiderPick(entity.riderId != null ? String(entity.riderId) : "");
-        setStatusPick(normalizeOrderStatus(entity.status || "RIDER_ASSIGNED"));
+        setStatusPick(canonicalOrderStatus(entity.status || "RIDER_ASSIGNED"));
         await loadEligibleRidersForOrder(entity, assignRolePick);
       }
     } catch {
@@ -487,28 +398,19 @@ const Orders = () => {
     setDetail(null);
   };
 
-  const nextStatuses = useMemo(() => {
-    const curated = Array.isArray(detail?.adminSelectableNextStatuses)
-      ? detail.adminSelectableNextStatuses
-      : [];
-    const allowed = Array.isArray(detail?.allowedNextStatuses)
-      ? detail.allowedNextStatuses
-      : [];
-    return (curated.length > 0 ? curated : allowed)
-      .map((s) =>
-        String(s || "")
-          .toUpperCase()
-          .trim(),
-      )
-      .filter(Boolean);
-  }, [detail]);
+  const nextStatuses = useMemo(() => resolveAdminNextStatuses(detail), [detail]);
+
+  const primaryNextStatus = useMemo(
+    () => getOutstationPrimaryNextStatus(detail),
+    [detail],
+  );
 
   useEffect(() => {
     if (nextStatuses.length === 0) {
       setStatusPick("");
       return;
     }
-    if (!nextStatuses.includes(String(statusPick || "").toUpperCase())) {
+    if (!nextStatuses.includes(canonicalOrderStatus(statusPick))) {
       setStatusPick(nextStatuses[0]);
     }
   }, [nextStatuses, statusPick]);
@@ -558,10 +460,7 @@ const Orders = () => {
 
   const filteredOrders = useMemo(() => {
     return modeFilteredOrders.filter((o) => {
-      if (statusTab !== "All") {
-        const st = String(o?.status || "").toUpperCase();
-        if (st !== statusTab.toUpperCase()) return false;
-      }
+      if (!orderMatchesStatusTab(o, statusTab)) return false;
       if (serviceModeTab === "OUTSTATION" && routeFilter !== "All Routes") {
         const orig = String(o.originHubCity || "").trim();
         const dest = String(o.destinationHubCity || "").trim();
@@ -587,21 +486,16 @@ const Orders = () => {
     });
   }, [modeFilteredOrders, statusTab, q, serviceModeTab, routeFilter]);
 
-  const statusCounts = useMemo(() => {
-    const m = { All: modeFilteredOrders.length };
-    for (const s of ORDER_STATUSES) {
-      m[s] = modeFilteredOrders.filter(
-        (o) => String(o?.status || "").toUpperCase() === s,
-      ).length;
-    }
-    return m;
-  }, [modeFilteredOrders]);
+  const statusCounts = useMemo(
+    () => countOrdersByCanonicalStatus(modeFilteredOrders),
+    [modeFilteredOrders],
+  );
 
   const statusGroups = useMemo(() => {
     if (serviceModeTab !== "OUTSTATION" || routeFilter === "All Routes") return [];
     const groups = {};
     for (const o of filteredOrders) {
-      const s = normalizeOrderStatus(o.status);
+      const s = canonicalOrderStatus(o.status);
       if (!groups[s]) groups[s] = [];
       groups[s].push(o);
     }
@@ -625,7 +519,7 @@ const Orders = () => {
       for (const o of groupOrders) {
         const id = o.id ?? o.orderId;
         try {
-          await orderService.updateStatus(id, { status: nextStatus });
+          await orderService.updateStatus(id, { status: toApiOrderStatus(nextStatus) });
           succeeded++;
         } catch {
           failed++;
@@ -652,7 +546,9 @@ const Orders = () => {
     try {
       for (const orderId of selectedOrderIds) {
         try {
-          await orderService.updateStatus(orderId, { status: bulkStatus });
+          await orderService.updateStatus(orderId, {
+            status: toApiOrderStatus(bulkStatus),
+          });
           succeeded++;
         } catch {
           failed++;
@@ -710,7 +606,8 @@ const Orders = () => {
     if (d?.containsBattery) tags.push("Contains battery");
     return tags;
   };
-  const isAnyBusy = loading || detailLoading || actionBusy;
+  const isListBusy = loading && selectedId == null;
+  const isPageOverlayBusy = isListBusy;
 
   return (
     <>
@@ -733,7 +630,7 @@ const Orders = () => {
           </div>
         ) : null}
 
-        {isAnyBusy ? (
+        {isPageOverlayBusy ? (
           <div
             className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
             style={{
@@ -745,16 +642,14 @@ const Orders = () => {
             <div className="bg-white rounded-4 shadow px-4 py-3 d-flex align-items-center gap-3">
               <span className="spinner-border spinner-border-sm text-danger" />
               <span className="small fw-semibold text-muted">
-                {actionBusy
-                  ? "Processing request..."
-                  : detailLoading
-                    ? "Loading order details..."
-                    : "Loading orders..."}
+                Loading orders...
               </span>
             </div>
           </div>
         ) : null}
 
+        {!(detail && selectedId != null) && (
+        <>
         <div className="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3 mb-4">
           <div>
             <h2 className="fw-bold mb-1">Orders</h2>
@@ -926,7 +821,7 @@ const Orders = () => {
                 <option value="All">
                   All statuses ({statusCounts.All ?? 0})
                 </option>
-                {ORDER_STATUSES.map((s) => (
+                {CANONICAL_ORDER_STATUSES.map((s) => (
                   <option key={s} value={s}>
                     {formatStatusLabel(s)} ({statusCounts[s] ?? 0})
                   </option>
@@ -1102,7 +997,7 @@ const Orders = () => {
               </div>
             ) : (
               statusGroups.map(([status, groupOrders]) => {
-                const nextStatus = getOutstationNextStatus(groupOrders[0]);
+                const nextStatus = getOutstationPrimaryNextStatus(groupOrders[0]);
                 const groupIds = groupOrders.map((o) => o.id ?? o.orderId);
                 const allGroupSelected =
                   groupIds.length > 0 &&
@@ -1110,7 +1005,9 @@ const Orders = () => {
                 const someGroupSelected = groupIds.some((id) =>
                   selectedOrderIds.has(id),
                 );
-                const isException = OUTSTATION_EXCEPTION_STATUSES.includes(status);
+                const isException = OUTSTATION_EXCEPTION_STATUSES.includes(
+                  canonicalOrderStatus(status),
+                );
                 return (
                   <div
                     key={status}
@@ -1414,20 +1311,26 @@ const Orders = () => {
             ? `${filteredOrders.length} order${filteredOrders.length !== 1 ? "s" : ""} on ${routeFilter}`
             : `Showing ${filteredOrders.length} of ${modeFilteredOrders.length} ${serviceModeTab === "INCITY" ? "incity" : "outstation"} orders`}
         </p>
-      </div>
+        </>
+        )}
 
       {detail && selectedId != null && (
-        <div
-          className="position-fixed top-0 start-0 w-100 h-100 fade-in d-flex flex-column"
-          style={{
-            zIndex: 1050,
-            background: "linear-gradient(180deg, #F1F5F9 0%, #F8FAFC 100%)",
-          }}
-        >
-          <div className="bg-white border-bottom shadow-sm px-3 py-3 px-md-4 sticky-top">
+        <div className="order-detail-panel fade-in pb-4">
+          <div className="dashboard-card border-0 shadow-sm mb-4">
             <div className="d-flex justify-content-between align-items-start gap-3">
               <div>
-                <h4 className="fw-bold mb-1 d-flex flex-wrap align-items-center gap-2">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-light rounded-pill mb-2 d-inline-flex align-items-center gap-1"
+                  onClick={closeDetail}
+                >
+                  <ChevronRight size={14} style={{ transform: "rotate(180deg)" }} />
+                  Back to orders
+                </button>
+                <h4
+                  id="order-detail-title"
+                  className="fw-bold mb-1 d-flex flex-wrap align-items-center gap-2"
+                >
                   Order #{selectedId}
                   {detailLoading ? (
                     <span className="spinner-border spinner-border-sm text-secondary" />
@@ -1443,6 +1346,8 @@ const Orders = () => {
                 <p className="text-muted small mb-0">
                   User #{detail.userId ?? "—"} · {detail.serviceMode ?? "—"} ·{" "}
                   {formatWhen(detail.createdAt)}
+                  {detail.deliveryType ? ` · ${detail.deliveryType}` : ""}
+                  {detail.paymentType ? ` · ${detail.paymentType}` : ""}
                 </p>
               </div>
               <button
@@ -1450,25 +1355,25 @@ const Orders = () => {
                 className="btn btn-danger rounded-circle p-2 border-0 d-flex align-items-center justify-content-center flex-shrink-0"
                 style={{ width: 40, height: 40, backgroundColor: "#E51818" }}
                 onClick={closeDetail}
-                aria-label="Close"
+                aria-label="Close order details"
               >
                 <X size={20} className="text-white" />
               </button>
             </div>
           </div>
 
-          <div className="flex-grow-1 overflow-auto px-3 py-4 px-md-4 pb-5">
-            <div className="mx-auto" style={{ maxWidth: 1100 }}>
-              <div className="row g-4">
-                <div className="col-12 col-lg-7">
+          <div className="pb-3">
+            <div className="row g-4">
+                <div className="col-12 col-xxl-8">
                   <div className="dashboard-card border-0 shadow-sm mb-4">
                     <h6 className="fw-bold mb-3 d-flex align-items-center gap-2 text-uppercase small text-muted letter-spacing">
                       <Navigation size={18} style={{ color: "#E51818" }} />
                       Locations
                     </h6>
-                    <div className="d-flex flex-column gap-3">
-                      <div className="p-3 rounded-3 bg-light">
-                        <p className="text-muted mb-1 small">Pickup</p>
+                    <div className="row g-3">
+                      <div className="col-12 col-md-6">
+                        <div className="p-3 rounded-3 bg-light h-100">
+                          <p className="text-muted mb-1 small">Pickup</p>
                         <p className="mb-1 small">
                           {fmtAddress(detail.pickupAddress)}
                         </p>
@@ -1491,8 +1396,10 @@ const Orders = () => {
                           </a>
                         ) : null}
                       </div>
-                      <div className="p-3 rounded-3 bg-light">
-                        <p className="text-muted mb-1 small">Drop</p>
+                      </div>
+                      <div className="col-12 col-md-6">
+                        <div className="p-3 rounded-3 bg-light h-100">
+                          <p className="text-muted mb-1 small">Drop</p>
                         <p className="mb-1 small">
                           {fmtAddress(detail.dropAddress)}
                         </p>
@@ -1513,6 +1420,7 @@ const Orders = () => {
                             Open in Maps
                           </a>
                         ) : null}
+                      </div>
                       </div>
                     </div>
                   </div>
@@ -1639,7 +1547,17 @@ const Orders = () => {
                   </div>
                 </div>
 
-                <div className="col-12 col-lg-5 d-flex flex-column gap-4">
+                <div
+                  className="col-12 col-xxl-4 d-flex flex-column gap-4"
+                  style={{ alignSelf: "flex-start" }}
+                >
+                  <div
+                    className="d-flex flex-column gap-4"
+                    style={{
+                      position: "sticky",
+                      top: 0,
+                    }}
+                  >
                   <div className="dashboard-card border-0 shadow-sm">
                     <h6 className="fw-bold mb-3 d-flex align-items-center gap-2">
                       <CreditCard size={18} /> Amounts
@@ -1663,26 +1581,46 @@ const Orders = () => {
                     </div>
                   </div>
 
+                  {String(detail?.serviceMode || "").toUpperCase() === "OUTSTATION" &&
+                  getOutstationNextAdminAction(detail) ? (
+                    <div className="dashboard-card border-0 shadow-sm border border-primary border-opacity-25 mb-3">
+                      <h6 className="fw-bold mb-2">Next action</h6>
+                      <p className="text-muted small mb-2">
+                        {getOutstationNextAdminAction(detail)}
+                      </p>
+                      {String(detail?.paymentType || "").toUpperCase() === "COD" ? (
+                        <span
+                          className={`badge rounded-pill fw-semibold ${
+                            detail?.codAlreadyCollected
+                              ? "bg-success-subtle text-success"
+                              : "bg-warning-subtle text-warning"
+                          }`}
+                        >
+                          COD {detail?.codAlreadyCollected ? "collected from sender" : "pending — collect from sender"}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+
                   <div className="dashboard-card border-0 shadow-sm border border-warning border-opacity-25">
                     <h6 className="fw-bold mb-2 d-flex align-items-center gap-2">
                       <User size={18} /> Assign rider
                     </h6>
                     <p className="text-muted small mb-3">
-                      POST <code className="small">/assign-rider</code> with a
-                      rider id from the available pool. For outstation{" "}
-                      <strong>hub → door</strong>, use <strong>Delivery rider</strong>{" "}
-                      after the parcel reaches the destination hub (riders are
-                      listed near Hyderabad, not Visakhapatnam).
+                      Pickup rider for door pickup (Door to Door / Door to Hub) — nearby online riders.
+                      Delivery rider for door delivery (Door to Door / Hub to Door) — any approved rider.
+                      Out for Delivery is set automatically when a delivery rider is assigned.
                     </p>
-                    {String(detail?.serviceMode || "").toUpperCase() ===
-                      "OUTSTATION" &&
-                    String(detail?.deliveryType || "").toUpperCase() ===
-                      "HUB_TO_DOOR" &&
-                    normalizeOrderStatus(detail?.status) === "AT_DESTINATION_HUB" ? (
+                    {needsDeliveryRiderAssign(detail) ? (
                       <div className="alert alert-info small py-2 px-3 mb-3">
                         Parcel is at the destination hub. Use <strong>Delivery rider</strong>,
-                        pick a rider online near the destination city, then assign — status
-                        becomes <strong>Out for delivery</strong>.
+                        select any approved rider, then assign — status becomes{" "}
+                        <strong>Out for delivery</strong>.
+                      </div>
+                    ) : null}
+                    {needsPickupRiderAssign(detail) ? (
+                      <div className="alert alert-info small py-2 px-3 mb-3">
+                        Order is booked. Use <strong>Pickup rider</strong> to assign a rider near the sender.
                       </div>
                     ) : null}
                     <div className="d-flex flex-column gap-2">
@@ -1718,7 +1656,7 @@ const Orders = () => {
                       </select>
                       {availableRiders.length === 0 ? (
                         <div className="alert alert-light border small mb-0 py-2 px-3">
-                          No eligible riders found for this order.
+                          No approved riders found.
                           <button
                             type="button"
                             className="btn btn-sm btn-link p-0 ms-1 align-baseline"
@@ -1873,7 +1811,14 @@ const Orders = () => {
                   <div className="dashboard-card border-0 shadow-sm">
                     <h6 className="fw-bold mb-2">Update status</h6>
                     <p className="text-muted small mb-3">
-                      Only valid next statuses are shown.
+                      Hub transit and delivery milestones. Out for Delivery is only via Assign rider at destination hub.
+                      {primaryNextStatus ? (
+                        <>
+                          {" "}
+                          Recommended next:{" "}
+                          <strong>{formatStatusLabel(primaryNextStatus)}</strong>
+                        </>
+                      ) : null}
                     </p>
                     <div className="d-flex flex-column gap-2">
                       <select
@@ -1886,6 +1831,7 @@ const Orders = () => {
                         {nextStatuses.map((s) => (
                           <option key={s} value={s}>
                             {formatStatusLabel(s)}
+                            {s === primaryNextStatus ? " (recommended)" : ""}
                           </option>
                         ))}
                       </select>
@@ -1922,6 +1868,18 @@ const Orders = () => {
                           </label>
                         </>
                       ) : null}
+                      {canRecordPickupCod(detail, statusPick) && !statusAdminOverride ? (
+                        <select
+                          aria-label="COD collection mode at pickup"
+                          className="form-select form-select-sm rounded-3"
+                          value={pickupCodMode}
+                          onChange={(e) => setPickupCodMode(e.target.value)}
+                          disabled={actionBusy}
+                        >
+                          <option value="CASH">COD — Cash from sender</option>
+                          <option value="QR">COD — UPI QR from sender</option>
+                        </select>
+                      ) : null}
                       <button
                         aria-label="Update status"
                         type="button"
@@ -1932,10 +1890,7 @@ const Orders = () => {
                         onClick={() =>
                           runAction(() =>
                             orderService.updateStatus(selectedId, {
-                              status:
-                                STATUS_UPDATE_MAP[
-                                  String(statusPick || "").toUpperCase()
-                                ] ?? statusPick,
+                              status: toApiOrderStatus(statusPick),
                               ...(String(detail?.serviceMode || "").toUpperCase() ===
                                 "OUTSTATION" &&
                               outstationStatusRequiresOtp(statusPick)
@@ -1943,6 +1898,10 @@ const Orders = () => {
                                     otp: statusOtp.trim() || undefined,
                                     adminOverride: statusAdminOverride,
                                   }
+                                : {}),
+                              ...(canRecordPickupCod(detail, statusPick) &&
+                              !statusAdminOverride
+                                ? { codCollectionMode: pickupCodMode }
                                 : {}),
                             }),
                           )
@@ -1960,15 +1919,8 @@ const Orders = () => {
                     <div className="dashboard-card border-0 shadow-sm">
                       <h6 className="fw-bold mb-3">Outstation milestones</h6>
                       <div className="d-flex flex-wrap gap-2">
-                        {[
-                          "Order Confirmed",
-                          "Parcel Picked Up",
-                          "Arrived Origin Hub",
-                          "Dispatched",
-                          "Arrived Destination Hub",
-                          "Ready/Out For Delivery",
-                          "Collected/Delivered",
-                        ].map((stepLabel, index) => {
+                      {getOutstationMilestoneLabels(detail?.deliveryType).map(
+                        (stepLabel, index) => {
                           const progressIndex = getOutstationProgressIndex(
                             detail?.status,
                             detail?.deliveryType,
@@ -1991,7 +1943,7 @@ const Orders = () => {
                         })}
                       </div>
                       {OUTSTATION_EXCEPTION_STATUSES.includes(
-                        String(detail?.status || "").toUpperCase(),
+                        canonicalOrderStatus(detail?.status),
                       ) ? (
                         <div className="mt-3">
                           <span className="badge bg-danger-subtle text-danger fw-semibold">
@@ -2012,12 +1964,13 @@ const Orders = () => {
                       Working…
                     </p>
                   ) : null}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
       )}
+      </div>
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
