@@ -36,98 +36,22 @@ import {
   statusBadgeClass,
   outstationStatusRequiresOtp,
 } from "../utils/orderStatusUtils";
+import OutstationOrdersWorkspace from "../components/orders/OutstationOrdersWorkspace";
+import OutstationActionPanel from "../components/orders/OutstationActionPanel";
+import {
+  canConfirmHubDrop,
+  canConfirmHubCollect,
+  canRecordPickupCod,
+  getOutstationNextAdminAction,
+  needsDeliveryRiderAssign,
+  needsPickupRiderAssign,
+  resolveSuggestedAssignRole,
+  orderMatchesAssignedFilter,
+  orderMatchesPaymentFilter,
+  getBulkRecommendedAction,
+} from "../components/orders/outstationOrderHelpers";
 
 const SERVICE_MODE_TABS = ["INCITY", "OUTSTATION"];
-
-function canConfirmHubDrop(order) {
-  return (
-    String(order?.serviceMode || "").toUpperCase() === "OUTSTATION" &&
-    String(order?.deliveryType || "").toUpperCase() === "HUB_TO_DOOR" &&
-    canonicalOrderStatus(order?.status) === "BOOKED"
-  );
-}
-
-function canConfirmHubCollect(order) {
-  return (
-    String(order?.serviceMode || "").toUpperCase() === "OUTSTATION" &&
-    String(order?.deliveryType || "").toUpperCase() === "DOOR_TO_HUB" &&
-    canonicalOrderStatus(order?.status) === "AWAITING_HUB_COLLECTION"
-  );
-}
-
-function isOutstationDoorDeliveryType(deliveryType) {
-  const type = String(deliveryType || "").toUpperCase();
-  return type === "DOOR_TO_DOOR" || type === "HUB_TO_DOOR";
-}
-
-function needsDeliveryRiderAssign(order) {
-  return (
-    String(order?.serviceMode || "").toUpperCase() === "OUTSTATION" &&
-    isOutstationDoorDeliveryType(order?.deliveryType) &&
-    canonicalOrderStatus(order?.status) === "AT_DESTINATION_HUB"
-  );
-}
-
-function needsPickupRiderAssign(order) {
-  const type = String(order?.deliveryType || "").toUpperCase();
-  return (
-    String(order?.serviceMode || "").toUpperCase() === "OUTSTATION" &&
-    (type === "DOOR_TO_DOOR" || type === "DOOR_TO_HUB") &&
-    canonicalOrderStatus(order?.status) === "BOOKED"
-  );
-}
-
-function resolveSuggestedAssignRole(order) {
-  if (needsDeliveryRiderAssign(order)) return "DELIVERY";
-  if (needsPickupRiderAssign(order)) return "PICKUP";
-  const type = String(order?.deliveryType || "").toUpperCase();
-  if (type === "DOOR_TO_HUB") return "PICKUP";
-  return "DELIVERY";
-}
-
-function canRecordPickupCod(order, targetStatus) {
-  const type = String(order?.deliveryType || "").toUpperCase();
-  return (
-    String(order?.serviceMode || "").toUpperCase() === "OUTSTATION" &&
-    (type === "DOOR_TO_DOOR" || type === "DOOR_TO_HUB") &&
-    String(canonicalOrderStatus(targetStatus)) === "PICKED_UP" &&
-    String(order?.paymentType || "").toUpperCase() === "COD" &&
-    !(order?.codAlreadyCollected === true)
-  );
-}
-
-function getOutstationNextAdminAction(order) {
-  if (!order || String(order?.serviceMode || "").toUpperCase() !== "OUTSTATION") {
-    return null;
-  }
-  const status = canonicalOrderStatus(order?.status);
-  const type = String(order?.deliveryType || "DOOR_TO_DOOR").toUpperCase();
-  if (needsPickupRiderAssign(order)) {
-    return "Assign pickup rider — order is booked and waiting for pickup.";
-  }
-  if (canConfirmHubDrop(order)) {
-    return "Confirm hub drop-off — sender drops at origin hub (COD + drop OTP if COD).";
-  }
-  if (status === "RIDER_ASSIGNED" && (type === "DOOR_TO_DOOR" || type === "DOOR_TO_HUB")) {
-    return "Confirm picked up — pickup OTP from sender; record COD from sender if applicable.";
-  }
-  if (status === "PICKED_UP") return "Mark at origin hub — parcel received at origin hub.";
-  if (status === "AT_ORIGIN_HUB") return "Mark in transit — parcel dispatched on route.";
-  if (status === "IN_TRANSIT") return "Mark at destination hub — parcel arrived at destination city.";
-  if (needsDeliveryRiderAssign(order)) {
-    return "Assign delivery rider — status becomes Out for Delivery automatically.";
-  }
-  if (status === "AT_DESTINATION_HUB" && type === "DOOR_TO_HUB") {
-    return "Mark awaiting hub collection — receiver collects at destination hub.";
-  }
-  if (canConfirmHubCollect(order)) {
-    return "Confirm hub collection — receiver OTP at destination hub.";
-  }
-  if (status === "OUT_FOR_DELIVERY") {
-    return "Mark delivered — delivery OTP from receiver (COD already collected from sender).";
-  }
-  return null;
-}
 
 function formatWhen(iso) {
   if (!iso) return "—";
@@ -138,6 +62,32 @@ function formatWhen(iso) {
   } catch {
     return String(iso);
   }
+}
+
+function buildOutstationStatusGroups(orders, sortOrder) {
+  const groups = {};
+  for (const o of orders) {
+    const s = canonicalOrderStatus(o.status);
+    if (!groups[s]) groups[s] = [];
+    groups[s].push(o);
+  }
+  const sortFn = (a, b) => {
+    const ta = new Date(a.createdAt || 0).getTime();
+    const tb = new Date(b.createdAt || 0).getTime();
+    return sortOrder === "newest" ? tb - ta : ta - tb;
+  };
+  for (const key of Object.keys(groups)) {
+    groups[key].sort(sortFn);
+  }
+  const deliveryType = orders[0]?.deliveryType;
+  return Object.entries(groups).sort(([a], [b]) => {
+    const ai = getOutstationProgressIndex(a, deliveryType);
+    const bi = getOutstationProgressIndex(b, deliveryType);
+    if (ai === -1 && bi === -1) return 0;
+    if (ai === -1) return 1;
+    if (bi === -1) return -1;
+    return ai - bi;
+  });
 }
 
 const Orders = () => {
@@ -163,6 +113,11 @@ const Orders = () => {
   const [hubHandoverCodMode, setHubHandoverCodMode] = useState("CASH");
   const [hubHandoverOverride, setHubHandoverOverride] = useState(false);
   const [routeFilter, setRouteFilter] = useState("All Routes");
+  const [paymentFilter, setPaymentFilter] = useState("All");
+  const [assignedToFilter, setAssignedToFilter] = useState("All");
+  const [sortOrder, setSortOrder] = useState("newest");
+  const [detailTab, setDetailTab] = useState("overview");
+  const [collapsedGroups, setCollapsedGroups] = useState(new Set());
   const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
   const [bulkStatus, setBulkStatus] = useState(OUTSTATION_BULK_STATUSES[0]);
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -448,7 +403,11 @@ const Orders = () => {
 
   useEffect(() => {
     setSelectedOrderIds(new Set());
-  }, [serviceModeTab, routeFilter, statusTab]);
+  }, [serviceModeTab, routeFilter, statusTab, paymentFilter, assignedToFilter]);
+
+  useEffect(() => {
+    setDetailTab("overview");
+  }, [selectedId]);
 
   useEffect(() => {
     if (serviceModeTab !== "OUTSTATION") setRouteFilter("All Routes");
@@ -457,6 +416,8 @@ const Orders = () => {
   const filteredOrders = useMemo(() => {
     return modeFilteredOrders.filter((o) => {
       if (!orderMatchesStatusTab(o, statusTab)) return false;
+      if (!orderMatchesPaymentFilter(o, paymentFilter)) return false;
+      if (!orderMatchesAssignedFilter(o, assignedToFilter)) return false;
       if (serviceModeTab === "OUTSTATION" && routeFilter !== "All Routes") {
         const orig = String(o.originHubCity || "").trim();
         const dest = String(o.destinationHubCity || "").trim();
@@ -471,6 +432,8 @@ const Orders = () => {
         o.serviceMode,
         o.paymentType,
         o.riderId,
+        o.pickupRiderId,
+        o.deliveryRiderId,
         o.vehicleId,
         o.originHubCity,
         o.destinationHubCity,
@@ -480,7 +443,26 @@ const Orders = () => {
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [modeFilteredOrders, statusTab, q, serviceModeTab, routeFilter]);
+  }, [
+    modeFilteredOrders,
+    statusTab,
+    paymentFilter,
+    assignedToFilter,
+    q,
+    serviceModeTab,
+    routeFilter,
+  ]);
+
+  const prevServiceModeRef = useRef(serviceModeTab);
+  useEffect(() => {
+    const switchedToOutstation =
+      prevServiceModeRef.current !== "OUTSTATION" &&
+      serviceModeTab === "OUTSTATION";
+    prevServiceModeRef.current = serviceModeTab;
+    if (switchedToOutstation && !loading && filteredOrders.length > 0) {
+      openDetail(filteredOrders[0]);
+    }
+  }, [serviceModeTab, loading, filteredOrders]);
 
   const statusCounts = useMemo(
     () => countOrdersByCanonicalStatus(modeFilteredOrders),
@@ -489,22 +471,36 @@ const Orders = () => {
 
   const statusGroups = useMemo(() => {
     if (serviceModeTab !== "OUTSTATION" || routeFilter === "All Routes") return [];
-    const groups = {};
-    for (const o of filteredOrders) {
-      const s = canonicalOrderStatus(o.status);
-      if (!groups[s]) groups[s] = [];
-      groups[s].push(o);
-    }
-    const deliveryType = filteredOrders[0]?.deliveryType;
-    return Object.entries(groups).sort(([a], [b]) => {
-      const ai = getOutstationProgressIndex(a, deliveryType);
-      const bi = getOutstationProgressIndex(b, deliveryType);
-      if (ai === -1 && bi === -1) return 0;
-      if (ai === -1) return 1;
-      if (bi === -1) return -1;
-      return ai - bi;
-    });
-  }, [filteredOrders, serviceModeTab, routeFilter]);
+    return buildOutstationStatusGroups(filteredOrders, sortOrder);
+  }, [filteredOrders, serviceModeTab, routeFilter, sortOrder]);
+
+  const outstationStatusGroups = useMemo(() => {
+    if (serviceModeTab !== "OUTSTATION") return [];
+    return buildOutstationStatusGroups(filteredOrders, sortOrder);
+  }, [filteredOrders, serviceModeTab, sortOrder]);
+
+  const serviceModeCounts = useMemo(
+    () => ({
+      INCITY: orders.filter(
+        (o) => String(o?.serviceMode || "").toUpperCase() === "INCITY",
+      ).length,
+      OUTSTATION: orders.filter(
+        (o) => String(o?.serviceMode || "").toUpperCase() === "OUTSTATION",
+      ).length,
+    }),
+    [orders],
+  );
+
+  const selectedOrdersForBulk = useMemo(
+    () =>
+      filteredOrders.filter((o) => selectedOrderIds.has(o.id ?? o.orderId)),
+    [filteredOrders, selectedOrderIds],
+  );
+
+  const bulkRecommendedAction = useMemo(
+    () => getBulkRecommendedAction(selectedOrdersForBulk),
+    [selectedOrdersForBulk],
+  );
 
   const runGroupAdvance = async (groupOrders, nextStatus) => {
     if (!nextStatus || groupOrders.length === 0) return;
@@ -586,6 +582,48 @@ const Orders = () => {
     }
   };
 
+  const toggleGroupCollapse = (status) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(status)) next.delete(status);
+      else next.add(status);
+      return next;
+    });
+  };
+
+  const clearOutstationFilters = () => {
+    setStatusTab("All");
+    setRouteFilter("All Routes");
+    setPaymentFilter("All");
+    setAssignedToFilter("All");
+    setSearch("");
+  };
+
+  const hasOutstationActiveFilters =
+    statusTab !== "All" ||
+    routeFilter !== "All Routes" ||
+    paymentFilter !== "All" ||
+    assignedToFilter !== "All" ||
+    search.trim() !== "";
+
+  const navigateOrder = (direction) => {
+    const ids = filteredOrders.map((o) => o.id ?? o.orderId);
+    const idx = ids.indexOf(selectedId);
+    if (idx === -1) return;
+    const nextIdx = idx + direction;
+    if (nextIdx < 0 || nextIdx >= ids.length) return;
+    const nextOrder = filteredOrders[nextIdx];
+    if (nextOrder) openDetail(nextOrder);
+  };
+
+  const handleOutstationSelect = (order) => {
+    if (order == null) {
+      closeDetail();
+      return;
+    }
+    openDetail(order);
+  };
+
   const fmtMoney = (n) =>
     n == null || Number.isNaN(Number(n))
       ? "—"
@@ -644,46 +682,6 @@ const Orders = () => {
           </div>
         ) : null}
 
-        {!(detail && selectedId != null) && (
-        <>
-        <div className="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3 mb-4">
-          <div>
-            <h2 className="fw-bold mb-1">Orders</h2>
-            <p className="text-muted small mb-0">
-              {loading ? "Loading orders…" : `${filteredOrders.length} orders`}
-            </p>
-          </div>
-          <button
-            type="button"
-            className="btn d-flex align-items-center gap-2 px-3 py-2 small fw-semibold text-white border-0"
-            style={{ backgroundColor: "#E51818", borderRadius: 10 }}
-            onClick={() => {
-              loadOrders();
-              loadRiders();
-            }}
-            disabled={loading}
-          >
-            <RefreshCw size={15} className={loading ? "spin" : ""} />
-            Refresh
-          </button>
-        </div>
-
-        {error ? (
-          <div
-            className="alert alert-danger mb-4 d-flex align-items-center justify-content-between gap-3 rounded-4 border-0 shadow-sm"
-            role="alert"
-          >
-            <span>{error}</span>
-            <button
-              type="button"
-              className="btn btn-sm btn-outline-danger rounded-pill"
-              onClick={loadOrders}
-            >
-              Retry
-            </button>
-          </div>
-        ) : null}
-
         {outstationAlertOrder ? (
           <div className="alert alert-warning border-0 shadow-sm rounded-4 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3">
             <div>
@@ -701,6 +699,7 @@ const Orders = () => {
                 type="button"
                 className="btn btn-sm btn-dark"
                 onClick={() => {
+                  setServiceModeTab("OUTSTATION");
                   openDetail(outstationAlertOrder);
                   setOutstationAlertOrder(null);
                 }}
@@ -756,6 +755,230 @@ const Orders = () => {
                 Dismiss
               </button>
             </div>
+          </div>
+        ) : null}
+
+        {serviceModeTab === "OUTSTATION" ? (
+          <OutstationOrdersWorkspace
+            loading={loading}
+            error={error}
+            onRefresh={() => {
+              loadOrders();
+              loadRiders();
+            }}
+            serviceModeCounts={serviceModeCounts}
+            serviceModeTab={serviceModeTab}
+            onServiceModeChange={setServiceModeTab}
+            search={search}
+            onSearchChange={setSearch}
+            statusTab={statusTab}
+            onStatusTabChange={setStatusTab}
+            statusCounts={statusCounts}
+            routeFilter={routeFilter}
+            onRouteFilterChange={setRouteFilter}
+            availableRoutes={availableRoutes}
+            modeFilteredCount={modeFilteredOrders.length}
+            paymentFilter={paymentFilter}
+            onPaymentFilterChange={setPaymentFilter}
+            assignedToFilter={assignedToFilter}
+            onAssignedToFilterChange={setAssignedToFilter}
+            onClearFilters={clearOutstationFilters}
+            hasActiveFilters={hasOutstationActiveFilters}
+            sortOrder={sortOrder}
+            onSortOrderChange={setSortOrder}
+            statusGroups={outstationStatusGroups}
+            collapsedGroups={collapsedGroups}
+            onToggleGroupCollapse={toggleGroupCollapse}
+            filteredOrders={filteredOrders}
+            selectedId={selectedId}
+            selectedOrderIds={selectedOrderIds}
+            onToggleOrderSelection={toggleOrderSelection}
+            onToggleSelectAll={toggleSelectAll}
+            onSelectOrder={handleOutstationSelect}
+            detail={detail}
+            detailLoading={detailLoading}
+            detailTab={detailTab}
+            onDetailTabChange={setDetailTab}
+            onNavigateOrder={navigateOrder}
+            primaryNextStatus={primaryNextStatus}
+            actionPanel={
+              <OutstationActionPanel
+                detail={detail}
+                selectedId={selectedId}
+                actionBusy={actionBusy}
+                availableRiders={availableRiders}
+                assignRolePick={assignRolePick}
+                onAssignRoleChange={setAssignRolePick}
+                riderPick={riderPick}
+                onRiderPickChange={setRiderPick}
+                onAssignRider={() => {
+                  const rid = parseInt(riderPick, 10);
+                  const payload =
+                    assignRolePick === "PICKUP"
+                      ? { pickupRiderId: rid, assignmentRole: "PICKUP" }
+                      : assignRolePick === "DELIVERY"
+                        ? { deliveryRiderId: rid, assignmentRole: "DELIVERY" }
+                        : {
+                            pickupRiderId: rid,
+                            deliveryRiderId: rid,
+                            assignmentRole: "BOTH",
+                          };
+                  runAction(async () => {
+                    const res = await orderService.assignRider(selectedId, payload);
+                    const userId = detail?.userId;
+                    if (userId != null) {
+                      try {
+                        await notificationAdminService.sendBroadcast({
+                          targetUserIds: [userId],
+                          title: "Rider Assigned",
+                          body: "Your rider is on the way! Track your delivery now.",
+                          data: {
+                            type: "RIDER_ASSIGNED",
+                            orderId: String(selectedId),
+                          },
+                        });
+                      } catch {
+                        // best-effort
+                      }
+                    }
+                    return res;
+                  });
+                }}
+                onReloadRiders={() =>
+                  loadEligibleRidersForOrder(detail, assignRolePick)
+                }
+                statusPick={statusPick}
+                onStatusPickChange={setStatusPick}
+                nextStatuses={nextStatuses}
+                primaryNextStatus={primaryNextStatus}
+                statusOtp={statusOtp}
+                onStatusOtpChange={setStatusOtp}
+                statusAdminOverride={statusAdminOverride}
+                onStatusAdminOverrideChange={setStatusAdminOverride}
+                pickupCodMode={pickupCodMode}
+                onPickupCodModeChange={setPickupCodMode}
+                onUpdateStatus={() =>
+                  runAction(() =>
+                    orderService.updateStatus(selectedId, {
+                      status: toApiOrderStatus(statusPick),
+                      ...(outstationStatusRequiresOtp(statusPick)
+                        ? {
+                            otp: statusOtp.trim() || undefined,
+                            adminOverride: statusAdminOverride,
+                          }
+                        : {}),
+                      ...(canRecordPickupCod(detail, statusPick) &&
+                      !statusAdminOverride
+                        ? { codCollectionMode: pickupCodMode }
+                        : {}),
+                    }),
+                  )
+                }
+                hubHandoverOtp={hubHandoverOtp}
+                onHubHandoverOtpChange={setHubHandoverOtp}
+                hubHandoverCodMode={hubHandoverCodMode}
+                onHubHandoverCodModeChange={setHubHandoverCodMode}
+                hubHandoverOverride={hubHandoverOverride}
+                onHubHandoverOverrideChange={setHubHandoverOverride}
+                onVerifyHubHandover={() =>
+                  runAction(() =>
+                    orderService.verifyHubHandover(selectedId, {
+                      type: canConfirmHubDrop(detail) ? "DROP" : "COLLECT",
+                      otp: hubHandoverOtp.trim() || undefined,
+                      adminOverride: hubHandoverOverride,
+                      codCollectionMode:
+                        canConfirmHubDrop(detail) &&
+                        String(detail?.paymentType || "").toUpperCase() === "COD"
+                          ? hubHandoverCodMode
+                          : undefined,
+                    }),
+                  )
+                }
+              />
+            }
+            bulkBar={
+              selectedOrderIds.size > 0 ? (
+                <div className="os-bulk-bar">
+                  <span className="small fw-semibold">
+                    {selectedOrderIds.size} Order
+                    {selectedOrderIds.size !== 1 ? "s" : ""} Selected
+                  </span>
+                  {bulkRecommendedAction ? (
+                    <span className="small opacity-75">
+                      Recommended: {bulkRecommendedAction}
+                    </span>
+                  ) : null}
+                  <select
+                    className="form-select form-select-sm"
+                    value={bulkStatus}
+                    onChange={(e) => setBulkStatus(e.target.value)}
+                    disabled={bulkBusy}
+                  >
+                    {OUTSTATION_BULK_STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {formatStatusLabel(s)}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="btn-update"
+                    disabled={bulkBusy}
+                    onClick={runBulkStatusUpdate}
+                  >
+                    Update {selectedOrderIds.size} Orders
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-link text-white p-0"
+                    onClick={() => setSelectedOrderIds(new Set())}
+                    disabled={bulkBusy}
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ) : null
+            }
+          />
+        ) : null}
+
+        {serviceModeTab !== "OUTSTATION" && !(detail && selectedId != null) && (
+        <>
+        <div className="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3 mb-4">
+          <div>
+            <h2 className="fw-bold mb-1">Orders</h2>
+            <p className="text-muted small mb-0">
+              {loading ? "Loading orders…" : `${filteredOrders.length} orders`}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn d-flex align-items-center gap-2 px-3 py-2 small fw-semibold text-white border-0"
+            style={{ backgroundColor: "#E51818", borderRadius: 10 }}
+            onClick={() => {
+              loadOrders();
+              loadRiders();
+            }}
+            disabled={loading}
+          >
+            <RefreshCw size={15} className={loading ? "spin" : ""} />
+            Refresh
+          </button>
+        </div>
+
+        {error ? (
+          <div
+            className="alert alert-danger mb-4 d-flex align-items-center justify-content-between gap-3 rounded-4 border-0 shadow-sm"
+            role="alert"
+          >
+            <span>{error}</span>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-danger rounded-pill"
+              onClick={loadOrders}
+            >
+              Retry
+            </button>
           </div>
         ) : null}
 
@@ -1310,7 +1533,7 @@ const Orders = () => {
         </>
         )}
 
-      {detail && selectedId != null && (
+      {serviceModeTab !== "OUTSTATION" && detail && selectedId != null && (
         <div className="order-detail-panel fade-in pb-4">
           <div className="dashboard-card border-0 shadow-sm mb-4">
             <div className="d-flex justify-content-between align-items-start gap-3">
