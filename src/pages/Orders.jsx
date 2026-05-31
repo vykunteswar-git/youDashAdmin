@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   Search,
   RefreshCw,
@@ -1501,15 +1502,25 @@ const Orders = () => {
         </p>
       </div>
 
-      {detail && selectedId != null && (
+      {detail &&
+        selectedId != null &&
+        createPortal(
         <div
-          className="position-fixed top-0 start-0 w-100 h-100 fade-in d-flex flex-column"
+          className="position-fixed d-flex flex-column overflow-hidden fade-in yd-admin-modal-layer"
           style={{
-            zIndex: 1100,
-            minHeight: "100vh",
-            height: "100vh",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: "100vw",
+            height: "100dvh",
+            maxHeight: "100dvh",
+            margin: 0,
             backgroundColor: "#F8F9FB",
           }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="order-detail-title"
         >
           <div
             className="bg-white border-bottom shadow-sm px-3 py-3 px-lg-4 flex-shrink-0"
@@ -1517,7 +1528,10 @@ const Orders = () => {
           >
             <div className="container-fluid px-0 d-flex justify-content-between align-items-start gap-3">
               <div>
-                <h4 className="fw-bold mb-1 d-flex flex-wrap align-items-center gap-2">
+                <h4
+                  id="order-detail-title"
+                  className="fw-bold mb-1 d-flex flex-wrap align-items-center gap-2"
+                >
                   Order #{selectedId}
                   {detailLoading ? (
                     <span className="spinner-border spinner-border-sm text-secondary" />
@@ -1549,7 +1563,7 @@ const Orders = () => {
             </div>
           </div>
 
-          <div className="flex-grow-1 overflow-auto">
+          <div className="flex-grow-1 overflow-auto min-h-0">
             <div className="container-fluid px-3 px-lg-4 py-4 pb-5">
               <div className="row g-4">
                 <div className="col-12 col-xxl-8">
@@ -2159,7 +2173,8 @@ const Orders = () => {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       <style>{`
