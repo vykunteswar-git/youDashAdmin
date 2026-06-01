@@ -4,36 +4,85 @@ import PageHeader from "@/components/PageHeader";
 import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { ArrowUpRight, Clock, AlertTriangle, CheckCircle2, IndianRupee } from "lucide-react";
 
+const RANGES = [
+  ["today", "Today"],
+  ["week", "This Week"],
+  ["month", "This Month"],
+];
+
+const RANGE_LABELS = {
+  today: "today",
+  week: "this week",
+  month: "this month",
+};
+
+const CHART_TITLES = {
+  today: "Order volume — today (2h buckets)",
+  week: "Order volume — this week",
+  month: "Order volume — this month",
+};
+
 export default function Dashboard() {
   const [data, setData] = useState(null);
+  const [range, setRange] = useState("week");
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    api.get("/dashboard/summary").then(r => setData({
-      kpis: {
-        total_orders: r.data?.kpis?.total_orders ?? 0,
-        gross_revenue: r.data?.kpis?.gross_revenue ?? 0,
-        online_riders: r.data?.kpis?.online_riders ?? 0,
-        active_users: r.data?.kpis?.active_users ?? 0,
-      },
-      health: {
-        avg_assignment_eta: r.data?.health?.avg_assignment_eta ?? "0 min",
-        cancellation_rate: r.data?.health?.cancellation_rate ?? 0,
-        completion_rate: r.data?.health?.completion_rate ?? 0,
-        avg_order_value: r.data?.health?.avg_order_value ?? 0,
-      },
-      chart: r.data?.chart ?? [],
-      feed: r.data?.feed ?? [],
-    }));
-  }, []);
-  if (!data) return <div data-testid="dashboard-loading" className="p-10 text-zinc-500">Loading…</div>;
+    setLoading(true);
+    api
+      .get("/dashboard/summary", { params: { range } })
+      .then((r) => setData(r.data))
+      .catch(() => setData(null))
+      .finally(() => setLoading(false));
+  }, [range]);
+
+  const rangeActions = (
+    <div className="flex gap-1" data-testid="dashboard-range">
+      {RANGES.map(([key, label]) => (
+        <button
+          key={key}
+          type="button"
+          onClick={() => setRange(key)}
+          className={`chip ${range === key ? "chip-active" : ""}`}
+          data-testid={`range-${key}`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (loading && !data) {
+    return (
+      <div data-testid="dashboard-loading" className="p-10 text-zinc-500">
+        Loading…
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div data-testid="dashboard-page">
+        <PageHeader title="Dashboard" subtitle="Could not load dashboard metrics" actions={rangeActions} />
+        <div className="surface empty">Failed to load dashboard. Check login and try again.</div>
+      </div>
+    );
+  }
+
   const { kpis, health, chart, feed } = data;
+  const period = RANGE_LABELS[range] || range;
 
   return (
     <div data-testid="dashboard-page">
-      <PageHeader title="Dashboard" subtitle="Real-time operational snapshot · India ops" />
+      <PageHeader
+        title="Dashboard"
+        subtitle={`Operational snapshot for ${period} · Orders list shows all orders without this filter`}
+        actions={rangeActions}
+      />
 
       <div className="grid grid-cols-4 gap-3 mb-3">
-        <KPI label="Total Orders" value={kpis.total_orders} icon={<ArrowUpRight size={14} />} testid="kpi-orders" />
-        <KPI label="Gross Revenue" value={`₹${kpis.gross_revenue.toLocaleString()}`} icon={<IndianRupee size={14} />} testid="kpi-revenue" />
+        <KPI label={`Total Orders (${period})`} value={kpis.total_orders} icon={<ArrowUpRight size={14} />} testid="kpi-orders" />
+        <KPI label={`Gross Revenue (${period})`} value={`₹${Number(kpis.gross_revenue || 0).toLocaleString()}`} icon={<IndianRupee size={14} />} testid="kpi-revenue" />
         <KPI label="Online Riders" value={kpis.online_riders} icon={<CheckCircle2 size={14} />} testid="kpi-riders" />
         <KPI label="Active Users" value={kpis.active_users} icon={<ArrowUpRight size={14} />} testid="kpi-users" />
       </div>
@@ -47,20 +96,13 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-3 gap-3">
         <div className="col-span-2 surface p-4" data-testid="chart-volume">
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="text-sm font-semibold">Order volume — today (2h buckets)</h3>
-            <div className="flex gap-1">
-              {["Today", "Week", "Month"].map(t => (
-                <button key={t} className={`chip ${t === "Today" ? "chip-active" : ""}`} data-testid={`range-${t.toLowerCase()}`}>{t}</button>
-              ))}
-            </div>
-          </div>
+          <h3 className="text-sm font-semibold mb-3">{CHART_TITLES[range] || "Order volume"}</h3>
           <div style={{ height: 240 }}>
             <ResponsiveContainer>
               <BarChart data={chart}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" vertical={false} />
                 <XAxis dataKey="label" stroke="#71717a" fontSize={11} />
-                <YAxis stroke="#71717a" fontSize={11} />
+                <YAxis stroke="#71717a" fontSize={11} allowDecimals={false} />
                 <Tooltip cursor={{ fill: "#f4f4f5" }} contentStyle={{ border: "1px solid #e4e4e7", borderRadius: 4, fontSize: 12 }} />
                 <Bar dataKey="value" fill="#09090b" />
               </BarChart>
@@ -71,16 +113,21 @@ export default function Dashboard() {
         <div className="surface p-4" data-testid="live-feed">
           <h3 className="text-sm font-semibold mb-3">Live Activity</h3>
           <div className="space-y-3 max-h-[240px] overflow-y-auto pr-1">
-            {feed.map((f, i) => (
+            {(feed || []).map((f, i) => (
               <div key={i} className="flex items-start gap-2 text-[12px]">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5" />
-                <div className="flex-1">
-                  <div className="font-mono text-[11px] text-zinc-400">{new Date(f.ts).toLocaleTimeString()}</div>
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="font-mono text-[11px] text-zinc-400">
+                    {f.ts ? new Date(f.ts).toLocaleTimeString() : "—"}
+                  </div>
                   <div>{f.detail}</div>
                   <div className="text-zinc-500 text-[11px]">by {f.actor}</div>
                 </div>
               </div>
             ))}
+            {(!feed || feed.length === 0) && (
+              <p className="text-[12px] text-zinc-500 text-center py-6">No live activity yet.</p>
+            )}
           </div>
         </div>
       </div>

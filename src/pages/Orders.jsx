@@ -1,14 +1,29 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
-import { BACKEND_URL } from "@/lib/api";
+import { adminSocketService } from "@/lib/adminSocketService";
 import PageHeader from "@/components/PageHeader";
 import StatusPill from "@/components/StatusPill";
 import { ALL_STATUSES, EXCEPTION_STATUSES } from "@/lib/status";
-import { Search, X, Layers, ListFilter, ChevronRight, Download } from "lucide-react";
+import {
+  OUTSTATION_BULK_STATUSES,
+  canBulkAdvanceGroupStatus,
+  formatStatusLabel,
+  getBulkRecommendedAction,
+  getDefaultBulkStatus,
+  getOutstationPrimaryNextStatus,
+  orderMatchesDateFilter,
+} from "@/lib/orderStatusUtils";
+import { Search, X, Layers, ListFilter, ChevronRight, Radio, Volume2, BellRing } from "lucide-react";
 import { toast } from "sonner";
 
 const STATUS_OPTIONS = ["ALL", ...ALL_STATUSES, ...EXCEPTION_STATUSES];
+const DATE_FILTERS = [
+  ["ALL", "All dates"],
+  ["TODAY", "Today"],
+  ["YESTERDAY", "Yesterday"],
+  ["CUSTOM", "Pick date"],
+];
 
 export default function Orders() {
   const nav = useNavigate();
@@ -18,28 +33,126 @@ export default function Orders() {
   const [payment, setPayment] = useState("ALL");
   const [assigned, setAssigned] = useState("ALL");
   const [q, setQ] = useState("");
+  const [dateFilter, setDateFilter] = useState("ALL");
+  const [customDate, setCustomDate] = useState("");
+  const [bulkStatus, setBulkStatus] = useState(OUTSTATION_BULK_STATUSES[0]);
   const [orders, setOrders] = useState([]);
   const [routes, setRoutes] = useState([]);
   const [view, setView] = useState("list"); // list | grouped
   const [selected, setSelected] = useState(new Set());
   const [groups, setGroups] = useState([]);
-  const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
+  const [expanded, setExpanded] = useState(new Set());
+  const [live, setLive] = useState(false);
+  const [alertOrder, setAlertOrder] = useState(null);
+  const reloadRef = useRef(() => {});
+  const lastReloadRef = useRef(0);
+  const alertIntervalRef = useRef(null);
+  const knownOutstationIdsRef = useRef(new Set());
+  const alertInitializedRef = useRef(false);
 
-  async function loadList() {
+  function filterParams() {
     const params = { service_mode: serviceMode };
     if (status !== "ALL") params.status = status;
     if (route !== "ALL") params.route = route;
     if (payment !== "ALL") params.payment = payment;
     if (assigned !== "ALL") params.assigned = assigned === "ASSIGNED" ? "yes" : "no";
     if (q) params.q = q;
-    const r = await api.get("/orders", { params });
+    return params;
+  }
+
+  // Best-effort loud triple-pulse beep for incoming outstation orders.
+  const playOutstationAlert = useCallback(() => {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      const gain = ctx.createGain();
+      gain.connect(ctx.destination);
+      const pulses = [
+        { at: 0, freq: 920, len: 0.34 },
+        { at: 0.4, freq: 740, len: 0.34 },
+        { at: 0.8, freq: 920, len: 0.46 },
+      ];
+      for (const pulse of pulses) {
+        const osc = ctx.createOscillator();
+        osc.type = "square";
+        osc.frequency.setValueAtTime(pulse.freq, ctx.currentTime + pulse.at);
+        osc.connect(gain);
+        osc.start(ctx.currentTime + pulse.at);
+        osc.stop(ctx.currentTime + pulse.at + pulse.len);
+      }
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.32, ctx.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 1.35);
+      window.setTimeout(() => { ctx.close().catch(() => {}); }, 1800);
+    } catch {
+      // sound is best-effort only
+    }
+  }, []);
+
+  async function loadList() {
+    const r = await api.get("/orders", { params: filterParams() });
     setOrders(r.data.orders);
-    setSelected(new Set());
+    if (serviceMode === "OUTSTATION") detectNewOutstation(r.data.orders);
   }
   async function loadGroups() {
-    const r = await api.get("/orders/grouped");
+    const r = await api.get("/orders/grouped", { params: filterParams() });
     setGroups(r.data.groups);
   }
+
+  const visibleOrders = useMemo(
+    () => orders.filter((o) => orderMatchesDateFilter(o, dateFilter, customDate)),
+    [orders, dateFilter, customDate],
+  );
+
+  const filteredGroups = useMemo(() => {
+    return groups
+      .map((g) => {
+        const routes = (g.routes || [])
+          .map((r) => {
+            const routeOrders = (r.orders || []).filter((o) =>
+              orderMatchesDateFilter(o, dateFilter, customDate),
+            );
+            return {
+              ...r,
+              orders: routeOrders,
+              count: routeOrders.length,
+              order_ids: routeOrders.map((o) => o.id),
+            };
+          })
+          .filter((r) => r.count > 0);
+        const total = routes.reduce((sum, r) => sum + r.count, 0);
+        return { ...g, routes, total };
+      })
+      .filter((g) => g.total > 0);
+  }, [groups, dateFilter, customDate]);
+
+  const selectedOrders = useMemo(() => {
+    const pool = view === "list" ? visibleOrders : filteredGroups.flatMap((g) => g.routes.flatMap((r) => r.orders || []));
+    return pool.filter((o) => selected.has(o.id));
+  }, [visibleOrders, filteredGroups, selected, view]);
+
+  // Track outstation order ids across reloads; trigger the alert loop on new arrivals.
+  function detectNewOutstation(list = []) {
+    const outstationIds = new Set(
+      list
+        .filter((o) => String(o.serviceMode || "").toUpperCase() === "OUTSTATION")
+        .map((o) => String(o.id))
+        .filter(Boolean),
+    );
+    if (alertInitializedRef.current) {
+      for (const id of outstationIds) {
+        if (!knownOutstationIdsRef.current.has(id)) {
+          setAlertOrder(list.find((o) => String(o.id) === id) || { id });
+          break;
+        }
+      }
+    } else {
+      alertInitializedRef.current = true;
+    }
+    knownOutstationIdsRef.current = outstationIds;
+  }
+
   useEffect(() => { api.get("/orders/routes").then(r => setRoutes(r.data.routes)); }, []);
   useEffect(() => {
     if (view === "list") loadList();
@@ -47,40 +160,96 @@ export default function Orders() {
     // eslint-disable-next-line
   }, [serviceMode, status, route, payment, assigned, q, view]);
 
-  const allSelected = orders.length > 0 && selected.size === orders.length;
+  useEffect(() => {
+    setSelected(new Set());
+  }, [serviceMode, status, route, payment, assigned, q, dateFilter, customDate, view]);
+
+  const selectionKey = Array.from(selected).sort((a, b) => a - b).join(",");
+  useEffect(() => {
+    if (!selectionKey) return;
+    setBulkStatus(getDefaultBulkStatus(selectedOrders));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectionKey]);
+
+  // Loop the alert sound every 3.5s until the admin acknowledges it.
+  useEffect(() => {
+    if (alertOrder) {
+      playOutstationAlert();
+      alertIntervalRef.current = window.setInterval(playOutstationAlert, 3500);
+    }
+    return () => {
+      if (alertIntervalRef.current != null) {
+        window.clearInterval(alertIntervalRef.current);
+        alertIntervalRef.current = null;
+      }
+    };
+  }, [alertOrder, playOutstationAlert]);
+
+  // Keep a stable reference to the current loader so the socket can refresh live.
+  reloadRef.current = () => {
+    const now = Date.now();
+    if (now - lastReloadRef.current < 1000) return; // throttle bursty pushes
+    lastReloadRef.current = now;
+    if (view === "list") loadList();
+    else loadGroups();
+  };
+
+  // Subscribe once to live admin order updates (STOMP over /topic/admin/orders).
+  useEffect(() => {
+    const unsubscribe = adminSocketService.subscribe((evt) => {
+      setLive(true);
+      reloadRef.current();
+      if (evt && String(evt.serviceMode || "").toUpperCase() === "OUTSTATION" && evt.orderId != null) {
+        setAlertOrder({ id: evt.orderId, status: evt.status, serviceMode: evt.serviceMode });
+      }
+    });
+    return unsubscribe;
+    // eslint-disable-next-line
+  }, []);
+
+  const visibleIds = visibleOrders.map((o) => o.id);
+  const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
+
+  function toggleIds(ids, allCurrentlySelected) {
+    const n = new Set(selected);
+    if (allCurrentlySelected) ids.forEach((id) => n.delete(id));
+    else ids.forEach((id) => n.add(id));
+    setSelected(n);
+  }
+
   function toggleAll() {
-    if (allSelected) setSelected(new Set());
-    else setSelected(new Set(orders.map(o => o.id)));
+    toggleIds(visibleIds, allSelected);
   }
   function toggleRow(id) {
     const n = new Set(selected);
     n.has(id) ? n.delete(id) : n.add(id);
     setSelected(n);
   }
+  function toggleExpand(key) {
+    const n = new Set(expanded);
+    n.has(key) ? n.delete(key) : n.add(key);
+    setExpanded(n);
+  }
 
   async function bulkAdvance(orderIds, newStatus) {
+    if (!newStatus) return;
     const results = await Promise.allSettled(
       orderIds.map((id) => api.post(`/orders/${id}/status`, { status: newStatus })),
     );
     const updated = results.filter((result) => result.status === "fulfilled").length;
     const skipped = results.length - updated;
     if (skipped) toast.warning(`Updated ${updated} · skipped ${skipped}`);
-    else toast.success(`Updated ${updated} orders → ${newStatus}`);
+    else toast.success(`Updated ${updated} orders → ${formatStatusLabel(newStatus)}`);
+    setSelected(new Set());
     if (view === "list") loadList(); else loadGroups();
   }
 
-  function exportCsv() {
-    const params = new URLSearchParams({ service_mode: serviceMode });
-    if (status !== "ALL") params.set("status", status);
-    if (payment !== "ALL") params.set("payment", payment);
-    if (q) params.set("q", q);
-    const url = `${BACKEND_URL}/api/exports/orders.csv?${params.toString()}`;
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `orders_${serviceMode.toLowerCase()}.csv`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    toast.success("Exporting orders…");
+  async function runBulkStatusUpdate() {
+    if (selected.size === 0 || !bulkStatus) return;
+    await bulkAdvance(Array.from(selected), bulkStatus);
   }
+
+  const bulkRecommended = getBulkRecommendedAction(selectedOrders);
 
   return (
     <div data-testid="orders-page">
@@ -88,13 +257,29 @@ export default function Orders() {
         title="Orders"
         subtitle="Outstation & incity dispatch operations"
         actions={
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            <span className={`chip ${live ? "text-emerald-700" : "text-zinc-400"}`} data-testid="live-indicator" title="Live order updates">
+              <Radio size={12} className={live ? "text-emerald-500" : "text-zinc-400"} /> {live ? "Live" : "Connecting…"}
+            </span>
             <button data-testid="view-list" onClick={() => setView("list")} className={`chip ${view === "list" ? "chip-active" : ""}`}><ListFilter size={12} /> List</button>
             <button data-testid="view-grouped" onClick={() => setView("grouped")} className={`chip ${view === "grouped" ? "chip-active" : ""}`}><Layers size={12} /> Grouped</button>
-            <button data-testid="export-orders-btn" onClick={exportCsv} className="chip">Export CSV</button>
           </div>
         }
       />
+
+      {alertOrder && (
+        <div className="surface p-3 mb-4 flex items-center justify-between border-l-4 border-l-[var(--brand-red)] bg-rose-50" data-testid="outstation-alert">
+          <div className="flex items-center gap-2 text-[13px] text-rose-900">
+            <BellRing size={16} className="text-rose-600 animate-pulse" />
+            <span className="font-semibold">New outstation order</span>
+            <span className="text-rose-700">#{alertOrder.id}{alertOrder.status ? ` · ${String(alertOrder.status).replaceAll("_", " ")}` : ""}</span>
+          </div>
+          <button onClick={() => setAlertOrder(null)} data-testid="ack-outstation-alert"
+            className="text-[12px] bg-rose-600 text-white px-3 py-1.5 rounded-sm hover:bg-rose-700 flex items-center gap-1">
+            <Volume2 size={12} /> Acknowledge
+          </button>
+        </div>
+      )}
 
       {/* Service mode tabs */}
       <div className="tabbar mb-4">
@@ -116,10 +301,22 @@ export default function Orders() {
           display={(v) => v === "ALL" ? "All routes" : (routes.find(r => r.key === v)?.label || v)} testid="filter-route" />
         <Select label="Payment" value={payment} onChange={setPayment} options={["ALL", "PREPAID", "COD"]} testid="filter-payment" />
         <Select label="Assigned" value={assigned} onChange={setAssigned} options={["ALL", "ASSIGNED", "UNASSIGNED"]} testid="filter-assigned" />
-        <button data-testid="reset-filters" onClick={() => { setStatus("ALL"); setRoute("ALL"); setPayment("ALL"); setAssigned("ALL"); setQ(""); }}
+        <Select label="Date" value={dateFilter} onChange={setDateFilter} options={DATE_FILTERS.map(([v]) => v)}
+          display={(v) => DATE_FILTERS.find(([k]) => k === v)?.[1] || v} testid="filter-date" />
+        {dateFilter === "CUSTOM" && (
+          <input type="date" value={customDate} onChange={(e) => setCustomDate(e.target.value)}
+            data-testid="filter-custom-date"
+            className="h-8 text-[12px] border border-[var(--border-default)] rounded-sm px-2" />
+        )}
+        <button data-testid="reset-filters" onClick={() => {
+          setStatus("ALL"); setRoute("ALL"); setPayment("ALL"); setAssigned("ALL"); setQ("");
+          setDateFilter("ALL"); setCustomDate("");
+        }}
           className="chip"><X size={12} /> Reset</button>
         <div className="ml-auto text-[12px] text-zinc-500">
-          {view === "list" ? `${orders.length} orders` : `${groups.length} groups`}
+          {view === "list"
+            ? `${visibleOrders.length} orders`
+            : `${filteredGroups.length} groups · ${filteredGroups.reduce((s, g) => s + g.total, 0)} orders`}
         </div>
       </div>
 
@@ -143,10 +340,10 @@ export default function Orders() {
               </tr>
             </thead>
             <tbody>
-              {orders.length === 0 && (
+              {visibleOrders.length === 0 && (
                 <tr><td colSpan={10} className="empty">No orders matching filters.</td></tr>
               )}
-              {orders.map(o => (
+              {visibleOrders.map(o => (
                 <tr key={o.id} className="row-link" data-testid={`order-row-${o.tracking_id}`}>
                   <td onClick={(e) => e.stopPropagation()}>
                     <input type="checkbox" checked={selected.has(o.id)} onChange={() => toggleRow(o.id)}
@@ -170,68 +367,125 @@ export default function Orders() {
         </div>
       ) : (
         <div className="space-y-3" data-testid="grouped-view">
-          {groups.map(g => (
+          {filteredGroups.map(g => {
+            const statusOrderIds = g.routes.flatMap((r) => r.order_ids || []);
+            const allStatusSelected = statusOrderIds.length > 0 && statusOrderIds.every((id) => selected.has(id));
+            const someStatusSelected = statusOrderIds.some((id) => selected.has(id));
+            return (
             <div key={g.status} className="surface p-4">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={allStatusSelected}
+                    ref={(el) => { if (el) el.indeterminate = someStatusSelected && !allStatusSelected; }}
+                    onChange={() => toggleIds(statusOrderIds, allStatusSelected)}
+                    data-testid={`group-select-status-${g.status}`}
+                    title="Select all orders in this status"
+                  />
                   <StatusPill status={g.status} />
                   <span className="text-[12px] text-zinc-500">{g.total} orders</span>
                 </div>
               </div>
               <div className="grid grid-cols-1 gap-2">
                 {g.routes.map(r => {
-                  const nextStatusMap = {
-                    BOOKED: "RIDER_ASSIGNED",
-                    RIDER_ASSIGNED: "PICKED_UP",
-                    PICKED_UP: "AT_ORIGIN_HUB",
-                    AT_ORIGIN_HUB: "IN_TRANSIT",
-                    IN_TRANSIT: "AT_DESTINATION_HUB",
-                    AT_DESTINATION_HUB: "OUT_FOR_DELIVERY",
-                    OUT_FOR_DELIVERY: "DELIVERED",
-                    AWAITING_HUB_COLLECTION: "COLLECTED",
-                  };
-                  const next = nextStatusMap[g.status];
-                  const canAdvance = !!next && !["BOOKED", "RIDER_ASSIGNED", "OUT_FOR_DELIVERY", "AWAITING_HUB_COLLECTION"].includes(g.status);
+                  const sample = r.orders?.[0];
+                  const next = sample ? getOutstationPrimaryNextStatus(sample) : null;
+                  const canAdvance = next && canBulkAdvanceGroupStatus(g.status);
+                  const routeIds = r.order_ids || [];
+                  const allRouteSelected = routeIds.length > 0 && routeIds.every((id) => selected.has(id));
+                  const someRouteSelected = routeIds.some((id) => selected.has(id));
+                  const key = `${g.status}::${r.route}`;
+                  const isOpen = expanded.has(key);
                   return (
-                    <div key={r.route} className="flex justify-between items-center px-3 py-2 border border-[var(--border-default)] rounded-sm">
-                      <div className="flex items-center gap-2">
-                        <ChevronRight size={14} className="text-zinc-400" />
-                        <span className="text-[13px]">{r.route}</span>
-                        <span className="text-[11px] text-zinc-500">({r.count})</span>
-                      </div>
-                      {canAdvance && (
-                        <button data-testid={`advance-all-${g.status}-${r.route.replace(/[^a-z]/gi, '')}`}
-                          onClick={() => bulkAdvance(r.order_ids, next)}
-                          className="text-[12px] px-2 py-1 bg-zinc-900 text-white rounded-sm hover:bg-zinc-800">
-                          Advance all → {next.replaceAll("_", " ")}
+                    <div key={r.route} className="border border-[var(--border-default)] rounded-sm overflow-hidden">
+                      <div className="flex justify-between items-center px-3 py-2 gap-2">
+                        <input
+                          type="checkbox"
+                          checked={allRouteSelected}
+                          ref={(el) => { if (el) el.indeterminate = someRouteSelected && !allRouteSelected; }}
+                          onChange={() => toggleIds(routeIds, allRouteSelected)}
+                          data-testid={`group-select-route-${g.status}-${r.route.replace(/[^a-z]/gi, '')}`}
+                          title="Select all orders on this route"
+                        />
+                        <button
+                          onClick={() => toggleExpand(key)}
+                          data-testid={`group-route-toggle-${g.status}-${r.route.replace(/[^a-z]/gi, '')}`}
+                          className="flex items-center gap-2 text-left flex-1 hover:opacity-70">
+                          <ChevronRight size={14} className={`text-zinc-400 transition-transform ${isOpen ? "rotate-90" : ""}`} />
+                          <span className="text-[13px]">{r.route}</span>
+                          <span className="text-[11px] text-zinc-500">({r.count})</span>
                         </button>
+                        {canAdvance && (
+                          <button data-testid={`advance-all-${g.status}-${r.route.replace(/[^a-z]/gi, '')}`}
+                            onClick={() => bulkAdvance(routeIds, next)}
+                            className="text-[12px] px-2 py-1 bg-zinc-900 text-white rounded-sm hover:bg-zinc-800 whitespace-nowrap">
+                            Advance all → {formatStatusLabel(next)}
+                          </button>
+                        )}
+                      </div>
+                      {isOpen && (
+                        <div className="border-t border-[var(--border-default)] bg-zinc-50/60" data-testid={`group-route-orders-${g.status}-${r.route.replace(/[^a-z]/gi, '')}`}>
+                          {(r.orders || []).map(o => (
+                            <div key={o.id}
+                              data-testid={`group-order-${o.tracking_id}`}
+                              className="flex items-center gap-3 px-3 py-2 text-[12px] border-b border-[var(--border-default)] last:border-b-0 hover:bg-white">
+                              <input type="checkbox" checked={selected.has(o.id)} onChange={() => toggleRow(o.id)}
+                                data-testid={`group-select-${o.tracking_id}`} />
+                              <div className="flex items-center justify-between flex-1 cursor-pointer" onClick={() => nav(`/orders/${o.id}`)}>
+                                <span className="mono font-semibold">{o.tracking_id}</span>
+                                <span className="text-zinc-500">{o.sender?.name} → {o.receiver?.name}</span>
+                                <span className={`pill ${o.payment_mode === "COD" ? "bg-amber-50 text-amber-800 border-amber-300" : "bg-emerald-50 text-emerald-800 border-emerald-300"}`}>{o.payment_mode}</span>
+                                <span className="mono">{o.weight_kg} kg</span>
+                                <span className="mono">₹{o.fare?.total}</span>
+                                <span className="text-zinc-500">{new Date(o.created_at).toLocaleString()}</span>
+                                <ChevronRight size={13} className="text-zinc-400" />
+                              </div>
+                            </div>
+                          ))}
+                          {(r.orders || []).length === 0 && (
+                            <div className="px-3 py-2 text-[12px] text-zinc-400">No orders in this route.</div>
+                          )}
+                        </div>
                       )}
                     </div>
                   );
                 })}
               </div>
             </div>
-          ))}
-          {groups.length === 0 && <div className="empty surface">No grouped orders.</div>}
+          );
+          })}
+          {filteredGroups.length === 0 && <div className="empty surface">No grouped orders.</div>}
         </div>
       )}
 
       {selected.size > 0 && (
-        <div className="bulkbar" data-testid="bulk-bar">
-          <span className="text-[12px] text-zinc-300">{selected.size} selected</span>
-          <button data-testid="bulk-status-btn" onClick={() => setBulkStatusOpen(true)}
-            className="text-[12px] bg-zinc-700 text-white px-3 py-1.5 rounded-sm">Change status</button>
+        <div className="bulkbar flex-wrap gap-2" data-testid="bulk-bar">
+          <span className="text-[12px] text-zinc-300 font-semibold">{selected.size} selected</span>
+          {bulkRecommended && (
+            <span className="text-[11px] text-zinc-400">Recommended: {bulkRecommended}</span>
+          )}
+          <select
+            value={bulkStatus}
+            onChange={(e) => setBulkStatus(e.target.value)}
+            data-testid="bulk-status-select"
+            className="h-8 text-[12px] border border-zinc-600 rounded-sm px-2 bg-zinc-800 text-white"
+          >
+            {OUTSTATION_BULK_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {formatStatusLabel(s)}
+                {s === getOutstationPrimaryNextStatus(selectedOrders[0]) ? " (recommended)" : ""}
+              </option>
+            ))}
+          </select>
+          <button data-testid="bulk-status-submit" onClick={runBulkStatusUpdate}
+            className="text-[12px] bg-white text-zinc-900 px-3 py-1.5 rounded-sm font-medium">
+            Update {selected.size} orders
+          </button>
           <button data-testid="bulk-clear" onClick={() => setSelected(new Set())}
             className="text-[12px] text-zinc-400 px-2"><X size={12} /></button>
         </div>
       )}
-
-      <BulkStatusModal
-        open={bulkStatusOpen}
-        onOpenChange={setBulkStatusOpen}
-        orderIds={Array.from(selected)}
-        onUpdated={() => { setSelected(new Set()); loadList(); }}
-      />
     </div>
   );
 }
@@ -249,37 +503,3 @@ function Select({ label, value, onChange, options, display, testid }) {
   );
 }
 
-function BulkStatusModal({ open, onOpenChange, orderIds, onUpdated }) {
-  const [status, setStatus] = useState("IN_TRANSIT");
-  if (!open) return null;
-  async function submit() {
-    const results = await Promise.allSettled(
-      orderIds.map((id) => api.post(`/orders/${id}/status`, { status })),
-    );
-    const updated = results.filter((result) => result.status === "fulfilled").length;
-    const skipped = results.length - updated;
-    if (skipped) {
-      toast.warning(`Updated ${updated}, skipped ${skipped} (invalid transition)`);
-    } else {
-      toast.success(`Updated ${updated} orders → ${status}`);
-    }
-    onOpenChange(false);
-    onUpdated?.();
-  }
-  return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center" data-testid="bulk-status-modal">
-      <div className="surface w-[400px] p-5">
-        <h3 className="text-lg font-semibold mb-3" style={{ fontFamily: "Outfit" }}>Bulk change status</h3>
-        <p className="text-[12px] text-zinc-500 mb-3">Updating {orderIds.length} orders</p>
-        <select value={status} onChange={e => setStatus(e.target.value)} data-testid="bulk-status-select"
-          className="w-full h-9 text-sm border border-[var(--border-default)] rounded-sm px-2">
-          {[...ALL_STATUSES, ...EXCEPTION_STATUSES].map(s => <option key={s} value={s}>{s.replaceAll("_", " ")}</option>)}
-        </select>
-        <div className="flex justify-end gap-2 mt-4">
-          <button onClick={() => onOpenChange(false)} className="chip" data-testid="bulk-status-cancel">Cancel</button>
-          <button onClick={submit} className="text-[12px] bg-zinc-900 text-white px-3 py-1.5 rounded-sm" data-testid="bulk-status-submit">Update {orderIds.length} orders</button>
-        </div>
-      </div>
-    </div>
-  );
-}

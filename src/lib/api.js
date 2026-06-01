@@ -1,5 +1,6 @@
 import axios from "axios";
-import { clearAuthSession, getAuthToken } from "@/lib/auth";
+import { clearAuthSession, withAuthHeaders } from "@/lib/auth";
+import { normalizeRiderUi, walletFromRider, mapRecentOrders } from "@/lib/riderUtils";
 
 export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "";
 export const API = import.meta.env.DEV ? "" : BACKEND_URL;
@@ -7,13 +8,13 @@ export const API = import.meta.env.DEV ? "" : BACKEND_URL;
 const client = axios.create({ baseURL: API, timeout: 30000 });
 
 client.interceptors.request.use((config) => {
-  const token = getAuthToken();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-
+  config.headers = withAuthHeaders(config.headers);
   return rewriteAdminRequest(config);
 });
+
+function adapterHeaders(config) {
+  return withAuthHeaders(config.headers);
+}
 
 client.interceptors.response.use(
   (response) => normalizeAdminResponse(response),
@@ -73,7 +74,7 @@ function rewriteAdminRequest(config) {
     return config;
   }
   if (url.match(/^\/orders\/\d+\/notify$/)) {
-    config.adapter = noopAdapter;
+    config.url = url.replace("/orders", "/admin/orders").replace("/notify", "/notify-user");
     return config;
   }
   if (url.match(/^\/orders\/\d+\/status$/)) {
@@ -81,20 +82,26 @@ function rewriteAdminRequest(config) {
     config.data = statusPayload(config.data);
     return config;
   }
+  if (url.match(/^\/orders\/\d+\/hub-handover$/)) {
+    config.url = url.replace("/orders", "/admin/orders").replace("/hub-handover", "/verify-hub-handover");
+    config.data = hubHandoverPayload(config.data);
+    return config;
+  }
   if (url === "/riders") {
-    if (config.params?.availability === "ONLINE") {
-      config.url = "/admin/riders/available";
-      config.params = {};
-    } else {
-      config.url = "/admin/riders";
-      config.params = { status: config.params?.status || "APPROVED" };
-    }
+    config.adapter = ridersListAdapter;
     return config;
   }
   if (url === "/riders/eligible") {
     const orderId = config.params?.order_id;
+    const role = String(config.params?.role || "").toUpperCase();
     config.url = `/admin/riders/eligible-for-order/${orderId}`;
-    config.params = { role: config.params?.role };
+    config.params = role ? { role } : {};
+    return config;
+  }
+  if (url.match(/^\/riders\/\d+\/handover-limit$/)) {
+    config.url = url.replace("/riders", "/admin/cod/riders").replace("/handover-limit", "/handover-limit");
+    config.method = "patch";
+    config.data = { codHandoverLimit: numberOrUndefined(config.data?.cod_handover_limit ?? config.data?.codHandoverLimit) };
     return config;
   }
   if (url.match(/^\/riders\/\d+\/(approve|reject)$/)) {
@@ -111,10 +118,6 @@ function rewriteAdminRequest(config) {
   }
   if (url === "/users") {
     config.url = "/admin/users";
-    return config;
-  }
-  if (url.match(/^\/users\/\d+\/ban$/)) {
-    config.adapter = noopAdapter;
     return config;
   }
   if (url.match(/^\/users\/\d+$/) && config.method === "delete") {
@@ -179,11 +182,23 @@ function rewriteAdminRequest(config) {
   if (url === "/banners" || url.match(/^\/banners\/\d+$/)) {
     config.url = url.replace("/banners", "/admin/banners");
     if (config.method === "patch") config.method = "put";
-    config.data = bannerPayload(config.data);
+    if (config.method === "post" || config.method === "put") {
+      config.data = bannerFormData(bannerPayload(config.data));
+    }
+    return config;
+  }
+  if (url === "/notifications/targets") {
+    config.url = "/admin/notifications/targets";
+    config.params = { q: config.params?.q, limit: config.params?.limit ?? 20 };
     return config;
   }
   if (url === "/notifications") {
-    config.url = config.method === "get" ? "/admin/notifications/logs" : "/admin/notifications/broadcast";
+    if (config.method === "get") {
+      config.url = "/admin/notifications/logs";
+      config.params = { page: config.params?.page ?? 0, size: config.params?.size ?? 20 };
+    } else {
+      config.url = "/admin/notifications/broadcast";
+    }
     return config;
   }
   if (url === "/transactions") {
@@ -215,6 +230,21 @@ function rewriteAdminRequest(config) {
   if (url === "/hub-routes" || url.match(/^\/hub-routes\/\d+$/)) {
     config.url = url.replace("/hub-routes", "/admin/hub-routes");
     config.data = hubRoutePayload(config.data);
+    if (config.method === "patch") config.method = "put";
+    return config;
+  }
+  if (url === "/zone-route-sla" || url.match(/^\/zone-route-sla\/\d+$/)) {
+    config.url = url.replace("/zone-route-sla", "/admin/zone-route-sla");
+    if (config.method === "patch") config.method = "put";
+    return config;
+  }
+  if (url === "/hub-corridor-sla" || url.match(/^\/hub-corridor-sla\/\d+$/)) {
+    config.url = url.replace("/hub-corridor-sla", "/admin/hub-corridor-sla");
+    if (config.method === "patch") config.method = "put";
+    return config;
+  }
+  if (url === "/hub-route-sla" || url.match(/^\/hub-route-sla\/\d+$/)) {
+    config.url = url.replace("/hub-route-sla", "/admin/hub-route-sla");
     if (config.method === "patch") config.method = "put";
     return config;
   }
@@ -270,11 +300,11 @@ function normalizeAdminResponse(response) {
   if (originalUrl === "/dashboard/summary") response.data = normalizeDashboard(data);
   else if (originalUrl === "/reports") response.data = normalizeReport(data);
   else if (originalUrl === "/orders") response.data = { orders: filterOrders((data || []).map(normalizeOrder), response.config?.params) };
-  else if (originalUrl === "/orders/grouped") response.data = { groups: groupOrders((data || []).map(normalizeOrder)) };
+  else if (originalUrl === "/orders/grouped") response.data = { groups: groupOrders(filterOrders((data || []).map(normalizeOrder), response.config?.params)) };
   else if (originalUrl === "/orders/routes") response.data = { routes: routesFromOrders((data || []).map(normalizeOrder)) };
   else if (originalUrl.match(/^\/orders\/\d+$/)) response.data = normalizeOrder(data);
   else if (originalUrl.match(/^\/orders\/\d+\/activity$/)) response.data = { activity: normalizeActivity(data) };
-  else if (originalUrl === "/riders" || originalUrl === "/riders/eligible") response.data = { riders: (data || []).map(normalizeRider) };
+  else if (originalUrl === "/riders/eligible") response.data = { riders: (data || []).map(normalizeRiderUi) };
   else if (originalUrl === "/users") response.data = { users: (data || []).map(normalizeUser) };
   else if (originalUrl === "/vehicles") response.data = { vehicles: (data || []).map(normalizeVehicle) };
   else if (originalUrl === "/zones") response.data = { zones: (data || []).map(normalizeZone) };
@@ -282,7 +312,8 @@ function normalizeAdminResponse(response) {
   else if (originalUrl === "/coupons") response.data = { coupons: (data || []).map(normalizeCoupon) };
   else if (originalUrl === "/categories") response.data = { categories: (data || []).map(normalizeCategory) };
   else if (originalUrl === "/banners") response.data = { banners: (data || []).map(normalizeBanner) };
-  else if (originalUrl === "/notifications") response.data = { notifications: data || [] };
+  else if (originalUrl === "/notifications/targets") response.data = normalizeNotificationTargets(data);
+  else if (originalUrl === "/notifications") response.data = normalizeNotificationLogs(data);
   else if (originalUrl === "/transactions") response.data = normalizeTransactions(data);
   else if (originalUrl === "/config/commission") response.data = normalizeCommissionConfig(data);
   else if (originalUrl === "/config/payments") response.data = normalizePaymentConfig(data);
@@ -294,6 +325,9 @@ function normalizeAdminResponse(response) {
   }
   else if (originalUrl === "/zone-routes") response.data = { routes: (data || []).map(normalizeZoneRoute) };
   else if (originalUrl === "/hub-routes") response.data = { routes: (data || []).map(normalizeHubRoute) };
+  else if (originalUrl === "/zone-route-sla") response.data = { slas: Array.isArray(data) ? data : [] };
+  else if (originalUrl === "/hub-corridor-sla") response.data = { slas: Array.isArray(data) ? data : [] };
+  else if (originalUrl === "/hub-route-sla") response.data = { slas: Array.isArray(data) ? data : [] };
   else response.data = data || payload;
 
   return response;
@@ -317,25 +351,41 @@ function emptyDataFor(originalUrl) {
     originalUrl === "/withdrawals" ||
     originalUrl === "/incentives" ||
     originalUrl === "/zone-routes" ||
-    originalUrl === "/hub-routes"
+    originalUrl === "/hub-routes" ||
+    originalUrl === "/zone-route-sla" ||
+    originalUrl === "/hub-corridor-sla" ||
+    originalUrl === "/hub-route-sla"
   ) {
     return [];
   }
   if (originalUrl === "/dashboard/summary") return {};
   if (originalUrl === "/reports") return {};
   if (originalUrl === "/transactions") return {};
+  if (originalUrl === "/notifications/targets") return { cities: [], zones: [], users: [], riders: [] };
   return null;
 }
 
 function assignmentPayload(data = {}) {
-  if (data.role === "pickup") return { pickupRiderId: data.rider_id || data.riderId };
-  if (data.role === "delivery") return { deliveryRiderId: data.rider_id || data.riderId };
-  return { riderId: data.rider_id || data.riderId };
+  const riderId = data.rider_id || data.riderId;
+  const role = String(data.role || "").toUpperCase();
+  if (role === "PICKUP") return { pickupRiderId: riderId, assignmentRole: "PICKUP" };
+  if (role === "DELIVERY") return { deliveryRiderId: riderId, assignmentRole: "DELIVERY" };
+  if (role === "BOTH") return { pickupRiderId: riderId, deliveryRiderId: riderId, assignmentRole: "BOTH" };
+  return { riderId };
 }
 
 function statusPayload(data = {}) {
   return {
     status: data.status,
+    otp: data.otp,
+    adminOverride: data.force || data.emergency_override,
+    codCollectionMode: data.cod_mode,
+  };
+}
+
+function hubHandoverPayload(data = {}) {
+  return {
+    type: data.type,
     otp: data.otp,
     adminOverride: data.force || data.emergency_override,
     codCollectionMode: data.cod_mode,
@@ -517,6 +567,57 @@ function bannerPayload(data = {}) {
   };
 }
 
+function normalizeNotificationTargets(data = {}) {
+  const d = data && typeof data === "object" ? data : {};
+  return {
+    cities: Array.isArray(d.cities) ? d.cities : [],
+    zones: Array.isArray(d.zones) ? d.zones : [],
+    users: Array.isArray(d.users) ? d.users : [],
+    riders: Array.isArray(d.riders) ? d.riders : [],
+  };
+}
+
+function normalizeNotificationLogs(data) {
+  const content = Array.isArray(data)
+    ? data
+    : Array.isArray(data?.content)
+      ? data.content
+      : Array.isArray(data?.logs)
+        ? data.logs
+        : [];
+  const notifications = content.map((row, index) => ({
+    id: row.id ?? row.campaignId ?? row.logId ?? index,
+    title: row.title || row.heading || "—",
+    body: row.body || row.message || "",
+    target: row.target || row.targetType || row.targetLabel || "—",
+    type: row.type || row.notificationType || "",
+    sent: row.sent ?? row.totalCount ?? row.recipientCount ?? 0,
+    success: row.success ?? row.successCount ?? row.deliveredCount ?? 0,
+    failed: row.failed ?? row.failureCount ?? row.failedCount ?? 0,
+    ts: row.createdAt || row.sentAt || row.ts || new Date().toISOString(),
+  }));
+  return {
+    notifications,
+    page: data?.number ?? 0,
+    size: data?.size ?? notifications.length,
+    totalElements: data?.totalElements ?? notifications.length,
+    totalPages: data?.totalPages ?? 1,
+  };
+}
+
+function bannerFormData(payload = {}) {
+  const fd = new FormData();
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+    if (key === "imageFile") {
+      if (value instanceof File) fd.append("imageFile", value);
+      return;
+    }
+    fd.append(key, String(value));
+  });
+  return fd;
+}
+
 function incentivePayload(data = {}) {
   if (!data) return data;
   const serviceMode = data.service_mode || data.serviceMode;
@@ -568,69 +669,94 @@ function rangeToBackend(range) {
   return "THIS_WEEK";
 }
 
+function normalizeDashboardChart(points = []) {
+  if (!Array.isArray(points)) return [];
+  return points.map((p) => ({
+    label: p.label ?? p.bucket ?? p.hour ?? "",
+    value: Number(p.value ?? p.count ?? p.orderCount ?? 0),
+  }));
+}
+
+function normalizeDashboardFeed(items = []) {
+  if (!Array.isArray(items)) return [];
+  return items.map((f) => ({
+    ts: f.createdAt || f.ts || new Date().toISOString(),
+    detail:
+      f.detail ||
+      `${f.displayOrderId || f.orderId || "Order"} is ${f.status || "updated"}`,
+    actor: f.riderName || f.customerName || f.actor || "System",
+    display_order_id: f.displayOrderId,
+    status: f.status,
+    amount: f.amount ?? f.totalAmount,
+  }));
+}
+
 function normalizeDashboard(data = {}) {
-  if (data.kpis || data.health || data.chart || data.feed) {
+  // Only treat as pre-normalized UI shape when kpis/health exist (not chart/feed arrays).
+  if (data.kpis || data.health) {
     const kpis = data.kpis || {};
     const health = data.health || {};
     return {
+      range: data.range,
       kpis: {
-        total_orders: kpis.total_orders ?? 0,
-        gross_revenue: kpis.gross_revenue ?? 0,
-        online_riders: kpis.online_riders ?? 0,
-        active_users: kpis.active_users ?? 0,
+        total_orders: kpis.total_orders ?? kpis.totalOrders ?? 0,
+        gross_revenue: kpis.gross_revenue ?? kpis.grossRevenue ?? 0,
+        online_riders: kpis.online_riders ?? kpis.onlineRiders ?? 0,
+        active_users: kpis.active_users ?? kpis.activeUsers ?? 0,
       },
       health: {
-        avg_assignment_eta: health.avg_assignment_eta ?? "0 min",
-        cancellation_rate: health.cancellation_rate ?? 0,
-        completion_rate: health.completion_rate ?? 0,
-        avg_order_value: health.avg_order_value ?? 0,
+        avg_assignment_eta: health.avg_assignment_eta ?? health.avgAssignmentEta ?? "0 min",
+        cancellation_rate: health.cancellation_rate ?? health.cancellationRate ?? 0,
+        completion_rate: health.completion_rate ?? health.completionRate ?? 0,
+        avg_order_value: health.avg_order_value ?? health.avgOrderValue ?? 0,
       },
-      chart: data.chart || [],
-      feed: data.feed || [],
+      chart: normalizeDashboardChart(data.chart),
+      feed: normalizeDashboardFeed(data.feed),
     };
   }
 
+  // Live GET /admin/dashboard/summary — flat camelCase (zone_setup).
   return {
+    range: data.range,
     kpis: {
-      total_orders: data.totalOrders ?? 0,
-      gross_revenue: data.grossRevenue ?? 0,
-      online_riders: data.onlineRiders ?? 0,
-      active_users: data.activeUsers ?? 0,
+      total_orders: data.totalOrders ?? data.total_orders ?? 0,
+      gross_revenue: data.grossRevenue ?? data.gross_revenue ?? 0,
+      online_riders: data.onlineRiders ?? data.online_riders ?? 0,
+      active_users: data.activeUsers ?? data.active_users ?? 0,
     },
     health: {
-      avg_assignment_eta: `${data.avgAssignmentEtaMinutes ?? 0} min`,
-      cancellation_rate: data.cancellationRate ?? 0,
-      completion_rate: data.completionRate ?? 0,
-      avg_order_value: data.avgOrderValue ?? 0,
+      avg_assignment_eta: `${data.avgAssignmentEtaMinutes ?? data.avg_assignment_eta_minutes ?? 0} min`,
+      cancellation_rate: data.cancellationRate ?? data.cancellation_rate ?? 0,
+      completion_rate: data.completionRate ?? data.completion_rate ?? 0,
+      avg_order_value: data.avgOrderValue ?? data.avg_order_value ?? 0,
     },
-    chart: (data.chart || []).map((p) => ({ label: p.label, value: p.value ?? p.count ?? 0 })),
-    feed: (data.feed || []).map((f) => ({
-      ts: f.createdAt || f.ts || new Date().toISOString(),
-      detail: f.detail || `${f.displayOrderId || "Order"} is ${f.status || "updated"}`,
-      actor: f.riderName || f.customerName || "System",
-    })),
+    chart: normalizeDashboardChart(data.chart),
+    feed: normalizeDashboardFeed(data.feed),
   };
 }
 
 async function dashboardAdapter(config) {
   const instance = axios.create({ baseURL: API, timeout: config.timeout });
-  const headers = { ...(config.headers || {}) };
+  const headers = adapterHeaders(config);
+  const range = rangeToBackend(config.params?.range);
   const [summary, chart, feed] = await Promise.all([
-    instance.get("/admin/dashboard/summary", { headers }),
-    instance.get("/admin/dashboard/order-volume", { headers }),
-    instance.get("/admin/dashboard/live-activity", { headers }),
+    instance.get("/admin/dashboard/summary", { headers, params: { range } }),
+    instance.get("/admin/dashboard/order-volume", { headers, params: { range } }),
+    instance.get("/admin/dashboard/live-activity", { headers, params: { limit: 10 } }),
   ]);
+
+  const summaryData = summary.data?.data || {};
+  const merged = {
+    ...summaryData,
+    range,
+    chart: chart.data?.data || chart.data || [],
+    feed: feed.data?.data || feed.data || [],
+  };
 
   return normalizeAdminResponse({
     ...summary,
     config,
-    data: {
-      data: {
-        ...(summary.data?.data || {}),
-        chart: chart.data?.data || [],
-        feed: feed.data?.data || [],
-      },
-    },
+    data: { data: merged },
   });
 }
 
@@ -638,21 +764,40 @@ async function riderDetailAdapter(config) {
   const originalUrl = config.adminUiUrl || config.url || "";
   const riderId = Number(originalUrl.match(/^\/riders\/(\d+)/)?.[1]);
   const instance = axios.create({ baseURL: API, timeout: config.timeout });
-  const headers = { ...(config.headers || {}) };
+  const headers = adapterHeaders(config);
+
+  const rider = await fetchAdminRiderDetail(instance, headers, riderId);
+  const riderUi = rider || normalizeRiderUi({ id: riderId });
 
   if (originalUrl.endsWith("/orders")) {
-    const ordersResponse = await instance.get("/admin/orders", { headers });
-    const orders = (ordersResponse.data?.data || [])
-      .map(normalizeOrder)
-      .filter((order) => [order.riderId, order.pickupRiderId, order.deliveryRiderId].includes(riderId))
-      .map((order) => normalizeRiderOrder(order, riderId));
+    let orders = riderUi.recent_orders || [];
+    if (!orders.length) {
+      const raw = await fetchAdminRiderRaw(instance, headers, riderId);
+      if (raw?.recentOrders?.length) {
+        orders = mapRecentOrders(raw.recentOrders);
+      } else {
+        try {
+          const ordersResponse = await instance.get("/admin/orders", { headers });
+          orders = (ordersResponse.data?.data || [])
+            .map(normalizeOrder)
+            .filter((order) => [order.riderId, order.pickupRiderId, order.deliveryRiderId].includes(riderId))
+            .map((order) => normalizeRiderOrder(order, riderId));
+        } catch {
+          orders = [];
+        }
+      }
+    }
     return { config, data: { orders }, status: 200, statusText: "OK", headers: {}, request: null };
   }
 
   if (originalUrl.endsWith("/wallet")) {
+    const txs = riderUi.recent_wallet_transactions || [];
+    if (txs.length || riderUi.wallet_balance != null) {
+      return { config, data: walletFromRider(riderUi), status: 200, statusText: "OK", headers: {}, request: null };
+    }
     const codDetail = await safeGet(instance, `/admin/cod/riders/${riderId}`, headers, null);
     const detail = codDetail?.data?.data || {};
-    return { config, data: normalizeRiderWallet(detail), status: 200, statusText: "OK", headers: {}, request: null };
+    return { config, data: normalizeRiderWallet(detail, riderUi), status: 200, statusText: "OK", headers: {}, request: null };
   }
 
   if (originalUrl.endsWith("/cod-deposits")) {
@@ -662,25 +807,21 @@ async function riderDetailAdapter(config) {
   }
 
   if (originalUrl.endsWith("/performance")) {
-    const [ordersResponse, rider] = await Promise.all([
-      instance.get("/admin/orders", { headers }),
-      fetchAdminRider(instance, headers, riderId),
-    ]);
-    const orders = (ordersResponse.data?.data || [])
-      .map(normalizeOrder)
-      .filter((order) => [order.riderId, order.pickupRiderId, order.deliveryRiderId].includes(riderId));
-    return { config, data: normalizeRiderPerformance(orders, rider), status: 200, statusText: "OK", headers: {}, request: null };
+    if (riderUi.performance) {
+      return { config, data: riderUi.performance, status: 200, statusText: "OK", headers: {}, request: null };
+    }
+    const orders = riderUi.recent_orders || [];
+    return { config, data: normalizeRiderPerformance(orders, riderUi), status: 200, statusText: "OK", headers: {}, request: null };
   }
 
-  const rider = await fetchAdminRider(instance, headers, riderId);
-  return { config, data: rider || normalizeRider({ id: riderId }), status: 200, statusText: "OK", headers: {}, request: null };
+  return { config, data: riderUi, status: 200, statusText: "OK", headers: {}, request: null };
 }
 
 async function userDetailAdapter(config) {
   const originalUrl = config.adminUiUrl || config.url || "";
   const userId = Number(originalUrl.match(/^\/users\/(\d+)$/)?.[1]);
   const instance = axios.create({ baseURL: API, timeout: config.timeout });
-  const headers = { ...(config.headers || {}) };
+  const headers = adapterHeaders(config);
   const ordersResponse = await safeGet(instance, `/orders/user/${userId}`, headers, { data: { data: [] } });
   const orders = (ordersResponse.data?.data || []).map(normalizeOrder);
   return { config, data: { orders }, status: 200, statusText: "OK", headers: {}, request: null };
@@ -688,7 +829,7 @@ async function userDetailAdapter(config) {
 
 async function transactionsAdapter(config) {
   const instance = axios.create({ baseURL: API, timeout: config.timeout });
-  const headers = { ...(config.headers || {}) };
+  const headers = adapterHeaders(config);
   const params = config.params || {};
   const [summaryResponse, listResponse] = await Promise.all([
     safeGet(instance, "/admin/transactions/summary", headers, { data: { data: {} } }),
@@ -714,7 +855,7 @@ async function transactionsAdapter(config) {
 
 async function pricingResolveAdapter(config) {
   const instance = axios.create({ baseURL: API, timeout: config.timeout });
-  const headers = { ...(config.headers || {}) };
+  const headers = adapterHeaders(config);
   const originHubId = Number(config.params?.origin_hub_id);
   const destinationHubId = Number(config.params?.destination_hub_id);
   const [hubRoutesResponse, zoneRoutesResponse, hubsResponse] = await Promise.all([
@@ -752,7 +893,7 @@ async function pricingResolveAdapter(config) {
 async function zoneDetailAdapter(config) {
   const id = Number((config.adminUiUrl || config.url || "").match(/^\/zones\/(\d+)$/)?.[1]);
   const instance = axios.create({ baseURL: API, timeout: config.timeout });
-  const headers = { ...(config.headers || {}) };
+  const headers = adapterHeaders(config);
   const response = await safeGet(instance, "/admin/zones", headers, { data: { data: [] } });
   const zone = (response.data?.data || []).map(normalizeZone).find((item) => Number(item.id) === id);
   return { config, data: zone || normalizeZone({ id }), status: 200, statusText: "OK", headers: {}, request: null };
@@ -761,7 +902,7 @@ async function zoneDetailAdapter(config) {
 async function hubDetailAdapter(config) {
   const id = Number((config.adminUiUrl || config.url || "").match(/^\/hubs\/(\d+)$/)?.[1]);
   const instance = axios.create({ baseURL: API, timeout: config.timeout });
-  const headers = { ...(config.headers || {}) };
+  const headers = adapterHeaders(config);
   const response = await safeGet(instance, "/admin/hubs", headers, { data: { data: [] } });
   const hub = (response.data?.data || []).map(normalizeHubForUi).find((item) => Number(item.id) === id);
   return { config, data: hub || normalizeHubForUi({ id }), status: 200, statusText: "OK", headers: {}, request: null };
@@ -769,7 +910,7 @@ async function hubDetailAdapter(config) {
 
 async function auditLogsAdapter(config) {
   const instance = axios.create({ baseURL: API, timeout: config.timeout });
-  const headers = { ...(config.headers || {}) };
+  const headers = adapterHeaders(config);
   const [notifications, transactions] = await Promise.all([
     safeGet(instance, "/admin/notifications/logs", headers, { data: { data: [] } }),
     safeGet(instance, "/admin/transactions", headers, { data: { data: [] } }),
@@ -799,27 +940,78 @@ async function noopAdapter(config) {
   return { config, data: {}, status: 200, statusText: "OK", headers: {}, request: null };
 }
 
-async function fetchAdminRider(instance, headers, riderId) {
-  const statuses = ["APPROVED", "PENDING", "REJECTED"];
-  const responses = await Promise.all(
-    statuses.map((status) => safeGet(instance, "/admin/riders", headers, null, { status })),
-  );
-  const riders = responses.flatMap((response) => response?.data?.data || []);
-  const rider = riders.find((item) => Number(item.id) === Number(riderId));
-  if (rider) return normalizeRider(rider);
+async function ridersListAdapter(config) {
+  const instance = axios.create({ baseURL: API, timeout: config.timeout });
+  const headers = adapterHeaders(config);
+  const tab = String(config.params?.tab || "ALL").toUpperCase();
+  const statusFilter = String(config.params?.status_filter || "ALL").toUpperCase();
 
+  let rawList = [];
+  if (statusFilter !== "ALL") {
+    const res = await safeGet(instance, "/admin/riders", headers, { data: { data: [] } }, { status: statusFilter });
+    rawList = res?.data?.data || [];
+  } else if (tab === "PENDING") {
+    const res = await safeGet(instance, "/admin/riders/pending", headers, { data: { data: [] } });
+    rawList = res?.data?.data || [];
+  } else if (tab === "AVAILABLE") {
+    const res = await safeGet(instance, "/admin/riders/available", headers, { data: { data: [] } });
+    rawList = res?.data?.data || [];
+  } else {
+    const [pendingRes, availableRes] = await Promise.all([
+      safeGet(instance, "/admin/riders/pending", headers, { data: { data: [] } }),
+      safeGet(instance, "/admin/riders/available", headers, { data: { data: [] } }),
+    ]);
+    const merged = new Map();
+    [...(pendingRes?.data?.data || []), ...(availableRes?.data?.data || [])].forEach((r) => {
+      if (r?.id != null) merged.set(Number(r.id), r);
+    });
+    rawList = Array.from(merged.values());
+  }
+
+  const riders = rawList.map((r) => normalizeRiderUi(r));
+  return { config, data: { riders }, status: 200, statusText: "OK", headers: {}, request: null };
+}
+
+async function fetchAdminRiderRaw(instance, headers, riderId) {
+  const [pendingRes, availableRes, approvedRes, rejectedRes, pendingStatusRes] = await Promise.all([
+    safeGet(instance, "/admin/riders/pending", headers, { data: { data: [] } }),
+    safeGet(instance, "/admin/riders/available", headers, { data: { data: [] } }),
+    safeGet(instance, "/admin/riders", headers, { data: { data: [] } }, { status: "APPROVED" }),
+    safeGet(instance, "/admin/riders", headers, { data: { data: [] } }, { status: "REJECTED" }),
+    safeGet(instance, "/admin/riders", headers, { data: { data: [] } }, { status: "PENDING" }),
+  ]);
+  const pool = [
+    ...(pendingRes?.data?.data || []),
+    ...(availableRes?.data?.data || []),
+    ...(approvedRes?.data?.data || []),
+    ...(rejectedRes?.data?.data || []),
+    ...(pendingStatusRes?.data?.data || []),
+  ];
+  return pool.find((item) => Number(item.id) === Number(riderId)) || null;
+}
+
+async function fetchAdminRiderDetail(instance, headers, riderId) {
+  const raw = await fetchAdminRiderRaw(instance, headers, riderId);
   const codDetail = await safeGet(instance, `/admin/cod/riders/${riderId}`, headers, null);
-  const summary = codDetail?.data?.data?.summary;
-  if (!summary) return null;
-  return normalizeRider({
-    id: summary.riderId,
-    name: summary.riderName,
-    phone: summary.riderPhone,
-    dispatchBlocked: summary.dispatchBlocked,
-    walletCodPendingAmount: summary.commissionPending,
-    codHandoverLimit: summary.handoverLimit,
-    approvalStatus: "APPROVED",
-  });
+  const summary = codDetail?.data?.data?.summary || {};
+
+  if (!raw && !summary?.riderId) return null;
+
+  const merged = {
+    ...(raw || {}),
+    id: raw?.id ?? summary.riderId ?? riderId,
+    name: raw?.name ?? summary.riderName,
+    phone: raw?.phone ?? summary.riderPhone,
+    dispatchBlocked: summary.dispatchBlocked ?? raw?.dispatchBlocked,
+    walletCodPendingAmount: summary.commissionPending ?? raw?.walletCodPendingAmount,
+    codHandoverLimit: summary.handoverLimit ?? raw?.codHandoverLimit,
+    walletCurrentBalance: raw?.walletCurrentBalance,
+  };
+  return normalizeRiderUi(merged);
+}
+
+async function fetchAdminRider(instance, headers, riderId) {
+  return fetchAdminRiderDetail(instance, headers, riderId);
 }
 
 async function safeGet(instance, url, headers, fallback, params) {
@@ -908,28 +1100,22 @@ function normalizeOrder(order = {}) {
 }
 
 function normalizeActivity(order = {}) {
-  return (order.timelineEvents || []).map((event, index) => ({
-    id: event.id || index,
-    ts: event.createdAt || order.createdAt || new Date().toISOString(),
-    event: event.status || event.event || "Update",
-    detail: event.note || event.detail || event.description || "Order updated",
-    actor: event.actor || "System",
+  const events = order.timelineEvents || order.timeline || order.events || [];
+  return events.map((event, index) => ({
+    id: event.id ?? index,
+    ts: event.createdAt || event.timestamp || event.ts || order.createdAt || new Date().toISOString(),
+    event: humanizeEvent(event.title || event.eventType || event.status || event.event || "Update"),
+    detail: event.description || event.message || event.note || event.detail || "",
+    actor: event.actor || event.performedBy || event.createdBy || event.updatedBy || "System",
   }));
 }
 
+function humanizeEvent(value) {
+  return String(value || "Update").replaceAll("_", " ");
+}
+
 function normalizeRider(rider = {}) {
-  return {
-    ...rider,
-    vehicle_type: rider.vehicleType || "—",
-    avatar: rider.profileImageUrl || "https://api.dicebear.com/7.x/initials/svg?seed=" + encodeURIComponent(rider.name || "Rider"),
-    city: rider.zoneName || "—",
-    status: rider.approvalStatus || "PENDING",
-    availability: rider.riderStatus || (rider.isAvailable ? "ONLINE" : "OFFLINE"),
-    blocked: rider.isBlocked || rider.dispatchBlocked || false,
-    wallet_balance: rider.walletCurrentBalance ?? 0,
-    cod_pending: rider.walletCodPendingAmount ?? 0,
-    cod_limit: rider.codHandoverLimit ?? 0,
-  };
+  return normalizeRiderUi(rider);
 }
 
 function normalizeVehicle(vehicle = {}) {
@@ -971,22 +1157,29 @@ function normalizeRiderOrder(order, riderId) {
   };
 }
 
-function normalizeRiderWallet(detail = {}) {
+function normalizeRiderWallet(detail = {}, riderUi = {}) {
   const summary = detail.summary || {};
   const openLines = detail.openLines || [];
-  return {
-    balance: 0,
-    cod_pending: summary.commissionPending ?? 0,
-    cod_limit: summary.handoverLimit ?? 0,
-    blocked: summary.dispatchBlocked ?? false,
-    transactions: openLines.map((line) => ({
-      id: line.orderId,
-      type: "DEBIT",
-      label: `COD commission pending for ${line.displayOrderId || line.orderId}`,
-      amount: line.commissionAmount ?? 0,
-      ts: line.deliveredAt || "",
-    })),
+  const codFallback = {
+    balance: Number(riderUi.wallet_balance ?? 0),
+    net_available: Number(riderUi.wallet_net_available ?? riderUi.wallet_balance ?? 0),
+    total_earnings: Number(riderUi.wallet_total_earnings ?? 0),
+    total_withdrawn: Number(riderUi.wallet_total_withdrawn ?? 0),
+    withdrawal_pending: Number(riderUi.wallet_withdrawal_pending ?? 0),
+    cod_pending: summary.commissionPending ?? riderUi.cod_pending ?? 0,
+    cod_limit: summary.handoverLimit ?? riderUi.cod_limit ?? 0,
+    blocked: summary.dispatchBlocked ?? riderUi.blocked ?? false,
+    transactions: (riderUi.recent_wallet_transactions || []).length
+      ? riderUi.recent_wallet_transactions
+      : openLines.map((line) => ({
+          id: line.orderId,
+          type: "DEBIT",
+          label: `COD commission pending for ${line.displayOrderId || line.orderId}`,
+          amount: line.commissionAmount ?? 0,
+          ts: line.deliveredAt || "",
+        })),
   };
+  return codFallback;
 }
 
 function normalizeRiderCod(detail = {}) {
@@ -1004,20 +1197,23 @@ function normalizeRiderCod(detail = {}) {
 }
 
 function normalizeRiderPerformance(orders, rider = {}) {
-  const total = orders.length;
+  const total = rider.total_orders_delivered ?? orders.length;
   const delivered = orders.filter((order) => order.status === "DELIVERED").length;
   const failed = orders.filter((order) => ["CANCELLED", "FAILED", "RETURNED"].includes(order.status)).length;
-  const inProgress = Math.max(0, total - delivered - failed);
-  const totalEarnings = orders
-    .filter((order) => order.status === "DELIVERED")
-    .reduce((sum, order) => sum + Number(order.earnedAmount ?? order.fare?.total ?? 0), 0);
+  const inProgress = Math.max(0, orders.length - delivered - failed);
+  const totalEarnings = Number(
+    rider.wallet_total_earnings ??
+      orders
+        .filter((order) => order.status === "DELIVERED")
+        .reduce((sum, order) => sum + Number(order.earnedAmount ?? order.fare_breakdown?.total ?? 0), 0),
+  );
 
   return {
     total_orders: total,
-    delivered,
+    delivered: rider.total_orders_delivered != null ? rider.total_orders_delivered : delivered,
     in_progress: inProgress,
     failed,
-    completion_rate: total ? Math.round((delivered / total) * 100) : 0,
+    completion_rate: orders.length ? Math.round((delivered / orders.length) * 100) : (total ? 100 : 0),
     on_time_rate: 0,
     rating: rider.rating ?? 0,
     total_earnings: Math.round(totalEarnings),
@@ -1170,10 +1366,11 @@ function groupOrders(orders) {
     if (!byStatus.has(order.status)) byStatus.set(order.status, new Map());
     const route = `${order.origin_city} → ${order.destination_city}`;
     const routeMap = byStatus.get(order.status);
-    if (!routeMap.has(route)) routeMap.set(route, { route, count: 0, order_ids: [] });
+    if (!routeMap.has(route)) routeMap.set(route, { route, count: 0, order_ids: [], orders: [] });
     const row = routeMap.get(route);
     row.count += 1;
     row.order_ids.push(order.id);
+    row.orders.push(order);
   });
 
   return Array.from(byStatus.entries()).map(([status, routeMap]) => ({

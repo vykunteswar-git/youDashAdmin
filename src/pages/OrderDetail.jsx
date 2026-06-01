@@ -4,6 +4,7 @@ import api from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
 import StatusPill from "@/components/StatusPill";
 import { milestonesFor, EXCEPTION_STATUSES } from "@/lib/status";
+import { formatStatusLabel, getOutstationPrimaryNextStatus } from "@/lib/orderStatusUtils";
 import AssignRiderModal from "@/components/modals/AssignRiderModal";
 import OtpModal from "@/components/modals/OtpModal";
 import { toast } from "sonner";
@@ -17,7 +18,7 @@ export default function OrderDetail() {
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignRole, setAssignRole] = useState("pickup");
   const [otpOpen, setOtpOpen] = useState(false);
-  const [otpAction, setOtpAction] = useState({ label: "", status: "", needsCod: false });
+  const [otpAction, setOtpAction] = useState({ label: "", status: "", needsCod: false, handoverType: null });
 
   async function load() {
     const [a, b] = await Promise.all([
@@ -50,12 +51,17 @@ export default function OrderDetail() {
   const milestones = milestonesFor(o.delivery_type);
   const currentIdx = milestones.indexOf(o.status);
 
-  // What's the next action?
-  const reco = o.recommendation;
+  const primaryNext = getOutstationPrimaryNextStatus(o);
+  const reco = {
+    title: primaryNext ? formatStatusLabel(primaryNext) : o.recommendation?.title,
+    detail: primaryNext
+      ? `Recommended next step in the delivery flow.`
+      : o.recommendation?.detail,
+  };
   const isException = EXCEPTION_STATUSES.includes(o.status);
 
-  function openOtp(label, status, needsCod = false) {
-    setOtpAction({ label, status, needsCod });
+  function openOtp(label, status, needsCod = false, handoverType = null) {
+    setOtpAction({ label, status, needsCod, handoverType });
     setOtpOpen(true);
   }
 
@@ -72,7 +78,7 @@ export default function OrderDetail() {
       case "BOOKED":
         if (o.delivery_type === "HUB_TO_DOOR") {
           return <ActionBtn label="Confirm hub drop-off"
-            onClick={() => openOtp("Confirm hub drop-off", "AT_ORIGIN_HUB", o.payment_mode === "COD" && !o.cod_already_collected)} />;
+            onClick={() => openOtp("Confirm hub drop-off", "AT_ORIGIN_HUB", o.payment_mode === "COD" && !o.cod_already_collected, "DROP")} />;
         }
         return <ActionBtn label="Assign pickup rider" onClick={() => openAssign("pickup")} />;
       case "RIDER_ASSIGNED":
@@ -92,7 +98,7 @@ export default function OrderDetail() {
       case "OUT_FOR_DELIVERY":
         return <ActionBtn label="Confirm delivery" onClick={() => openOtp("Confirm delivery", "DELIVERED")} />;
       case "AWAITING_HUB_COLLECTION":
-        return <ActionBtn label="Confirm hub collection" onClick={() => openOtp("Confirm collection", "COLLECTED")} />;
+        return <ActionBtn label="Confirm hub collection" onClick={() => openOtp("Confirm collection", "COLLECTED", false, "COLLECT")} />;
       default:
         return null;
     }
@@ -187,6 +193,7 @@ export default function OrderDetail() {
       <AssignRiderModal open={assignOpen} onOpenChange={setAssignOpen} orderId={id} role={assignRole} onAssigned={load} />
       <OtpModal open={otpOpen} onOpenChange={setOtpOpen} orderId={id}
         action={otpAction.label} targetStatus={otpAction.status} requiresCod={otpAction.needsCod}
+        handoverType={otpAction.handoverType}
         onDone={load} />
     </div>
   );

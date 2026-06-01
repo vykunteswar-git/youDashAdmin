@@ -6,7 +6,7 @@ import StatusPill from "@/components/StatusPill";
 import { toast } from "sonner";
 import {
   ArrowLeft, Phone, MapPin, Bike, Star, Wallet, Banknote,
-  CheckCircle2, AlertCircle, Package, TrendingUp, FileText, Ban, ShieldCheck
+  CheckCircle2, Package, TrendingUp, Ban, ShieldCheck, Pencil, X,
 } from "lucide-react";
 
 const TABS = [
@@ -26,6 +26,9 @@ export default function RiderDetail() {
   const [wallet, setWallet] = useState(null);
   const [cod, setCod] = useState({ deposits: [], total: 0 });
   const [perf, setPerf] = useState(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [limitEdit, setLimitEdit] = useState("");
+  const [savingLimit, setSavingLimit] = useState(false);
 
   async function loadAll() {
     const [r, o, w, c, p] = await Promise.all([
@@ -36,10 +39,11 @@ export default function RiderDetail() {
       api.get(`/riders/${id}/performance`),
     ]);
     setRider(r.data);
-    setOrders(o.data.orders);
+    setOrders(o.data.orders || []);
     setWallet(w.data);
-    setCod(c.data);
+    setCod(c.data || { deposits: [], total: 0 });
     setPerf(p.data);
+    setLimitEdit(String(r.data?.cod_limit ?? ""));
   }
 
   useEffect(() => { loadAll(); /* eslint-disable-next-line */ }, [id]);
@@ -55,7 +59,26 @@ export default function RiderDetail() {
     loadAll();
   }
 
-  if (!rider) return <div className="empty">Loading rider…</div>;
+  async function saveHandoverLimit() {
+    const limit = Number(String(limitEdit).trim());
+    if (!Number.isFinite(limit) || limit <= 0) {
+      toast.error("Enter a valid handover limit");
+      return;
+    }
+    setSavingLimit(true);
+    try {
+      await api.patch(`/riders/${id}/handover-limit`, { cod_handover_limit: limit });
+      toast.success("COD handover limit updated");
+      setEditOpen(false);
+      loadAll();
+    } catch (e) {
+      toast.error(e.response?.data?.message || e.response?.data?.detail || "Failed to update limit");
+    } finally {
+      setSavingLimit(false);
+    }
+  }
+
+  if (!rider) return <div className="empty" data-testid="rider-loading">Loading rider…</div>;
 
   return (
     <div data-testid="rider-detail-page">
@@ -63,13 +86,13 @@ export default function RiderDetail() {
         <ArrowLeft size={13} /> Back to Riders
       </button>
 
-      {/* Identity header */}
       <div className="surface p-5 mb-5" data-testid="rider-header">
         <div className="flex items-start justify-between gap-6">
           <div className="flex items-start gap-4">
-            <img src={rider.avatar} alt="" className="w-16 h-16 rounded-full border-2 border-[var(--border-default)]" />
+            <img src={rider.avatar} alt="" className="w-16 h-16 rounded-full border-2 border-[var(--border-default)] object-cover"
+              onError={(e) => { e.currentTarget.src = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(rider.name)}`; }} />
             <div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <h1 className="text-2xl font-semibold" style={{ fontFamily: "Outfit" }}>{rider.name}</h1>
                 <span className={`pill ${rider.status === "APPROVED" ? "pill-green" : rider.status === "PENDING" ? "pill-amber" : "pill-red"}`} data-testid="rider-status">
                   {rider.status}
@@ -81,37 +104,37 @@ export default function RiderDetail() {
                 <span className="flex items-center gap-1"><Phone size={12} /> <span className="mono">{rider.phone}</span></span>
                 <span className="flex items-center gap-1"><MapPin size={12} /> {rider.city}</span>
                 <span className="flex items-center gap-1"><Bike size={12} /> {rider.vehicle_type}</span>
-                <span className="flex items-center gap-1"><Star size={12} className="text-[var(--amber)]" /> <span className="mono">{rider.rating}</span></span>
+                <span className="flex items-center gap-1"><Star size={12} className="text-[var(--amber)]" /> <span className="mono">{rider.rating ?? "—"}</span></span>
+                <span className="mono text-zinc-400">#{rider.id}{rider.public_id ? ` · ${rider.public_id}` : ""}</span>
               </div>
             </div>
           </div>
-          {rider.status === "PENDING" && (
-            <div className="flex gap-2" data-testid="rider-approval-actions">
-              <button onClick={approve} className="btn-primary" data-testid="approve-rider-detail">Approve</button>
-              <button onClick={reject} className="btn-secondary" data-testid="reject-rider-detail">Reject</button>
-            </div>
-          )}
+          <div className="flex gap-2 flex-wrap" data-testid="rider-header-actions">
+            <button onClick={() => { setLimitEdit(String(rider.cod_limit ?? "")); setEditOpen(true); }}
+              className="chip" data-testid="edit-rider-btn">
+              <Pencil size={12} /> Edit COD limit
+            </button>
+            {rider.status === "PENDING" && (
+              <>
+                <button onClick={approve} className="btn-primary" data-testid="approve-rider-detail">Approve</button>
+                <button onClick={reject} className="btn-secondary" data-testid="reject-rider-detail">Reject</button>
+              </>
+            )}
+          </div>
         </div>
 
-        {/* Quick stats strip */}
         <div className="grid grid-cols-5 gap-3 mt-5 pt-5 border-t border-[var(--border-default)]">
-          <Stat icon={Package} label="Total Orders" value={perf?.total_orders ?? "—"} testid="stat-total-orders" />
-          <Stat icon={CheckCircle2} label="Delivered" value={perf?.delivered ?? "—"} accent="green" testid="stat-delivered" />
-          <Stat icon={Wallet} label="Wallet Balance" value={`₹${rider.wallet_balance ?? 0}`} accent="blue" testid="stat-wallet" />
-          <Stat icon={Banknote} label="COD Pending" value={`₹${rider.cod_pending ?? 0} / ₹${rider.cod_limit ?? 0}`} accent={rider.blocked ? "red" : "amber"} testid="stat-cod" />
-          <Stat icon={TrendingUp} label="Earnings" value={`₹${perf?.total_earnings ?? 0}`} accent="green" testid="stat-earnings" />
+          <Stat icon={Package} label="Delivered" value={perf?.total_orders ?? rider.total_orders_delivered ?? "—"} testid="stat-total-orders" />
+          <Stat icon={CheckCircle2} label="Net available" value={`₹${rider.wallet_net_available ?? rider.wallet_balance ?? 0}`} accent="green" testid="stat-delivered" />
+          <Stat icon={Wallet} label="Wallet balance" value={`₹${rider.wallet_balance ?? 0}`} accent="blue" testid="stat-wallet" />
+          <Stat icon={Banknote} label="COD pending" value={`₹${rider.cod_pending ?? 0} / ₹${rider.cod_limit ?? 0}`} accent={rider.blocked ? "red" : "amber"} testid="stat-cod" />
+          <Stat icon={TrendingUp} label="Total earnings" value={`₹${perf?.total_earnings ?? rider.wallet_total_earnings ?? 0}`} accent="green" testid="stat-earnings" />
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="tabbar mb-4">
         {TABS.map(t => (
-          <button
-            key={t.id}
-            className={tab === t.id ? "active" : ""}
-            onClick={() => setTab(t.id)}
-            data-testid={`rider-tab-${t.id}`}
-          >
+          <button key={t.id} className={tab === t.id ? "active" : ""} onClick={() => setTab(t.id)} data-testid={`rider-tab-${t.id}`}>
             {t.label}
           </button>
         ))}
@@ -122,18 +145,35 @@ export default function RiderDetail() {
       {tab === "wallet" && <WalletTab wallet={wallet} />}
       {tab === "cod" && <CodTab cod={cod} riderId={id} reload={loadAll} />}
       {tab === "performance" && <PerformanceTab perf={perf} />}
+
+      {editOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center" data-testid="edit-rider-modal">
+          <div className="surface w-[400px] p-5">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-lg font-semibold" style={{ fontFamily: "Outfit" }}>Edit rider — COD handover limit</h3>
+              <button onClick={() => setEditOpen(false)}><X size={16} /></button>
+            </div>
+            <p className="text-[12px] text-zinc-500 mb-3">
+              Updates via <span className="mono">PATCH /admin/cod/riders/{id}/handover-limit</span> (same as zone_setup).
+            </p>
+            <label className="label">Handover limit (₹)</label>
+            <input type="number" value={limitEdit} onChange={(e) => setLimitEdit(e.target.value)}
+              className="input mono w-full mb-4" data-testid="handover-limit-input" />
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setEditOpen(false)} className="chip">Cancel</button>
+              <button onClick={saveHandoverLimit} disabled={savingLimit} className="btn-primary" data-testid="save-handover-limit">
+                {savingLimit ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 function Stat({ icon: Icon, label, value, accent = "slate", testid }) {
-  const colorMap = {
-    green: "var(--green)",
-    red: "var(--brand-red)",
-    amber: "var(--amber)",
-    blue: "var(--blue)",
-    slate: "var(--slate-600)",
-  };
+  const colorMap = { green: "var(--green)", red: "var(--brand-red)", amber: "var(--amber)", blue: "var(--blue)", slate: "var(--slate-600)" };
   return (
     <div data-testid={testid}>
       <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-[var(--slate-400)] mb-1">
@@ -145,40 +185,74 @@ function Stat({ icon: Icon, label, value, accent = "slate", testid }) {
 }
 
 function ProfileTab({ rider }) {
+  const joined = rider.joined_at ? new Date(rider.joined_at).toLocaleDateString() : "—";
   return (
-    <div className="grid grid-cols-2 gap-4" data-testid="profile-tab">
-      <div className="surface p-5">
-        <h3 className="text-[14px] font-semibold mb-4">Contact & Vehicle</h3>
-        <Row label="Full name" value={rider.name} />
-        <Row label="Phone" value={rider.phone} mono />
-        <Row label="City" value={rider.city} />
-        <Row label="Zone ID" value={rider.zone_id || "—"} mono />
-        <Row label="Vehicle" value={rider.vehicle_type} />
-        <Row label="Joined" value={(rider.joined_at || "").slice(0, 10)} mono />
-      </div>
-      <div className="surface p-5">
-        <h3 className="text-[14px] font-semibold mb-4 flex items-center gap-2">
-          <ShieldCheck size={14} className="text-[var(--green)]" /> KYC Documents
-        </h3>
-        <div className="space-y-2">
-          {Object.entries(rider.documents || {}).map(([doc, ok]) => (
-            <div key={doc} className="flex items-center justify-between py-2 border-b border-[var(--slate-100)] last:border-0">
-              <div className="flex items-center gap-2 text-[13px]">
-                <FileText size={13} className="text-[var(--slate-400)]" />
-                <span className="capitalize">{doc}</span>
-              </div>
-              {ok ? (
-                <span className="pill pill-green"><CheckCircle2 size={11} /> Verified</span>
-              ) : (
-                <span className="pill pill-red"><AlertCircle size={11} /> Missing</span>
-              )}
-            </div>
-          ))}
-          {Object.keys(rider.documents || {}).length === 0 && (
-            <div className="empty">No documents uploaded</div>
-          )}
+    <div className="space-y-4" data-testid="profile-tab">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="surface p-5">
+          <h3 className="text-[14px] font-semibold mb-4">Personal details</h3>
+          <Row label="Full name" value={rider.name} />
+          <Row label="Phone" value={rider.phone} mono />
+          <Row label="City / zone" value={rider.city} />
+          <Row label="Vehicle number" value={rider.vehicle_number || "—"} mono />
+          <Row label="Joined" value={joined} mono />
+          <Row label="Rating" value={rider.rating ?? "—"} mono />
+          <Row label="Available" value={rider.isAvailable ? "Yes" : "No"} />
+        </div>
+        <div className="surface p-5">
+          <h3 className="text-[14px] font-semibold mb-4">Emergency contact</h3>
+          <Row label="Name" value={rider.emergency_contact_name || "Not provided"} />
+          <Row label="Phone" value={rider.emergency_contact_phone || "—"} mono />
+          <Row label="Relation" value={rider.emergency_contact_relation || "—"} />
         </div>
       </div>
+
+      <div className="surface p-5">
+        <h3 className="text-[14px] font-semibold mb-4">Vehicle information</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <Row label="Vehicle type" value={rider.vehicle_type} />
+          <Row label="Vehicle model" value={rider.vehicle_model || "—"} />
+          <Row label="Vehicle number" value={rider.vehicle_number || "—"} mono />
+          <Row label="Registration state" value={rider.vehicle_state || "—"} />
+        </div>
+      </div>
+
+      <div className="surface p-5">
+        <h3 className="text-[14px] font-semibold mb-4 flex items-center gap-2">
+          <ShieldCheck size={14} className="text-[var(--green)]" /> Onboarding documents
+        </h3>
+        {(rider.kyc_documents || []).length === 0 ? (
+          <div className="empty">No KYC document URLs returned by the API for this rider.</div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            {rider.kyc_documents.map((doc) => (
+              <KycDocCard key={doc.key} doc={doc} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function KycDocCard({ doc }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <div className="border border-[var(--slate-100)] rounded-sm overflow-hidden" data-testid={`kyc-doc-${doc.key}`}>
+      <div className="text-[10px] uppercase tracking-wider text-[var(--slate-500)] px-2 py-1 bg-[var(--slate-50)] flex justify-between items-center gap-2">
+        <span>{doc.label}</span>
+        <a href={doc.url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-[var(--brand-red)]">Open</a>
+      </div>
+      {!failed ? (
+        <a href={doc.url} target="_blank" rel="noopener noreferrer">
+          <img src={doc.url} alt={doc.label} className="w-full h-40 object-cover bg-[var(--slate-50)]"
+            onError={() => setFailed(true)} />
+        </a>
+      ) : (
+        <div className="h-40 flex items-center justify-center text-[12px] text-zinc-500 px-3 text-center bg-zinc-50">
+          Could not load image — <a href={doc.url} className="text-[var(--brand-red)] underline" target="_blank" rel="noreferrer">open URL</a>
+        </div>
+      )}
     </div>
   );
 }
@@ -222,46 +296,40 @@ function OrdersTab({ orders, nav }) {
 
 function WalletTab({ wallet }) {
   if (!wallet) return <div className="empty">Loading wallet…</div>;
+  const txs = wallet.transactions || [];
   return (
     <div className="space-y-4" data-testid="wallet-tab">
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="kpi">
-          <div className="label">Wallet Balance</div>
+          <div className="label">Balance</div>
           <div className="value" style={{ color: "var(--blue)" }}>₹{wallet.balance}</div>
-          <div className="sub">Settled earnings available for withdrawal</div>
         </div>
         <div className="kpi">
-          <div className="label">COD Pending</div>
+          <div className="label">Net available</div>
+          <div className="value" style={{ color: "var(--green)" }}>₹{wallet.net_available ?? wallet.balance}</div>
+        </div>
+        <div className="kpi">
+          <div className="label">Withdrawal pending</div>
+          <div className="value" style={{ color: "var(--amber)" }}>₹{wallet.withdrawal_pending ?? 0}</div>
+        </div>
+        <div className="kpi">
+          <div className="label">COD pending</div>
           <div className="value" style={{ color: wallet.blocked ? "var(--brand-red)" : "var(--amber)" }}>₹{wallet.cod_pending}</div>
-          <div className="sub">Of ₹{wallet.cod_limit} limit · {wallet.blocked ? "Blocked from new COD" : "Within limit"}</div>
-        </div>
-        <div className="kpi">
-          <div className="label">Transactions</div>
-          <div className="value">{wallet.transactions.length}</div>
-          <div className="sub">Last 50 entries</div>
         </div>
       </div>
       <div className="surface overflow-hidden">
         <table className="tbl">
-          <thead>
-            <tr><th>Type</th><th>Description</th><th className="text-right">Amount</th><th>Time</th></tr>
-          </thead>
+          <thead><tr><th>Type</th><th>Description</th><th className="text-right">Amount</th><th>Time</th></tr></thead>
           <tbody>
-            {wallet.transactions.map(t => (
+            {txs.map(t => (
               <tr key={t.id} data-testid={`wallet-txn-${t.id}`}>
-                <td>
-                  <span className={`pill ${t.type === "CREDIT" ? "pill-green" : "pill-amber"}`}>{t.type}</span>
-                </td>
-                <td className="text-[13px]">{t.label}</td>
-                <td className="text-right mono font-semibold" style={{ color: t.type === "CREDIT" ? "var(--green)" : "var(--amber)" }}>
-                  {t.type === "CREDIT" ? "+" : "−"}₹{t.amount}
-                </td>
+                <td><span className={`pill ${t.type === "CREDIT" ? "pill-green" : "pill-amber"}`}>{t.type}</span></td>
+                <td className="text-[13px]">{t.label}{t.status && t.status !== "COMPLETED" ? ` (${t.status})` : ""}</td>
+                <td className="text-right mono font-semibold">{t.type === "CREDIT" ? "+" : "−"}₹{t.amount}</td>
                 <td className="mono text-[11px] text-[var(--slate-400)]">{(t.ts || "").slice(0, 16).replace("T", " ")}</td>
               </tr>
             ))}
-            {wallet.transactions.length === 0 && (
-              <tr><td colSpan={4} className="empty">No transactions yet</td></tr>
-            )}
+            {txs.length === 0 && <tr><td colSpan={4} className="empty">No transactions yet</td></tr>}
           </tbody>
         </table>
       </div>
@@ -289,36 +357,29 @@ function CodTab({ cod, riderId, reload }) {
   return (
     <div className="space-y-4" data-testid="cod-tab">
       <div className="surface p-5">
-        <h3 className="text-[14px] font-semibold mb-3">Record COD Handover</h3>
+        <h3 className="text-[14px] font-semibold mb-3">Record COD handover</h3>
         <div className="flex gap-2 items-end">
           <div className="flex-1">
             <label className="label">Amount (₹)</label>
-            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" className="input mono" data-testid="cod-amount-input" />
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} className="input mono" data-testid="cod-amount-input" />
           </div>
           <div className="flex-1">
             <label className="label">Note</label>
-            <input value={note} onChange={e => setNote(e.target.value)} placeholder="Optional note…" className="input" data-testid="cod-note-input" />
+            <input value={note} onChange={e => setNote(e.target.value)} className="input" data-testid="cod-note-input" />
           </div>
-          <button onClick={deposit} className="btn-primary" data-testid="record-cod-btn">Record Handover</button>
+          <button onClick={deposit} className="btn-primary" data-testid="record-cod-btn">Record</button>
         </div>
       </div>
-
       <div className="surface overflow-hidden">
-        <div className="px-5 py-3 border-b border-[var(--border-default)] flex justify-between items-center">
-          <h3 className="text-[14px] font-semibold">Handover History</h3>
-          <span className="text-[12px] text-[var(--slate-600)]">Total handed over: <span className="mono font-semibold text-[var(--green)]">₹{cod.total}</span></span>
-        </div>
         <table className="tbl">
-          <thead>
-            <tr><th>Date</th><th>Amount</th><th>Hub</th><th>Note</th></tr>
-          </thead>
+          <thead><tr><th>Date</th><th>Amount</th><th>Hub</th><th>Note</th></tr></thead>
           <tbody>
             {cod.deposits.map(d => (
               <tr key={d.id} data-testid={`cod-deposit-${d.id}`}>
                 <td className="mono text-[12px]">{(d.ts || "").slice(0, 16).replace("T", " ")}</td>
                 <td className="mono font-semibold text-[var(--green)]">₹{d.amount}</td>
-                <td className="text-[12px]">{d.hub_id || "—"}</td>
-                <td className="text-[12px] text-[var(--slate-600)]">{d.note || "—"}</td>
+                <td>{d.hub_id || "—"}</td>
+                <td>{d.note || "—"}</td>
               </tr>
             ))}
             {cod.deposits.length === 0 && <tr><td colSpan={4} className="empty">No deposits recorded</td></tr>}
@@ -339,20 +400,6 @@ function PerformanceTab({ perf }) {
         <Metric label="Rating" value={`★ ${perf.rating}`} bar={(perf.rating / 5) * 100} color="var(--amber)" />
         <Metric label="Failures" value={perf.failed} bar={perf.total_orders ? (perf.failed / perf.total_orders) * 100 : 0} color="var(--brand-red)" />
       </div>
-      <div className="surface p-5">
-        <h3 className="text-[14px] font-semibold mb-3">Order Breakdown</h3>
-        <div className="grid grid-cols-4 gap-4 text-center">
-          <BreakdownItem label="Total" value={perf.total_orders} color="var(--slate-600)" />
-          <BreakdownItem label="Delivered" value={perf.delivered} color="var(--green)" />
-          <BreakdownItem label="In Progress" value={perf.in_progress} color="var(--blue)" />
-          <BreakdownItem label="Failed/Returned" value={perf.failed} color="var(--brand-red)" />
-        </div>
-      </div>
-      <div className="surface p-5">
-        <h3 className="text-[14px] font-semibold mb-1">Total Earnings</h3>
-        <p className="text-[12px] text-[var(--slate-600)] mb-3">Calculated at 18% commission on delivered fare.</p>
-        <div className="text-3xl font-semibold mono" style={{ color: "var(--green)" }}>₹{perf.total_earnings}</div>
-      </div>
     </div>
   );
 }
@@ -363,17 +410,8 @@ function Metric({ label, value, bar, color }) {
       <div className="label">{label}</div>
       <div className="value" style={{ color }}>{value}</div>
       <div className="mt-2 h-1.5 bg-[var(--slate-100)] rounded-full overflow-hidden">
-        <div style={{ width: `${Math.min(100, Math.max(0, bar))}%`, background: color }} className="h-full transition-all" />
+        <div style={{ width: `${Math.min(100, Math.max(0, bar))}%`, background: color }} className="h-full" />
       </div>
-    </div>
-  );
-}
-
-function BreakdownItem({ label, value, color }) {
-  return (
-    <div>
-      <div className="text-3xl font-semibold" style={{ fontFamily: "Outfit", color }}>{value}</div>
-      <div className="text-[11px] uppercase tracking-wider text-[var(--slate-400)] mt-1">{label}</div>
     </div>
   );
 }

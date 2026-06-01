@@ -26,12 +26,43 @@ export default function Incentives() {
   const [is, setIs] = useState([]);
   const [mode, setMode] = useState("ALL");
   const [showAdd, setShowAdd] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   async function load() { const r = await api.get("/incentives"); setIs(r.data?.incentives ?? []); }
   useEffect(() => { load(); }, []);
   const filtered = is.filter(i => mode === "ALL" || i.service_mode === mode);
   async function toggle(i) { await api.patch(`/incentives/${i.id}`, { active: !i.active }); toast.success("Updated"); load(); }
+
+  function openEdit(i) {
+    setEditingId(i.id);
+    setForm({
+      ...EMPTY_FORM,
+      name: i.name || "",
+      incentive_type: i.incentiveType || i.incentive_type || "DAILY_DELIVERIES_SLOT",
+      service_mode: i.service_mode || "ALL",
+      days: i.days || [],
+      active: i.active ?? true,
+      target_online_minutes: String(i.targetOnlineMinutes ?? i.target_online_minutes ?? "120"),
+      bonus_amount: String(i.bonusAmount ?? i.bonus_amount ?? "100"),
+      slabs: (i.slabs || []).length
+        ? i.slabs.map(s => ({ min_deliveries: String(s.min_deliveries ?? ""), bonus: String(s.bonus ?? "") }))
+        : EMPTY_FORM.slabs,
+    });
+    setShowAdd(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function del(i) {
+    if (!window.confirm(`Delete incentive "${i.name}"?`)) return;
+    try {
+      await api.delete(`/incentives/${i.id}`);
+      toast.success("Incentive deleted");
+      load();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || err?.response?.data?.detail || "Failed to delete incentive");
+    }
+  }
 
   function set(k, v) {
     setForm(current => ({ ...current, [k]: v }));
@@ -73,13 +104,19 @@ export default function Incentives() {
     if (form.incentive_type === "ONLINE_HOURS_DAILY" && !form.target_online_minutes) return toast.error("Target online minutes is required");
     setSaving(true);
     try {
-      await api.post("/incentives", { ...form, slabs });
-      toast.success("Incentive campaign added");
+      if (editingId) {
+        await api.patch(`/incentives/${editingId}`, { ...form, slabs });
+        toast.success("Incentive campaign updated");
+      } else {
+        await api.post("/incentives", { ...form, slabs });
+        toast.success("Incentive campaign added");
+      }
       setForm(EMPTY_FORM);
       setShowAdd(false);
+      setEditingId(null);
       load();
     } catch (err) {
-      toast.error(err?.response?.data?.message || err?.response?.data?.detail || "Failed to add incentive");
+      toast.error(err?.response?.data?.message || err?.response?.data?.detail || "Failed to save incentive");
     } finally {
       setSaving(false);
     }
@@ -89,7 +126,7 @@ export default function Incentives() {
     <div data-testid="incentives-page">
       <div className="flex items-start justify-between gap-3">
         <PageHeader title="Rider Incentives" subtitle="Bonus campaigns for peak demand" />
-        <button type="button" onClick={() => setShowAdd(v => !v)} className="btn-primary" data-testid="add-incentive-btn">
+        <button type="button" onClick={() => { if (showAdd) { setEditingId(null); setForm(EMPTY_FORM); } setShowAdd(v => !v); }} className="btn-primary" data-testid="add-incentive-btn">
           {showAdd ? "Close" : "Add Incentive"}
         </button>
       </div>
@@ -164,8 +201,8 @@ export default function Incentives() {
           </div>}
 
           <div className="flex gap-2 mt-4 pt-4 border-t border-[var(--border-default)]">
-            <button type="submit" disabled={saving} className="btn-primary">{saving ? "Saving..." : "Save Incentive"}</button>
-            <button type="button" onClick={() => { setShowAdd(false); setForm(EMPTY_FORM); }} className="btn-secondary">Cancel</button>
+            <button type="submit" disabled={saving} className="btn-primary">{saving ? "Saving..." : editingId ? "Update Incentive" : "Save Incentive"}</button>
+            <button type="button" onClick={() => { setShowAdd(false); setForm(EMPTY_FORM); setEditingId(null); }} className="btn-secondary">Cancel</button>
           </div>
         </form>
       )}
@@ -178,7 +215,11 @@ export default function Incentives() {
                 <h3 className="font-semibold text-[15px]" style={{ fontFamily: "Outfit" }}>{i.name}</h3>
                 <div className="text-[11px] text-zinc-500 mt-1">{i.incentiveType || i.incentive_type || "DAILY_DELIVERIES_SLOT"} · {i.service_mode} · {i.days.join(", ")}</div>
               </div>
-              <button onClick={() => toggle(i)} className={`chip ${i.active ? "chip-active" : ""}`} data-testid={`toggle-inc-${i.id}`}>{i.active ? "ON" : "OFF"}</button>
+              <div className="flex gap-1">
+                <button onClick={() => toggle(i)} className={`chip ${i.active ? "chip-active" : ""}`} data-testid={`toggle-inc-${i.id}`}>{i.active ? "ON" : "OFF"}</button>
+                <button onClick={() => openEdit(i)} className="chip" data-testid={`edit-inc-${i.id}`}>Edit</button>
+                <button onClick={() => del(i)} className="chip" style={{ color: "var(--brand-red)" }} data-testid={`del-inc-${i.id}`}>Delete</button>
+              </div>
             </div>
             <div className="mt-3 space-y-1">
               {i.slabs.map((s, idx) => (

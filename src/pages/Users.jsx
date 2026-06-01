@@ -20,7 +20,6 @@ export default function Users() {
     const r = await api.get(`/users/${u.id}`);
     setProfileData(r.data);
   }
-  async function ban(id) { await api.post(`/users/${id}/ban`); toast.success("Banned"); load(); }
   async function del(id) {
     if (prompt('Type DELETE to confirm') !== 'DELETE') return;
     await api.delete(`/users/${id}`); toast.success("Deleted"); setSelected(null); load();
@@ -74,7 +73,6 @@ export default function Users() {
                 </>
               )}
               <div className="flex gap-2 mt-4">
-                <button onClick={() => ban(selected.id)} className="flex-1 bg-rose-100 text-rose-800 border border-rose-300 text-[12px] py-2 rounded-sm" data-testid="ban-user">Ban</button>
                 <button onClick={() => del(selected.id)} className="flex-1 bg-zinc-900 text-white text-[12px] py-2 rounded-sm" data-testid="delete-user">Delete</button>
               </div>
             </div>

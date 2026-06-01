@@ -1,11 +1,12 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Package, Users, Truck, MapPin, Building2,
-  CreditCard, Wallet, ArrowDownToLine, Tags, ListChecks, Percent,
-  Sparkles, BellRing, BarChart3, FileText, Smartphone, Settings,
+  CreditCard, ArrowDownToLine, Tags, ListChecks, Percent,
+  Sparkles, BellRing, BarChart3, Smartphone, Settings,
   Image, Bike, Banknote, Route, LogOut
 } from "lucide-react";
 import { clearAuthSession, getAuthUser } from "@/lib/auth";
+import { APP_LOGO_URL, APP_NAME, APP_TAGLINE } from "@/lib/brand";
 
 const NAV = [
   { group: "Operations", items: [
@@ -30,7 +31,6 @@ const NAV = [
     { to: "/transactions", label: "Transactions", icon: CreditCard, testid: "nav-txns" },
     { to: "/payments", label: "Payments", icon: Banknote, testid: "nav-payments" },
     { to: "/withdrawals", label: "Withdrawals", icon: ArrowDownToLine, testid: "nav-withdrawals" },
-    { to: "/wallet", label: "Wallet Admin", icon: Wallet, testid: "nav-wallet" },
     { to: "/commission", label: "Rider Commission", icon: Percent, testid: "nav-commission" },
     { to: "/incentives", label: "Rider Incentives", icon: Sparkles, testid: "nav-incentives" },
   ]},
@@ -42,7 +42,6 @@ const NAV = [
   { group: "System", items: [
     { to: "/notifications", label: "Notifications", icon: BellRing, testid: "nav-notifications" },
     { to: "/reports", label: "Reports", icon: BarChart3, testid: "nav-reports" },
-    { to: "/audit", label: "Audit Logs", icon: FileText, testid: "nav-audit" },
     { to: "/app-version", label: "App Version", icon: Smartphone, testid: "nav-app-version" },
   ]},
 ];
@@ -62,10 +61,16 @@ export default function Shell() {
       <aside className="sidebar fixed left-0 top-0 bottom-0 w-[260px] overflow-y-auto flex flex-col" data-testid="sidebar">
         <div className="px-4 pt-5 pb-4 border-b border-zinc-800">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-white text-black rounded-sm flex items-center justify-center font-bold text-sm" style={{ fontFamily: "Outfit" }}>P</div>
+            <img
+              src={APP_LOGO_URL}
+              alt=""
+              className="w-8 h-8 rounded-sm object-contain bg-white/10 p-0.5"
+              width={32}
+              height={32}
+            />
             <div>
-              <div className="text-sm font-semibold tracking-tight" style={{ fontFamily: "Outfit" }}>Parceloop</div>
-              <div className="text-[10px] text-zinc-500 tracking-widest uppercase">Admin Console</div>
+              <div className="text-sm font-semibold tracking-tight" style={{ fontFamily: "Outfit" }}>{APP_NAME}</div>
+              <div className="text-[10px] text-zinc-500 tracking-widest uppercase">{APP_TAGLINE}</div>
             </div>
           </div>
         </div>

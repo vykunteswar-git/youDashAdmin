@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
 import { toast } from "sonner";
+import { Pencil, X } from "lucide-react";
 
 const EMPTY_FORM = {
   name: "",
@@ -18,6 +19,7 @@ export default function Vehicles() {
   const [tab, setTab] = useState("ALL");
   const [expandedId, setExpandedId] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
 
@@ -34,30 +36,61 @@ export default function Vehicles() {
     setForm(current => ({ ...current, [k]: v }));
   }
 
+  function openCreate() {
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+    setShowAdd(true);
+  }
+
+  function openEdit(v) {
+    setEditingId(v.id);
+    setForm({
+      name: v.name || "",
+      image: v.image || "",
+      base_fare: String(v.base_fare ?? ""),
+      per_km: String(v.per_km ?? ""),
+      min_distance: String(v.min_distance ?? ""),
+      max_weight: String(v.max_weight ?? ""),
+      active: v.active ?? true,
+    });
+    setShowAdd(true);
+  }
+
+  function closeForm() {
+    setShowAdd(false);
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+  }
+
   async function toggle(v) {
     await api.patch(`/vehicles/${v.id}`, { active: !v.active });
     toast.success("Updated");
     load();
   }
 
-  async function createVehicle(e) {
+  async function saveVehicle(e) {
     e.preventDefault();
     if (!form.name.trim()) return toast.error("Vehicle name is required");
     setSaving(true);
+    const payload = {
+      ...form,
+      base_fare: Number(form.base_fare || 0),
+      per_km: Number(form.per_km || 0),
+      min_distance: Number(form.min_distance || 0),
+      max_weight: Number(form.max_weight || 0),
+    };
     try {
-      await api.post("/vehicles", {
-        ...form,
-        base_fare: Number(form.base_fare || 0),
-        per_km: Number(form.per_km || 0),
-        min_distance: Number(form.min_distance || 0),
-        max_weight: Number(form.max_weight || 0),
-      });
-      toast.success("Vehicle added");
-      setForm(EMPTY_FORM);
-      setShowAdd(false);
+      if (editingId) {
+        await api.patch(`/vehicles/${editingId}`, payload);
+        toast.success("Vehicle updated");
+      } else {
+        await api.post("/vehicles", payload);
+        toast.success("Vehicle added");
+      }
+      closeForm();
       load();
     } catch (err) {
-      toast.error(err?.response?.data?.message || err?.response?.data?.detail || "Failed to add vehicle");
+      toast.error(err?.response?.data?.message || err?.response?.data?.detail || "Failed to save vehicle");
     } finally {
       setSaving(false);
     }
@@ -67,7 +100,7 @@ export default function Vehicles() {
     <div data-testid="vehicles-page">
       <div className="flex items-start justify-between gap-3">
         <PageHeader title="Vehicles" subtitle="Vehicle types and pricing" />
-        <button type="button" onClick={() => setShowAdd(v => !v)} className="btn-primary" data-testid="add-vehicle-btn">
+        <button type="button" onClick={() => (showAdd ? closeForm() : openCreate())} className="btn-primary" data-testid="add-vehicle-btn">
           {showAdd ? "Close" : "Add Vehicle"}
         </button>
       </div>
@@ -81,7 +114,8 @@ export default function Vehicles() {
       </div>
 
       {showAdd && (
-        <form onSubmit={createVehicle} className="surface p-4 mb-4" data-testid="vehicle-form">
+        <form onSubmit={saveVehicle} className="surface p-4 mb-4" data-testid="vehicle-form">
+          <h3 className="text-sm font-semibold mb-3">{editingId ? "Edit vehicle" : "Add vehicle"}</h3>
           <div className="grid grid-cols-3 gap-3">
             <Field label="Name" value={form.name} onChange={v => set("name", v)} placeholder="Bike" autoFocus />
             <Field label="Image URL" value={form.image} onChange={v => set("image", v)} placeholder="https://..." />
@@ -101,8 +135,10 @@ export default function Vehicles() {
             <Field label="Max Weight" value={form.max_weight} onChange={v => set("max_weight", v)} type="number" />
           </div>
           <div className="flex gap-2 mt-4 pt-4 border-t border-[var(--border-default)]">
-            <button type="submit" disabled={saving} className="btn-primary">{saving ? "Saving..." : "Save Vehicle"}</button>
-            <button type="button" onClick={() => { setShowAdd(false); setForm(EMPTY_FORM); }} className="btn-secondary">Cancel</button>
+            <button type="submit" disabled={saving} className="btn-primary" data-testid="vehicle-save">
+              {saving ? "Saving..." : editingId ? "Save changes" : "Save vehicle"}
+            </button>
+            <button type="button" onClick={closeForm} className="btn-secondary">Cancel</button>
           </div>
         </form>
       )}
@@ -114,7 +150,11 @@ export default function Vehicles() {
             <div key={v.id} className={`surface border transition ${expanded ? "border-[var(--brand-red)] shadow-sm" : "border-transparent hover:border-[var(--border-default)]"}`} data-testid={`vehicle-row-${v.id}`}>
               <button type="button" onClick={() => setExpandedId(expanded ? null : v.id)} className="w-full text-left p-4">
                 <div className="flex items-center gap-3">
-                  <img src={v.image} alt="" className="w-12 h-12 object-contain rounded-sm bg-[var(--slate-50)]" />
+                  {v.image ? (
+                    <img src={v.image} alt="" className="w-12 h-12 object-contain rounded-sm bg-[var(--slate-50)]" />
+                  ) : (
+                    <div className="w-12 h-12 rounded-sm bg-[var(--slate-50)] flex items-center justify-center text-[10px] text-zinc-400">No img</div>
+                  )}
                   <div className="flex-1">
                     <div className="text-sm font-semibold">{v.name}</div>
                     <div className="text-[11px] text-zinc-500 mono mt-1">₹{v.base_fare} base · ₹{v.per_km}/km · up to {v.max_weight} kg</div>
@@ -130,17 +170,19 @@ export default function Vehicles() {
                       <h3 className="section-title">{v.name}</h3>
                       <p className="section-subtitle">Pricing and capacity details</p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => toggle(v)}
-                      className={`min-w-28 h-9 rounded-full border px-2 text-xs font-semibold transition ${v.active ? "bg-emerald-50 text-emerald-800 border-emerald-300" : "bg-zinc-100 text-zinc-700 border-zinc-300"}`}
-                      data-testid={`toggle-vehicle-${v.id}`}
-                    >
-                      <span className="flex items-center justify-between gap-2">
-                        <span>{v.active ? "Active" : "Inactive"}</span>
-                        <span className={`w-4 h-4 rounded-full ${v.active ? "bg-emerald-600" : "bg-zinc-400"}`} />
-                      </span>
-                    </button>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => openEdit(v)} className="chip" data-testid={`edit-vehicle-${v.id}`}>
+                        <Pencil size={12} /> Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggle(v)}
+                        className={`min-w-28 h-9 rounded-full border px-2 text-xs font-semibold transition ${v.active ? "bg-emerald-50 text-emerald-800 border-emerald-300" : "bg-zinc-100 text-zinc-700 border-zinc-300"}`}
+                        data-testid={`toggle-vehicle-${v.id}`}
+                      >
+                        {v.active ? "Active" : "Inactive"}
+                      </button>
+                    </div>
                   </div>
                   <div className="grid grid-cols-4 gap-3">
                     <Box k="Base Fare" v={`₹${v.base_fare}`} />

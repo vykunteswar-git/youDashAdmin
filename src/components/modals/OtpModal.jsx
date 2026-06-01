@@ -3,7 +3,7 @@ import api from "@/lib/api";
 import { toast } from "sonner";
 import { X, ShieldAlert } from "lucide-react";
 
-export default function OtpModal({ open, onOpenChange, orderId, action, targetStatus, requiresCod = false, onDone }) {
+export default function OtpModal({ open, onOpenChange, orderId, action, targetStatus, requiresCod = false, handoverType = null, onDone }) {
   const [otp, setOtp] = useState("");
   const [codMode, setCodMode] = useState("CASH");
   const [override, setOverride] = useState(false);
@@ -13,10 +13,16 @@ export default function OtpModal({ open, onOpenChange, orderId, action, targetSt
   async function submit() {
     setLoading(true);
     try {
-      const payload = { status: targetStatus, emergency_override: override };
+      const payload = { emergency_override: override };
       if (!override) payload.otp = otp;
       if (requiresCod) payload.cod_mode = codMode;
-      await api.post(`/orders/${orderId}/status`, payload);
+      if (handoverType) {
+        payload.type = handoverType;
+        await api.post(`/orders/${orderId}/hub-handover`, payload);
+      } else {
+        payload.status = targetStatus;
+        await api.post(`/orders/${orderId}/status`, payload);
+      }
       toast.success(`${action} confirmed`);
       onDone?.();
       onOpenChange(false);

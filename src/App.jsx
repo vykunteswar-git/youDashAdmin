@@ -20,10 +20,8 @@ import Promotions from "@/pages/Promotions";
 import Categories from "@/pages/Categories";
 import Commission from "@/pages/Commission";
 import Incentives from "@/pages/Incentives";
-import WalletAdmin from "@/pages/WalletAdmin";
 import Notifications from "@/pages/Notifications";
 import Reports from "@/pages/Reports";
-import AuditLogs from "@/pages/AuditLogs";
 import AppVersion from "@/pages/AppVersion";
 import AppConfig from "@/pages/AppConfig";
 import CMS from "@/pages/CMS";
@@ -62,11 +60,9 @@ export default function App() {
           <Route path="categories" element={<Categories />} />
           <Route path="commission" element={<Commission />} />
           <Route path="incentives" element={<Incentives />} />
-          <Route path="wallet" element={<WalletAdmin />} />
           <Route path="cod-handover" element={<CodHandover />} />
           <Route path="notifications" element={<Notifications />} />
           <Route path="reports" element={<Reports />} />
-          <Route path="audit" element={<AuditLogs />} />
           <Route path="app-version" element={<AppVersion />} />
           <Route path="cms" element={<CMS />} />
         </Route>

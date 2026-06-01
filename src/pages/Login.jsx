@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
-import { Loader2, LockKeyhole } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import { APP_LOGO_URL, APP_NAME } from "@/lib/brand";
 import { toast } from "sonner";
 import { API } from "@/lib/api";
 import { setAuthSession } from "@/lib/auth";
@@ -24,11 +25,12 @@ export default function Login() {
       });
       const body = response.data;
 
-      if (!body?.success || !body?.data?.token) {
+      const token = body?.data?.token ?? body?.data?.accessToken;
+      if (!body?.success || !token) {
         throw new Error(body?.message || "Login failed");
       }
 
-      setAuthSession(body.data);
+      setAuthSession({ ...body.data, token });
       toast.success("Login successful");
       navigate(searchParams.get("next") || "/dashboard", { replace: true });
     } catch (error) {
@@ -42,12 +44,16 @@ export default function Login() {
     <main className="min-h-screen bg-[var(--app-bg)] flex items-center justify-center px-4">
       <section className="w-full max-w-md surface p-8 shadow-sm" data-testid="login-page">
         <div className="flex items-center gap-3 mb-8">
-          <div className="w-10 h-10 rounded-sm bg-[var(--brand-red)] text-white flex items-center justify-center">
-            <LockKeyhole size={20} />
-          </div>
+          <img
+            src={APP_LOGO_URL}
+            alt=""
+            className="w-11 h-11 rounded-sm object-contain"
+            width={44}
+            height={44}
+          />
           <div>
-            <h1 className="text-2xl font-semibold">Admin Login</h1>
-            <p className="text-sm text-[var(--text-secondary)]">Sign in to YouDash Express admin</p>
+            <h1 className="text-2xl font-semibold">{APP_NAME} Admin</h1>
+            <p className="text-sm text-[var(--text-secondary)]">Sign in to YouDash Express</p>
           </div>
         </div>
 

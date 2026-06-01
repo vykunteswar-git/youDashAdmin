@@ -16,15 +16,17 @@ export default defineConfig({
   },
   server: {
     proxy: {
+      // API only under /admin — do NOT proxy /orders (conflicts with React route /orders).
       '/admin': {
         target: 'https://youdashexpress.com',
         changeOrigin: true,
         secure: true,
       },
-      '/orders': {
+      '/ws': {
         target: 'https://youdashexpress.com',
         changeOrigin: true,
         secure: true,
+        ws: true,
       },
     },
   },
