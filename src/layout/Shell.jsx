@@ -6,7 +6,8 @@ import {
   Image, Bike, Banknote, Route, LogOut
 } from "lucide-react";
 import { clearAuthSession, getAuthUser } from "@/lib/auth";
-import { APP_LOGO_URL, APP_NAME, APP_TAGLINE } from "@/lib/brand";
+import BrandLogo from "@/components/BrandLogo";
+import "@/components/BrandLogo.css";
 
 const NAV = [
   { group: "Operations", items: [
@@ -60,19 +61,7 @@ export default function Shell() {
     <div className="flex min-h-screen" data-testid="shell-root">
       <aside className="sidebar fixed left-0 top-0 bottom-0 w-[260px] overflow-y-auto flex flex-col" data-testid="sidebar">
         <div className="px-4 pt-5 pb-4 border-b border-zinc-800">
-          <div className="flex items-center gap-2">
-            <img
-              src={APP_LOGO_URL}
-              alt=""
-              className="w-8 h-8 rounded-sm object-contain bg-white/10 p-0.5"
-              width={32}
-              height={32}
-            />
-            <div>
-              <div className="text-sm font-semibold tracking-tight" style={{ fontFamily: "Outfit" }}>{APP_NAME}</div>
-              <div className="text-[10px] text-zinc-500 tracking-widest uppercase">{APP_TAGLINE}</div>
-            </div>
-          </div>
+          <BrandLogo variant="light" compact />
         </div>
         <nav className="flex-1 px-3 py-3">
           {NAV.map((sec) => (

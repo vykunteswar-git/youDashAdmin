@@ -2,9 +2,9 @@ import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "@/index.css";
 import App from "@/App.jsx";
-import { APP_NAME } from "@/lib/brand";
+import { APP_PRODUCT_NAME } from "@/lib/brand";
 
-document.title = `${APP_NAME} Admin`;
+document.title = `${APP_PRODUCT_NAME} Admin`;
 
 const queryClient = new QueryClient({
   defaultOptions: {
