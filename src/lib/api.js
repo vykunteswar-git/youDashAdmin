@@ -128,23 +128,37 @@ function rewriteAdminRequest(config) {
     config.url = "/admin/users";
     return config;
   }
+  if (url.match(/^\/users\/\d+\/orders$/)) {
+    config.adapter = userOrdersAdapter;
+    return config;
+  }
   if (url.match(/^\/users\/\d+$/) && config.method === "delete") {
     config.url = url.replace("/users", "/admin/users") + "/hard-delete";
     return config;
   }
-  if (url.match(/^\/users\/\d+$/)) {
-    config.adapter = userDetailAdapter;
+  if (url.match(/^\/users\/\d+$/) && (config.method === "put" || config.method === "patch")) {
+    config.url = url.replace("/users", "/admin/users");
+    if (config.method === "patch") config.method = "put";
+    config.data = userUpdatePayload(config.data);
+    return config;
+  }
+  if (url.match(/^\/users\/\d+$/) && config.method === "get") {
+    config.url = url.replace("/users", "/admin/users");
     return config;
   }
   if (url === "/vehicles") {
     config.url = "/admin/vehicles";
-    config.data = vehiclePayload(config.data);
+    if (config.method === "post") {
+      config.data = adminMultipartFormData(vehicleMultipartPayload(config.data));
+    }
     return config;
   }
   if (url.match(/^\/vehicles\/\d+$/)) {
     config.url = url.replace("/vehicles", "/admin/vehicles");
     if (config.method === "patch") config.method = "put";
-    config.data = vehiclePayload(config.data);
+    if (config.method === "put") {
+      config.data = adminMultipartFormData(vehicleMultipartPayload(config.data));
+    }
     return config;
   }
   if (url === "/zones" || url.match(/^\/zones\/\d+$/)) {
@@ -191,7 +205,7 @@ function rewriteAdminRequest(config) {
     config.url = url.replace("/banners", "/admin/banners");
     if (config.method === "patch") config.method = "put";
     if (config.method === "post" || config.method === "put") {
-      config.data = bannerFormData(bannerPayload(config.data));
+      config.data = adminMultipartFormData(bannerMultipartPayload(config.data));
     }
     return config;
   }
@@ -320,6 +334,11 @@ function normalizeAdminResponse(response) {
   else if (originalUrl.match(/^\/orders\/\d+\/activity$/)) response.data = { activity: normalizeActivity(data) };
   else if (originalUrl === "/riders/eligible") response.data = { riders: (data || []).map(normalizeRiderUi) };
   else if (originalUrl === "/users") response.data = { users: (data || []).map(normalizeUser) };
+  else if (originalUrl.match(/^\/users\/\d+$/)) response.data = normalizeUser(data || {});
+  else if (originalUrl.match(/^\/users\/\d+\/orders$/)) {
+    const orders = Array.isArray(data?.orders) ? data.orders : Array.isArray(data) ? data : [];
+    response.data = { orders };
+  }
   else if (originalUrl === "/vehicles") response.data = { vehicles: (data || []).map(normalizeVehicle) };
   else if (originalUrl === "/zones") response.data = { zones: (data || []).map(normalizeZone) };
   else if (originalUrl === "/hubs") response.data = { hubs: (data || []).map(normalizeHubForUi) };
@@ -441,16 +460,18 @@ function numberOrUndefined(value) {
   return Number.isFinite(n) ? n : undefined;
 }
 
-function vehiclePayload(data = {}) {
-  if (!data) return data;
+function vehicleMultipartPayload(data = {}) {
+  if (!data) return {};
+  const imageUrl = data.image || data.imageUrl;
   return {
     name: data.name,
     pricePerKm: numberOrUndefined(data.per_km ?? data.pricePerKm),
     baseFare: numberOrUndefined(data.base_fare ?? data.baseFare),
     minimumKm: numberOrUndefined(data.min_distance ?? data.minimumKm),
     maxWeight: numberOrUndefined(data.max_weight ?? data.maxWeight),
-    imageUrl: data.image || data.imageUrl,
+    imageUrl: imageUrl || undefined,
     isActive: data.active ?? data.isActive,
+    imageFile: data.imageFile,
   };
 }
 
@@ -567,17 +588,19 @@ function couponPayload(data = {}) {
   };
 }
 
-function bannerPayload(data = {}) {
-  if (!data) return data;
+function bannerMultipartPayload(data = {}) {
+  if (!data) return {};
+  const imageUrl = data.image || data.image_url || data.imageUrl;
   return {
     title: data.title,
     subtitle: data.subtitle,
-    imageUrl: data.image || data.image_url || data.imageUrl,
+    imageUrl: imageUrl || undefined,
     redirectUrl: data.redirect_url || data.redirectUrl,
     sortOrder: numberOrUndefined(data.sort_order ?? data.sortOrder),
     isActive: data.status ? data.status === "ACTIVE" : data.active ?? data.isActive,
     startsAt: data.start_date || data.startsAt,
     endsAt: data.end_date || data.endsAt,
+    imageFile: data.imageFile,
   };
 }
 
@@ -619,12 +642,17 @@ function normalizeNotificationLogs(data) {
   };
 }
 
-function bannerFormData(payload = {}) {
+function adminMultipartFormData(payload = {}) {
+  if (payload instanceof FormData) return payload;
   const fd = new FormData();
   Object.entries(payload).forEach(([key, value]) => {
     if (value === undefined || value === null) return;
     if (key === "imageFile") {
       if (value instanceof File) fd.append("imageFile", value);
+      return;
+    }
+    if (typeof value === "boolean") {
+      fd.append(key, String(value));
       return;
     }
     fd.append(key, String(value));
@@ -831,14 +859,30 @@ async function riderDetailAdapter(config) {
   return { config, data: riderUi, status: 200, statusText: "OK", headers: {}, request: null };
 }
 
-async function userDetailAdapter(config) {
+async function userOrdersAdapter(config) {
   const originalUrl = config.adminUiUrl || config.url || "";
-  const userId = Number(originalUrl.match(/^\/users\/(\d+)$/)?.[1]);
+  const userId = Number(originalUrl.match(/^\/users\/(\d+)\/orders$/)?.[1]);
   const instance = axios.create({ baseURL: API, timeout: config.timeout });
   const headers = adapterHeaders(config);
-  const ordersResponse = await safeGet(instance, `/orders/user/${userId}`, headers, { data: { data: [] } });
-  const orders = (ordersResponse.data?.data || []).map(normalizeOrder);
+  const ordersResponse = await safeGet(
+    instance,
+    `/admin/orders/user/${userId}`,
+    headers,
+    { data: { data: [] } },
+  );
+  const raw = ordersResponse.data?.data ?? ordersResponse.data ?? [];
+  const orders = (Array.isArray(raw) ? raw : []).map(normalizeOrder);
   return { config, data: { orders }, status: 200, statusText: "OK", headers: {}, request: null };
+}
+
+function userUpdatePayload(data = {}) {
+  if (!data) return data;
+  return {
+    firstName: data.first_name ?? data.firstName,
+    lastName: data.last_name ?? data.lastName,
+    phoneNumber: data.phone ?? data.phoneNumber,
+    active: data.active ?? data.isActive,
+  };
 }
 
 async function transactionsAdapter(config) {
@@ -1234,15 +1278,32 @@ function normalizeRiderPerformance(orders, rider = {}) {
   };
 }
 
+function userDisplayStatus(user = {}) {
+  const active = user.active ?? user.isActive;
+  const profileCompleted = user.profileCompleted ?? user.profile_completed;
+  if (active === false) return "INACTIVE";
+  if (active && profileCompleted) return "ACTIVE";
+  if (active && !profileCompleted) return "PENDING";
+  return active ? "ACTIVE" : "INACTIVE";
+}
+
 function normalizeUser(user = {}) {
-  const name = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.name || "User";
+  const firstName = String(user.firstName ?? user.first_name ?? "").trim();
+  const lastName = String(user.lastName ?? user.last_name ?? "").trim();
+  const name = [firstName, lastName].filter(Boolean).join(" ") || user.name || "User";
+  const status = userDisplayStatus(user);
   return {
     ...user,
+    first_name: firstName,
+    last_name: lastName,
     name,
+    email: user.email ?? "",
     phone: user.phoneNumber || user.phone || "—",
     city: user.city || "—",
     total_orders: user.totalOrders ?? user.total_orders ?? 0,
-    status: user.active === false ? "INACTIVE" : "ACTIVE",
+    status,
+    active: status !== "INACTIVE",
+    profile_completed: Boolean(user.profileCompleted ?? user.profile_completed),
     wallet_balance: user.walletBalance ?? user.wallet_balance ?? 0,
   };
 }

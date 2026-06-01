@@ -1,22 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="YouDash">
   <defs>
     <linearGradient id="ydTop" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FF8C1A"/>
-      <stop offset="100%" stop-color="#FF6B00"/>
+      <stop offset="0%" stop-color="#EF4444"/>
+      <stop offset="100%" stop-color="#DC2626"/>
     </linearGradient>
     <linearGradient id="ydLeft" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#FF6B00"/>
-      <stop offset="100%" stop-color="#E85D00"/>
+      <stop offset="0%" stop-color="#EF4444"/>
+      <stop offset="100%" stop-color="#B91C1C"/>
     </linearGradient>
     <linearGradient id="ydRight" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#FF7A1A"/>
-      <stop offset="100%" stop-color="#CC5200"/>
+      <stop offset="0%" stop-color="#F87171"/>
+      <stop offset="100%" stop-color="#991B1B"/>
     </linearGradient>
   </defs>
   <path d="M24 6 L40 16 L40 34 L24 44 L8 34 L8 16 Z" fill="url(#ydLeft)"/>
   <path d="M24 6 L40 16 L24 26 L8 16 Z" fill="url(#ydTop)"/>
   <path d="M24 26 L40 16 L40 34 L24 44 Z" fill="url(#ydRight)"/>
-  <path d="M24 26 L8 16 L8 34 L24 44 Z" fill="#FF6B00"/>
-  <path d="M17 19 L24 23 L31 19 L24 15 Z" fill="#fff" opacity="0.4"/>
-  <path d="M24 15 L31 19 L31 22 L24 26 L17 22 L17 19 Z" fill="#fff" opacity="0.2"/>
+  <path d="M24 26 L8 16 L8 34 L24 44 Z" fill="#DC2626"/>
+  <path d="M17 19 L24 23 L31 19 L24 15 Z" fill="#fff" opacity="0.45"/>
+  <path d="M24 15 L31 19 L31 22 L24 26 L17 22 L17 19 Z" fill="#fff" opacity="0.22"/>
 </svg>

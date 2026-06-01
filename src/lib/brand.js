@@ -5,5 +5,8 @@ export const APP_TAGLINE = "Admin Console";
 export const APP_LOGO_URL = "/youdash-logo.svg";
 export const LOGIN_HERO_BG = "/login-hero-bg.png";
 
-export const BRAND_ORANGE = "#FF6B00";
-export const BRAND_ORANGE_SECONDARY = "#FF8C1A";
+export const BRAND_PRIMARY = "#DC2626";
+export const BRAND_SECONDARY = "#EF4444";
+export const BRAND_TEXT = "#111827";
+export const BRAND_SURFACE = "#FFFFFF";
+export const BRAND_MUTED_BG = "#F8FAFC";

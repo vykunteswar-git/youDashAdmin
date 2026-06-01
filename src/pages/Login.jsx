@@ -6,7 +6,7 @@ import {
   Lock,
   Eye,
   EyeOff,
-  LogIn,
+  Package,
   MapPin,
   Truck,
   BarChart3,
@@ -24,24 +24,34 @@ const HERO_FEATURES = [
   {
     icon: MapPin,
     title: "Real-Time Tracking",
-    sub: "Track every parcel in real time",
+    sub: "Monitor every shipment live",
   },
   {
     icon: Truck,
     title: "Fleet Management",
-    sub: "Monitor drivers and vehicles easily",
+    sub: "Manage drivers and delivery vehicles",
   },
   {
     icon: BarChart3,
-    title: "Analytics Dashboard",
-    sub: "Insights that help you grow",
+    title: "Operations Analytics",
+    sub: "Delivery insights and performance metrics",
   },
 ];
 
 function HeroRouteGraphic() {
   return (
     <div className="login-hero-route" aria-hidden>
-      <svg viewBox="0 0 200 160" xmlns="http://www.w3.org/2000/svg">
+      <svg className="login-hero-route__svg login-hero-route__svg--back" viewBox="0 0 240 200" xmlns="http://www.w3.org/2000/svg">
+        <path
+          className="login-route-path login-route-path--dim"
+          d="M12 160 Q 80 60, 140 100 T 228 48"
+        />
+        <g className="login-route-pin login-route-pin--dim">
+          <circle cx="48" cy="132" r="9" />
+          <circle cx="48" cy="130" r="3.5" fill="#fff" />
+        </g>
+      </svg>
+      <svg className="login-hero-route__svg login-hero-route__svg--front" viewBox="0 0 200 160" xmlns="http://www.w3.org/2000/svg">
         <path
           className="login-route-path"
           d="M20 120 Q 60 40, 100 70 T 180 30"
@@ -49,6 +59,10 @@ function HeroRouteGraphic() {
         <g className="login-route-pin">
           <circle cx="168" cy="38" r="11" />
           <circle cx="168" cy="36" r="4" fill="#fff" />
+        </g>
+        <g className="login-route-pin login-route-pin--b">
+          <circle cx="92" cy="72" r="8" />
+          <circle cx="92" cy="70.5" r="3" fill="#fff" />
         </g>
       </svg>
     </div>
@@ -146,11 +160,11 @@ export default function Login() {
 
           <div className="login-hero-copy">
             <h1>
-              <span className="login-hero-line">Smart Logistics.</span>
-              <span className="login-hero-line login-hero-accent">Faster Deliveries.</span>
+              <span className="login-hero-line">Deliver Every Parcel</span>
+              <span className="login-hero-line login-hero-accent">With Confidence.</span>
             </h1>
             <p>
-              Manage parcels, deliveries, drivers and operations from a unified platform.
+              Manage deliveries, drivers, parcels and logistics operations from a single platform.
             </p>
           </div>
 
@@ -174,12 +188,8 @@ export default function Login() {
 
       <section className="login-panel">
         <div className="login-card">
-          <div className="login-card-badge" aria-hidden>
-            <Lock size={24} strokeWidth={2} />
-          </div>
-
           <header className="login-card-header">
-            <h2>Welcome Back!</h2>
+            <h2>Welcome Back</h2>
             <p>Sign in to your YouDash Express admin account</p>
           </header>
 
@@ -261,7 +271,7 @@ export default function Login() {
                   onChange={(e) => setRememberMe(e.target.checked)}
                   data-testid="login-remember-me"
                 />
-                Remember me
+                Remember Me
               </label>
               <a
                 href="#forgot"
@@ -269,7 +279,7 @@ export default function Login() {
                 onClick={handleForgotPassword}
                 data-testid="login-forgot-password"
               >
-                Forgot password?
+                Forgot Password
               </a>
             </div>
 
@@ -282,7 +292,7 @@ export default function Login() {
               {loading ? (
                 <Loader2 size={18} className="login-spinner" />
               ) : (
-                <LogIn size={18} />
+                <Package size={18} strokeWidth={2.25} />
               )}
               {loading ? "Signing in…" : "Sign In"}
             </button>

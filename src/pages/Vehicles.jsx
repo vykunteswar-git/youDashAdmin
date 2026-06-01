@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
+import ImageUploadField from "@/components/ImageUploadField";
 import { toast } from "sonner";
 import { Pencil, X } from "lucide-react";
 
 const EMPTY_FORM = {
   name: "",
-  image: "",
   base_fare: "",
   per_km: "",
   min_distance: "",
@@ -21,6 +21,8 @@ export default function Vehicles() {
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [imageFile, setImageFile] = useState(null);
+  const [existingImageUrl, setExistingImageUrl] = useState("");
   const [saving, setSaving] = useState(false);
 
   async function load() {
@@ -39,14 +41,17 @@ export default function Vehicles() {
   function openCreate() {
     setEditingId(null);
     setForm(EMPTY_FORM);
+    setImageFile(null);
+    setExistingImageUrl("");
     setShowAdd(true);
   }
 
   function openEdit(v) {
     setEditingId(v.id);
+    setImageFile(null);
+    setExistingImageUrl(v.image || "");
     setForm({
       name: v.name || "",
-      image: v.image || "",
       base_fare: String(v.base_fare ?? ""),
       per_km: String(v.per_km ?? ""),
       min_distance: String(v.min_distance ?? ""),
@@ -60,6 +65,8 @@ export default function Vehicles() {
     setShowAdd(false);
     setEditingId(null);
     setForm(EMPTY_FORM);
+    setImageFile(null);
+    setExistingImageUrl("");
   }
 
   async function toggle(v) {
@@ -71,9 +78,13 @@ export default function Vehicles() {
   async function saveVehicle(e) {
     e.preventDefault();
     if (!form.name.trim()) return toast.error("Vehicle name is required");
+    if (!editingId && !imageFile) return toast.error("Vehicle image is required");
+    if (editingId && !imageFile && !existingImageUrl) return toast.error("Vehicle image is required");
     setSaving(true);
     const payload = {
       ...form,
+      image: existingImageUrl || undefined,
+      imageFile: imageFile || undefined,
       base_fare: Number(form.base_fare || 0),
       per_km: Number(form.per_km || 0),
       min_distance: Number(form.min_distance || 0),
@@ -118,7 +129,14 @@ export default function Vehicles() {
           <h3 className="text-sm font-semibold mb-3">{editingId ? "Edit vehicle" : "Add vehicle"}</h3>
           <div className="grid grid-cols-3 gap-3">
             <Field label="Name" value={form.name} onChange={v => set("name", v)} placeholder="Bike" autoFocus />
-            <Field label="Image URL" value={form.image} onChange={v => set("image", v)} placeholder="https://..." />
+            <ImageUploadField
+              label="Vehicle image"
+              file={imageFile}
+              onFileChange={setImageFile}
+              existingUrl={existingImageUrl}
+              required={!editingId || !existingImageUrl}
+              testId="vehicle-image-upload"
+            />
             <div>
               <label className="label">Status</label>
               <button

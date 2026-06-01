@@ -1,18 +1,19 @@
-/* YouDash Express — enterprise login (custom CSS, project fonts & tokens) */
+/* YouDash Express — enterprise login (custom CSS, no Tailwind) */
 
 .login-page {
-  --yd-primary: #ff6b00;
-  --yd-secondary: #ff8c1a;
-  --yd-primary-hover: #e85f00;
+  --yd-primary: #dc2626;
+  --yd-secondary: #ef4444;
+  --yd-primary-hover: #b91c1c;
   --yd-text: #111827;
   --yd-muted: #6b7280;
   --yd-border: #e5e7eb;
   --yd-surface: #ffffff;
-  --yd-orange-tint: #fff7ed;
+  --yd-panel-bg: #f8fafc;
+  --yd-red-tint: #fef2f2;
   min-height: 100vh;
   display: flex;
   flex-wrap: nowrap;
-  background: var(--yd-surface);
+  background: var(--yd-panel-bg);
   animation: loginFadeIn 0.5s ease-out both;
 }
 
@@ -30,7 +31,7 @@
   position: relative;
   flex: 0 0 60%;
   min-height: 100vh;
-  background-color: #1a1208;
+  background-color: #111827;
   background-image: url("/login-hero-bg.png");
   background-repeat: no-repeat;
   background-size: cover;
@@ -42,10 +43,10 @@
   position: absolute;
   inset: 0;
   background: linear-gradient(
-    115deg,
-    rgba(17, 24, 39, 0.82) 0%,
-    rgba(17, 24, 39, 0.55) 45%,
-    rgba(255, 107, 0, 0.22) 100%
+    118deg,
+    rgba(17, 24, 39, 0.88) 0%,
+    rgba(17, 24, 39, 0.62) 42%,
+    rgba(220, 38, 38, 0.28) 100%
   );
   pointer-events: none;
 }
@@ -54,35 +55,51 @@
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, transparent 60%, rgba(17, 24, 39, 0.5) 100%);
+  background: linear-gradient(180deg, transparent 55%, rgba(17, 24, 39, 0.55) 100%);
   pointer-events: none;
 }
 
-/* Animated route + pin decoration */
+/* Route lines + location pins */
 .login-hero-route {
   position: absolute;
-  right: 8%;
-  top: 22%;
-  width: min(220px, 28vw);
-  height: min(180px, 24vh);
+  inset: 0;
   z-index: 1;
   pointer-events: none;
-  opacity: 0.85;
 }
 
-.login-hero-route svg {
-  width: 100%;
-  height: 100%;
+.login-hero-route__svg {
+  position: absolute;
+  height: auto;
+}
+
+.login-hero-route__svg--back {
+  left: 4%;
+  bottom: 18%;
+  width: min(280px, 36vw);
+  opacity: 0.45;
+}
+
+.login-hero-route__svg--front {
+  right: 6%;
+  top: 20%;
+  width: min(220px, 28vw);
+  opacity: 0.9;
 }
 
 .login-route-path {
   fill: none;
-  stroke: rgba(255, 140, 26, 0.9);
+  stroke: rgba(239, 68, 68, 0.95);
   stroke-width: 2.5;
   stroke-linecap: round;
   stroke-dasharray: 8 10;
   animation: loginRouteDash 2.8s linear infinite;
-  filter: drop-shadow(0 0 6px rgba(255, 107, 0, 0.6));
+  filter: drop-shadow(0 0 8px rgba(220, 38, 38, 0.45));
+}
+
+.login-route-path--dim {
+  stroke: rgba(239, 68, 68, 0.45);
+  stroke-width: 2;
+  animation-duration: 3.6s;
 }
 
 .login-route-pin {
@@ -90,10 +107,24 @@
   transform-origin: 168px 38px;
 }
 
+.login-route-pin--b {
+  transform-origin: 92px 72px;
+  animation-delay: 0.6s;
+}
+
+.login-route-pin--dim {
+  transform-origin: 48px 132px;
+  animation-delay: 1.2s;
+}
+
 .login-route-pin circle:first-child {
-  fill: #ff6b00;
+  fill: #dc2626;
   stroke: #fff;
   stroke-width: 2;
+}
+
+.login-route-pin--dim circle:first-child {
+  fill: #ef4444;
 }
 
 @keyframes loginRouteDash {
@@ -110,7 +141,7 @@
   }
   50% {
     transform: scale(1.08);
-    opacity: 0.9;
+    opacity: 0.88;
   }
 }
 
@@ -120,7 +151,7 @@
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  padding: 32px 40px 28px;
+  padding: 32px 40px 52px;
 }
 
 .login-hero-brand {
@@ -132,15 +163,15 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  max-width: 520px;
-  padding: 20px 0;
+  max-width: 540px;
+  padding: 24px 0;
 }
 
 .login-hero-copy h1 {
   font-family: "Outfit", sans-serif;
-  font-size: clamp(2rem, 3.2vw, 2.65rem);
+  font-size: clamp(2rem, 3.2vw, 2.75rem);
   font-weight: 700;
-  line-height: 1.15;
+  line-height: 1.12;
   color: #fff;
   margin: 0 0 16px;
   letter-spacing: -0.03em;
@@ -159,9 +190,9 @@
 .login-hero-copy > p {
   font-size: 15px;
   line-height: 1.65;
-  color: rgba(255, 255, 255, 0.82);
+  color: rgba(255, 255, 255, 0.84);
   margin: 0;
-  max-width: 440px;
+  max-width: 460px;
 }
 
 .login-hero-features {
@@ -169,28 +200,28 @@
   grid-template-columns: repeat(3, 1fr);
   gap: 14px;
   margin-top: auto;
-  padding-top: 24px;
+  padding-top: 20px;
 }
 
 .login-feature-card {
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.65);
   border-radius: 14px;
   padding: 16px 14px;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.2);
   transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
 
 .login-feature-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.24);
 }
 
 .login-feature-card__icon {
   width: 42px;
   height: 42px;
   border-radius: 10px;
-  background: linear-gradient(135deg, var(--yd-orange-tint), #ffedd5);
+  background: linear-gradient(135deg, #fef2f2, #fee2e2);
   color: var(--yd-primary);
   display: flex;
   align-items: center;
@@ -214,10 +245,13 @@
 }
 
 .login-hero-footer {
-  flex-shrink: 0;
+  position: absolute;
+  left: 40px;
+  bottom: 28px;
+  z-index: 3;
   font-size: 11px;
   color: rgba(255, 255, 255, 0.55);
-  margin-top: 20px;
+  margin: 0;
   padding: 0;
   text-align: left;
 }
@@ -230,48 +264,40 @@
   align-items: center;
   justify-content: center;
   padding: 48px 40px;
-  background: var(--yd-surface);
+  background: var(--yd-panel-bg);
 }
 
 .login-card {
   width: 100%;
-  max-width: 400px;
+  max-width: 420px;
   background: var(--yd-surface);
   border: 1px solid var(--yd-border);
-  border-radius: 20px;
-  padding: 44px 40px 36px;
-  box-shadow: 0 12px 40px rgba(17, 24, 39, 0.08), 0 2px 8px rgba(17, 24, 39, 0.04);
+  border-radius: 24px;
+  padding: 48px 44px 40px;
+  box-shadow:
+    0 4px 6px rgba(17, 24, 39, 0.04),
+    0 20px 48px rgba(17, 24, 39, 0.1);
   transition: box-shadow 0.3s ease, transform 0.3s ease;
 }
 
 .login-card:hover {
-  box-shadow: 0 20px 50px rgba(17, 24, 39, 0.1);
-}
-
-.login-card-badge {
-  width: 58px;
-  height: 58px;
-  border-radius: 50%;
-  background: var(--yd-orange-tint);
-  border: 2px solid #fed7aa;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--yd-primary);
-  margin: 0 auto 22px;
+  box-shadow:
+    0 8px 12px rgba(17, 24, 39, 0.05),
+    0 28px 56px rgba(17, 24, 39, 0.12);
 }
 
 .login-card-header {
   text-align: center;
-  margin-bottom: 30px;
+  margin-bottom: 32px;
 }
 
 .login-card-header h2 {
   font-family: "Outfit", sans-serif;
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 700;
   color: var(--yd-text);
   margin: 0 0 8px;
+  letter-spacing: -0.02em;
 }
 
 .login-card-header p {
@@ -341,7 +367,7 @@
 .login-input:focus {
   outline: none;
   border-color: var(--yd-secondary);
-  box-shadow: 0 0 0 3px rgba(255, 107, 0, 0.15);
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
 }
 
 .login-input.login-input-error {
@@ -372,7 +398,7 @@
 
 .login-toggle-password:hover {
   color: var(--yd-primary);
-  background: var(--yd-orange-tint);
+  background: var(--yd-red-tint);
 }
 
 .login-field-error {
@@ -420,7 +446,7 @@
 
 .login-btn-signin {
   width: 100%;
-  height: 50px;
+  height: 52px;
   margin-top: 6px;
   border: none;
   border-radius: 12px;
@@ -432,16 +458,16 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 10px;
   cursor: pointer;
-  box-shadow: 0 6px 20px rgba(255, 107, 0, 0.35);
+  box-shadow: 0 8px 24px rgba(220, 38, 38, 0.35);
   transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
 }
 
 .login-btn-signin:hover:not(:disabled) {
-  filter: brightness(1.05);
-  box-shadow: 0 10px 28px rgba(255, 107, 0, 0.45);
-  transform: translateY(-1px);
+  filter: brightness(1.04);
+  box-shadow: 0 12px 32px rgba(220, 38, 38, 0.42);
+  transform: translateY(-2px);
 }
 
 .login-btn-signin:active:not(:disabled) {
@@ -475,6 +501,10 @@
   .login-hero-features {
     grid-template-columns: 1fr;
   }
+  .login-hero-footer {
+    left: 28px;
+    bottom: 20px;
+  }
 }
 
 /* Mobile */
@@ -492,13 +522,18 @@
 
   .login-hero-inner {
     min-height: 420px;
-    padding: 24px 20px 20px;
+    padding: 24px 20px 56px;
   }
 
-  .login-hero-route {
-    right: 4%;
-    top: 12%;
-    opacity: 0.6;
+  .login-hero-route__svg--front {
+    right: 2%;
+    top: 10%;
+    opacity: 0.65;
+  }
+
+  .login-hero-footer {
+    left: 20px;
+    bottom: 16px;
   }
 
   .login-panel {
@@ -509,7 +544,7 @@
   }
 
   .login-card {
-    padding: 32px 24px 28px;
-    border-radius: 16px;
+    padding: 36px 28px 32px;
+    border-radius: 20px;
   }
 }

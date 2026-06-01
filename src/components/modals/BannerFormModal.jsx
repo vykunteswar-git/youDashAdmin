@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
+import ImageUploadField from "@/components/ImageUploadField";
 import { toast } from "sonner";
 import { X, Save } from "lucide-react";
 
 const empty = {
   title: "",
-  image: "",
   redirect_url: "",
   start_date: new Date().toISOString().slice(0, 10),
   end_date: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10),
@@ -15,6 +15,8 @@ const empty = {
 export default function BannerFormModal({ banner, onClose, onSaved }) {
   const isEdit = !!banner;
   const [form, setForm] = useState(empty);
+  const [imageFile, setImageFile] = useState(null);
+  const [existingImageUrl, setExistingImageUrl] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -26,8 +28,12 @@ export default function BannerFormModal({ banner, onClose, onSaved }) {
         end_date: (banner.end_date || "").slice(0, 10),
         redirect_url: banner.redirect_url || "",
       });
+      setExistingImageUrl(banner.image || "");
+      setImageFile(null);
     } else {
       setForm(empty);
+      setExistingImageUrl("");
+      setImageFile(null);
     }
   }, [banner]);
 
@@ -35,12 +41,21 @@ export default function BannerFormModal({ banner, onClose, onSaved }) {
 
   async function submit(e) {
     e.preventDefault();
-    if (!form.title.trim() || !form.image.trim()) {
-      toast.error("Title and image URL are required");
+    if (!form.title.trim()) {
+      toast.error("Title is required");
+      return;
+    }
+    if (!imageFile && !existingImageUrl) {
+      toast.error("Banner image is required");
       return;
     }
     setSaving(true);
-    const payload = { ...form, redirect_url: form.redirect_url.trim() || null };
+    const payload = {
+      ...form,
+      image: existingImageUrl || undefined,
+      imageFile: imageFile || undefined,
+      redirect_url: form.redirect_url.trim() || null,
+    };
     try {
       if (isEdit) {
         await api.patch(`/banners/${banner.id}`, payload);
@@ -51,7 +66,7 @@ export default function BannerFormModal({ banner, onClose, onSaved }) {
       }
       onSaved?.();
     } catch (err) {
-      toast.error(err?.response?.data?.detail || "Save failed");
+      toast.error(err?.response?.data?.message || err?.response?.data?.detail || "Save failed");
     } finally {
       setSaving(false);
     }
@@ -74,15 +89,14 @@ export default function BannerFormModal({ banner, onClose, onSaved }) {
             <input className="input" value={form.title} onChange={e => set("title", e.target.value)} placeholder="Monsoon Sale!" data-testid="banner-title-input" />
           </div>
 
-          <div>
-            <label className="label">Image URL</label>
-            <input className="input" value={form.image} onChange={e => set("image", e.target.value)} placeholder="https://images.unsplash.com/photo-..." data-testid="banner-image-input" />
-            {form.image && (
-              <div className="mt-2 border border-[var(--border-default)] rounded overflow-hidden">
-                <img src={form.image} alt="preview" className="w-full h-28 object-cover" onError={(e) => { e.target.style.display = "none"; }} />
-              </div>
-            )}
-          </div>
+          <ImageUploadField
+            label="Banner image"
+            file={imageFile}
+            onFileChange={setImageFile}
+            existingUrl={existingImageUrl}
+            required={!isEdit || !existingImageUrl}
+            testId="banner-image-upload"
+          />
 
           <div>
             <label className="label">Redirect URL (optional)</label>

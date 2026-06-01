@@ -60,8 +60,8 @@ export default function Shell() {
   return (
     <div className="flex min-h-screen" data-testid="shell-root">
       <aside className="sidebar fixed left-0 top-0 bottom-0 w-[260px] overflow-y-auto flex flex-col" data-testid="sidebar">
-        <div className="px-4 pt-5 pb-4 border-b border-zinc-800">
-          <BrandLogo variant="light" compact />
+        <div className="px-4 pt-5 pb-4 border-b border-[var(--sidebar-border)]">
+          <BrandLogo variant="sidebar" />
         </div>
         <nav className="flex-1 px-3 py-3">
           {NAV.map((sec) => (
@@ -78,9 +78,9 @@ export default function Shell() {
           ))}
           <div className="h-6" />
         </nav>
-        <div className="px-4 py-3 border-t border-zinc-800 text-[11px] text-zinc-500">
+        <div className="sidebar-footer px-4 py-3 border-t border-[var(--sidebar-border)]">
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <div className="sidebar-live-dot w-2 h-2 rounded-full animate-pulse" />
             <span>Live · India ops</span>
           </div>
         </div>

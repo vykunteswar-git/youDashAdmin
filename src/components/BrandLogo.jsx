@@ -2,8 +2,8 @@ import { APP_LOGO_URL } from "@/lib/brand";
 import "./BrandLogo.css";
 
 /**
- * Shared YouDash Express mark (orange cube + wordmark).
- * variant: hero (white on photo), light (sidebar), dark (light panels)
+ * Shared YouDash Express mark (red cube + wordmark).
+ * variant: hero (login overlay), sidebar (dark nav), dark (light panels)
  */
 export default function BrandLogo({ variant = "dark", compact = false, className = "" }) {
   return (
@@ -15,7 +15,11 @@ export default function BrandLogo({ variant = "dark", compact = false, className
         <span className="brand-logo__name">
           <strong>YouDash</strong> Express
         </span>
-        {!compact && <span className="brand-logo__tag">Admin Console</span>}
+        {!compact && (
+          <span className="brand-logo__tag">
+            {variant === "hero" ? "ADMIN CONSOLE" : "Admin Console"}
+          </span>
+        )}
       </div>
     </div>
   );
