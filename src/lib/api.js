@@ -2,7 +2,11 @@ import axios from "axios";
 import { clearAuthSession, withAuthHeaders } from "@/lib/auth";
 import { normalizeRiderUi, walletFromRider, mapRecentOrders } from "@/lib/riderUtils";
 
-export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "";
+/** Spring API origin. Dev uses Vite proxy (empty base). Prod must not use admin subdomain. */
+const configuredBackend = String(import.meta.env.VITE_BACKEND_URL || "").trim();
+export const BACKEND_URL =
+  configuredBackend || (import.meta.env.DEV ? "" : "https://youdashexpress.com");
+/** Axios baseURL: same-origin in dev (proxied), absolute API host in production. */
 export const API = import.meta.env.DEV ? "" : BACKEND_URL;
 
 const client = axios.create({ baseURL: API, timeout: 30000 });
@@ -46,6 +50,10 @@ export default client;
 function rewriteAdminRequest(config) {
   const url = config.url || "";
   config.adminUiUrl = url;
+
+  if (url === "/admin/login") {
+    return config;
+  }
 
   if (url === "/dashboard/summary") {
     config.adapter = dashboardAdapter;
@@ -295,6 +303,12 @@ function rewriteAdminRequest(config) {
 function normalizeAdminResponse(response) {
   const originalUrl = response.config?.adminUiUrl || response.config?.url || "";
   const payload = response.data;
+
+  // Keep ApiResponse wrapper for auth (token + success flag).
+  if (originalUrl === "/admin/login") {
+    return response;
+  }
+
   const data = payload && Object.prototype.hasOwnProperty.call(payload, "data") ? payload.data : payload;
 
   if (originalUrl === "/dashboard/summary") response.data = normalizeDashboard(data);

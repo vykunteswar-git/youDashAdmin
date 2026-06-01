@@ -1,10 +1,9 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import axios from "axios";
 import { Loader2 } from "lucide-react";
 import { APP_LOGO_URL, APP_NAME } from "@/lib/brand";
 import { toast } from "sonner";
-import { API } from "@/lib/api";
+import api from "@/lib/api";
 import { setAuthSession } from "@/lib/auth";
 
 export default function Login() {
@@ -19,7 +18,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const response = await axios.post(`${API}/admin/login`, {
+      const response = await api.post("/admin/login", {
         email,
         password,
       });
