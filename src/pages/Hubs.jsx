@@ -1,691 +1,181 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
-import { Link } from "react-router-dom";
-import {
-  Warehouse,
-  Plus,
-  Pencil,
-  X,
-  RefreshCw,
-  MapPin,
-  Crosshair,
-  Info,
-} from "lucide-react";
-import { hubService, zoneService, unwrapList } from "../services/apiService";
-import HubLocationMapView from "../components/hubs/HubLocationMapView";
-import HubCorridorSlaPanel from "../components/hubs/HubCorridorSlaPanel";
-import { CoverageSummaryCards } from "../components/coverage/CoverageSummaryCards";
-import { StatusBadge, BookingImpactCard } from "../components/coverage/StatusBadge";
-import { hubRoleLabel } from "../components/coverage/coverageUtils";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import api from "@/lib/api";
+import PageHeader from "@/components/PageHeader";
+import { toast } from "sonner";
+import { Plus, Trash2, Save, X, Clock } from "lucide-react";
 
-const HYDERABAD = { lat: 17.4065, lng: 78.4772 };
-
-const HUB_FILTERS = [
-  { id: "all", label: "All hubs" },
-  { id: "operational", label: "Fully operational" },
-  { id: "crossCity", label: "Cross-city only" },
-  { id: "hubOff", label: "Hub off" },
-  { id: "noZone", label: "Missing zone" },
-];
-
-const defaultForm = () => ({
-  name: "",
-  city: "",
-  lat: String(HYDERABAD.lat),
-  lng: String(HYDERABAD.lng),
-  zoneId: "",
-  intakeCutoff: "",
-  isActive: true,
-});
-
-function zoneById(zones, id) {
-  return zones.find((z) => Number(z.id) === Number(id));
-}
-
-function matchesHubFilter(h, zones, filterId) {
-  const z = h.zoneId != null ? zoneById(zones, h.zoneId) : null;
-  const hubOn = Boolean(h.isActive);
-  const zoneOn = z ? Boolean(z.isActive) : false;
-
-  switch (filterId) {
-    case "operational":
-      return hubOn && zoneOn;
-    case "crossCity":
-      return hubOn && z && !zoneOn;
-    case "hubOff":
-      return !hubOn;
-    case "noZone":
-      return h.zoneId == null;
-    default:
-      return true;
-  }
-}
-
-const Hubs = () => {
-  const [rows, setRows] = useState([]);
+export default function Hubs() {
+  const nav = useNavigate();
+  const [hs, setHs] = useState([]);
   const [zones, setZones] = useState([]);
-  const [hubFilter, setHubFilter] = useState("all");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState(defaultForm);
-  const [saving, setSaving] = useState(false);
-  const [flyToToken, setFlyToToken] = useState(0);
+  const [zone, setZone] = useState("ALL");
+  const [status, setStatus] = useState("ALL");
+  const [editing, setEditing] = useState(null); // hub being edited for slots
 
-  const loadAll = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const [hubRes, zoneRes] = await Promise.all([
-        hubService.list(),
-        zoneService.list(),
-      ]);
-      setRows(unwrapList(hubRes));
-      setZones(unwrapList(zoneRes));
-    } catch (e) {
-      setError(e?.response?.data?.message || e?.message || "Failed to load hubs.");
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadAll();
-  }, [loadAll]);
-
-  useEffect(() => {
-    if (!editorOpen) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [editorOpen]);
-
-  const openCreate = () => {
-    setEditingId(null);
-    setForm(defaultForm());
-    setFlyToToken(0);
-    setEditorOpen(true);
-  };
-
-  const openEdit = (h) => {
-    setEditingId(h.id);
-    setForm({
-      name: h.name ?? "",
-      city: h.city ?? "",
-      lat: h.lat != null ? String(h.lat) : String(HYDERABAD.lat),
-      lng: h.lng != null ? String(h.lng) : String(HYDERABAD.lng),
-      zoneId: h.zoneId != null ? String(h.zoneId) : "",
-      intakeCutoff: h.intakeCutoff ?? "",
-      isActive: Boolean(h.isActive),
-    });
-    setFlyToToken(0);
-    setEditorOpen(true);
-  };
-
-  const closeEditor = () => {
-    setEditorOpen(false);
-    setEditingId(null);
-    setForm(defaultForm());
-    setFlyToToken(0);
-  };
-
-  const handleHubPosition = useCallback((la, ln) => {
-    setForm((f) => ({ ...f, lat: String(la), lng: String(ln) }));
-  }, []);
-
-  const handleSubmit = async () => {
-    const lat = parseFloat(form.lat);
-    const lng = parseFloat(form.lng);
-    const zoneId = parseInt(form.zoneId, 10);
-    if (!form.name.trim() || !form.city.trim()) {
-      window.alert("Name and city are required.");
-      return;
-    }
-    if (Number.isNaN(lat) || Number.isNaN(lng)) {
-      window.alert("Valid latitude and longitude are required.");
-      return;
-    }
-    if (Number.isNaN(zoneId)) {
-      window.alert("Select a zone.");
-      return;
-    }
-    const payload = {
-      name: form.name.trim(),
-      city: form.city.trim(),
-      lat,
-      lng,
-      zoneId,
-      intakeCutoff: form.intakeCutoff.trim() || null,
-      isActive: Boolean(form.isActive),
-    };
-    setSaving(true);
-    try {
-      if (editingId != null) {
-        await hubService.update(editingId, payload);
-      } else {
-        await hubService.create(payload);
-      }
-      await loadAll();
-      closeEditor();
-    } catch (e) {
-      window.alert(
-        e?.response?.data?.message || e?.message || "Save failed."
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const selectedZone = useMemo(
-    () => (form.zoneId ? zoneById(zones, form.zoneId) : null),
-    [zones, form.zoneId]
+  async function load() {
+    const r = await api.get("/hubs");
+    setHs(r.data?.hubs ?? []);
+  }
+  useEffect(() => { api.get("/zones").then(r => setZones(r.data?.zones ?? [])); }, []);
+  useEffect(() => { load(); }, []);
+  const filtered = hs.filter(h =>
+    (zone === "ALL" || String(h.zone_id) === String(zone)) &&
+    (status === "ALL" || h.status === status)
   );
+  async function toggle(h) {
+    const ns = h.status === "FULLY_OPERATIONAL" ? "HUB_OFF" : "FULLY_OPERATIONAL";
+    await api.patch(`/hubs/${h.id}`, { status: ns });
+    toast.success("Updated"); load();
+  }
+  return (
+    <div data-testid="hubs-page">
+      <PageHeader
+        title="Hubs"
+        subtitle="Physical depots & dispatch SLA slots"
+        actions={
+          <button onClick={() => nav("/hubs/new")} className="btn-primary" data-testid="add-hub-btn">
+            <Plus size={14} /> Add Hub
+          </button>
+        }
+      />
+      <div className="surface p-3 mb-4 flex gap-2 items-center" data-testid="hubs-filter">
+        <select value={zone} onChange={e => setZone(e.target.value)} className="h-8 text-[12px] border border-[var(--border-default)] rounded-sm px-2" data-testid="hub-zone-filter">
+          <option value="ALL">All zones</option>
+          {zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
+        </select>
+        <select value={status} onChange={e => setStatus(e.target.value)} className="h-8 text-[12px] border border-[var(--border-default)] rounded-sm px-2" data-testid="hub-status-filter">
+          {["ALL", "FULLY_OPERATIONAL", "CROSS_CITY_ONLY", "HUB_OFF"].map(s => <option key={s} value={s}>{s.replaceAll("_", " ")}</option>)}
+        </select>
+      </div>
+      <div className="surface overflow-hidden">
+        <table className="tbl">
+          <thead><tr><th>Name</th><th>City</th><th>Coords</th><th>Hours</th><th>Slots</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            {filtered.map(h => (
+              <tr key={h.id} data-testid={`hub-row-${h.id}`}>
+                <td className="font-medium">{h.name}</td>
+                <td>{h.city}</td>
+                <td className="mono text-[11px]">{h.lat}, {h.lng}</td>
+                <td className="text-[12px]">{h.hours}</td>
+                <td className="text-[12px]">{(h.slots || []).length} configured</td>
+                <td><span className={`pill ${h.status === "FULLY_OPERATIONAL" ? "pill-green" : "pill-red"}`}>{h.status.replaceAll("_", " ")}</span></td>
+                <td className="flex gap-1">
+                  <button onClick={() => nav(`/hubs/${h.id}/edit`)} className="chip" data-testid={`edit-hub-${h.id}`}>Edit</button>
+                  <button onClick={() => setEditing(h)} className="chip" data-testid={`edit-slots-${h.id}`}><Clock size={11} /> Slots</button>
+                  <button onClick={() => toggle(h)} className="chip" data-testid={`toggle-hub-${h.id}`}>Toggle</button>
+                </td>
+              </tr>
+            ))}
+            {filtered.length === 0 && <tr><td colSpan={7} className="empty">No hubs found for selected filters</td></tr>}
+          </tbody>
+        </table>
+      </div>
 
-  const stats = useMemo(() => {
-    let operational = 0;
-    let crossCity = 0;
-    let off = 0;
-    for (const h of rows) {
-      const z = h.zoneId != null ? zoneById(zones, h.zoneId) : null;
-      if (!h.isActive) off++;
-      else if (z?.isActive) operational++;
-      else if (z) crossCity++;
-    }
-    return { operational, crossCity, off, total: rows.length };
-  }, [rows, zones]);
+      <SlotEditor hub={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />
+    </div>
+  );
+}
 
-  const filteredRows = rows.filter((h) => matchesHubFilter(h, zones, hubFilter));
+function SlotEditor({ hub, onClose, onSaved }) {
+  const [slots, setSlots] = useState([]);
+  useEffect(() => {
+    if (!hub) return;
+    setSlots((hub.slots || []).map((s, i) => ({
+      name: s.name || "",
+      cutoff: s.cutoff || "",
+      delivery_by: s.delivery_by || "",
+      offset_days: s.offset_days ?? 1,
+      priority: s.priority ?? (i + 1),
+      delivery_type: s.delivery_type || "NEXT_DAY",
+      hours: s.hours || null,
+    })));
+  }, [hub]);
 
-  const mapLat = parseFloat(form.lat);
-  const mapLng = parseFloat(form.lng);
-  const mapLatNum = Number.isFinite(mapLat) ? mapLat : HYDERABAD.lat;
-  const mapLngNum = Number.isFinite(mapLng) ? mapLng : HYDERABAD.lng;
+  if (!hub) return null;
+
+  function update(i, field, val) {
+    const next = [...slots];
+    next[i] = { ...next[i], [field]: val };
+    setSlots(next);
+  }
+  function addSlot() {
+    setSlots([...slots, { name: "New slot", cutoff: "12:00", delivery_by: "18:00 next day", offset_days: 1, priority: slots.length + 1, delivery_type: "NEXT_DAY", hours: null }]);
+  }
+  function remove(i) {
+    setSlots(slots.filter((_, idx) => idx !== i));
+  }
+  async function save() {
+    // sort & normalize priority
+    const normalized = [...slots]
+      .sort((a, b) => a.priority - b.priority)
+      .map((s, i) => ({ ...s, priority: i + 1, offset_days: parseInt(s.offset_days || 0), hours: s.hours ? parseInt(s.hours) : null }));
+    await api.put(`/hubs/${hub.id}/slots`, normalized);
+    toast.success(`Saved ${normalized.length} slots for ${hub.name}`);
+    onSaved?.();
+  }
 
   return (
-    <div className="container-fluid fade-in">
-      <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3 mb-3">
-        <div>
-          <h2 className="fw-bold mb-1">Hubs</h2>
-          <p className="text-muted small mb-0" style={{ maxWidth: 560 }}>
-            Warehouse points for outstation legs. Each hub must link to a{" "}
-            <Link to="/zones">zone</Link>. Hub <strong>on</strong> + zone{" "}
-            <strong>paused</strong> = cross-city only; both on = in-city + outstation.
-          </p>
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center" data-testid="slot-editor-modal">
+      <div className="surface w-[820px] max-h-[85vh] flex flex-col">
+        <div className="flex justify-between items-start px-5 py-3 border-b border-[var(--border-default)]">
+          <div>
+            <h3 className="text-lg font-semibold" style={{ fontFamily: "Outfit" }}>Dispatch SLA slots</h3>
+            <p className="text-[12px] text-zinc-500">{hub.name} · {hub.city}</p>
+          </div>
+          <button onClick={onClose} data-testid="slot-close"><X size={16} /></button>
         </div>
-        <div className="d-flex gap-2">
-          <button
-            type="button"
-            className="btn btn-outline-secondary rounded-3 d-flex align-items-center gap-2"
-            onClick={loadAll}
-            disabled={loading}
-          >
-            <RefreshCw size={18} />
-            Refresh
-          </button>
-          <button
-            type="button"
-            className="btn text-white rounded-3 d-flex align-items-center gap-2 px-4 shadow-sm border-0"
-            style={{ backgroundColor: "#E51818" }}
-            onClick={openCreate}
-          >
-            <Plus size={18} />
-            Add hub
-          </button>
-        </div>
-      </div>
 
-      <div
-        className="alert alert-light border rounded-4 small d-flex gap-2 align-items-start mb-4"
-        role="note"
-      >
-        <Info size={18} className="text-primary flex-shrink-0 mt-1" />
-        <div>
-          <strong>Zone vs hub</strong>
-          <ul className="mb-0 ps-3 mt-1">
-            <li>
-              <strong>Zone paused</strong> — blocks pickup &amp; drop both inside that
-              zone (local trips).
-            </li>
-            <li>
-              <strong>Hub active</strong> — still used for outstation corridors when the
-              zone is paused (<Link to="/zone-routes">Zone routes</Link>).
-            </li>
-            <li>
-              <strong>Intake cutoff</strong> — per hub (when parcel must reach that warehouse).
-            </li>
-            <li>
-              <strong>Per-corridor delivery</strong> — edit each hub to set &quot;delivered
-              by&quot; per destination zone (e.g. each Vizag hub → Hyd).
-            </li>
-            <li>
-              <strong>Zone active</strong> — enables in-city vehicles inside the zone.
-            </li>
-          </ul>
-        </div>
-      </div>
+        <div className="flex-1 overflow-y-auto p-5">
+          <div className="text-[11px] text-zinc-500 mb-3">
+            Slots are evaluated in priority order. Lower number = preferred. A booking picks the first slot whose cutoff hasn't passed.
+          </div>
 
-      {error ? (
-        <div className="alert alert-danger rounded-4 border-0 d-flex justify-content-between align-items-center">
-          <span>{error}</span>
-          <button type="button" className="btn btn-sm btn-outline-danger" onClick={loadAll}>
-            Retry
-          </button>
-        </div>
-      ) : null}
-
-      {!loading && !error ? (
-        <CoverageSummaryCards
-          items={[
-            {
-              key: "op",
-              label: "Fully operational",
-              value: stats.operational,
-              color: "#198754",
-              hint: "Hub on + zone serving",
-            },
-            {
-              key: "cc",
-              label: "Cross-city only",
-              value: stats.crossCity,
-              color: stats.crossCity > 0 ? "#0d6efd" : "#111",
-              hint: "Hub on, zone paused",
-            },
-            {
-              key: "off",
-              label: "Hubs off",
-              value: stats.off,
-              hint: "Not in quotes",
-            },
-            {
-              key: "total",
-              label: "Total hubs",
-              value: stats.total,
-            },
-          ]}
-        />
-      ) : null}
-
-      <div className="d-flex flex-wrap gap-2 mb-3">
-        {HUB_FILTERS.map((f) => (
-          <button
-            key={f.id}
-            type="button"
-            className={`btn btn-sm rounded-pill ${
-              hubFilter === f.id ? "text-white border-0" : "btn-outline-secondary"
-            }`}
-            style={hubFilter === f.id ? { backgroundColor: "#E51818" } : undefined}
-            onClick={() => setHubFilter(f.id)}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="dashboard-card p-0 border-0 overflow-hidden shadow-sm">
-        <div className="table-responsive">
-          <table className="table table-hover mb-0 align-middle">
-            <thead className="bg-light">
+          <table className="tbl">
+            <thead>
               <tr>
-                <th className="px-4 py-3 small text-muted border-0">HUB</th>
-                <th className="px-3 py-3 small text-muted border-0">CITY</th>
-                <th className="px-3 py-3 small text-muted border-0">ZONE</th>
-                <th className="px-3 py-3 small text-muted border-0">INTAKE CUTOFF</th>
-                <th className="px-3 py-3 small text-muted border-0">BOOKING ROLE</th>
-                <th className="px-3 py-3 small text-muted border-0">HUB</th>
-                <th className="px-4 py-3 small text-muted border-0 text-end">ACTIONS</th>
+                <th style={{ width: 50 }}>Pri</th>
+                <th>Name</th>
+                <th style={{ width: 90 }}>Cutoff</th>
+                <th>Delivery by</th>
+                <th style={{ width: 70 }}>Days</th>
+                <th style={{ width: 110 }}>Type</th>
+                <th style={{ width: 70 }}>Hours</th>
+                <th style={{ width: 30 }}></th>
               </tr>
             </thead>
             <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="text-center py-5 text-muted small">
-                    Loading hubs…
+              {slots.map((s, i) => (
+                <tr key={i} data-testid={`slot-row-${i}`}>
+                  <td><input type="number" value={s.priority} onChange={e => update(i, "priority", parseInt(e.target.value || 1))} className="h-7 w-12 mono text-[12px] border border-[var(--border-default)] rounded-sm px-1.5" /></td>
+                  <td><input value={s.name} onChange={e => update(i, "name", e.target.value)} className="h-7 w-full text-[12px] border border-[var(--border-default)] rounded-sm px-1.5" data-testid={`slot-name-${i}`} /></td>
+                  <td><input type="time" value={s.cutoff} onChange={e => update(i, "cutoff", e.target.value)} className="h-7 mono text-[12px] border border-[var(--border-default)] rounded-sm px-1.5" data-testid={`slot-cutoff-${i}`} /></td>
+                  <td><input value={s.delivery_by} onChange={e => update(i, "delivery_by", e.target.value)} className="h-7 w-full text-[12px] border border-[var(--border-default)] rounded-sm px-1.5" /></td>
+                  <td><input type="number" value={s.offset_days} onChange={e => update(i, "offset_days", e.target.value)} className="h-7 w-12 mono text-[12px] border border-[var(--border-default)] rounded-sm px-1.5" /></td>
+                  <td>
+                    <select value={s.delivery_type} onChange={e => update(i, "delivery_type", e.target.value)} className="h-7 text-[11px] border border-[var(--border-default)] rounded-sm">
+                      <option value="NEXT_DAY">NEXT_DAY</option>
+                      <option value="HOURS">HOURS</option>
+                    </select>
                   </td>
-                </tr>
-              ) : filteredRows.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="text-center py-5 text-muted small">
-                    {rows.length === 0 ? "No hubs yet." : "No hubs match this filter."}
+                  <td>
+                    <input type="number" disabled={s.delivery_type !== "HOURS"} value={s.hours || ""} onChange={e => update(i, "hours", e.target.value)} placeholder="—" className="h-7 w-14 mono text-[12px] border border-[var(--border-default)] rounded-sm px-1.5 disabled:bg-zinc-50 disabled:text-zinc-400" />
                   </td>
+                  <td><button onClick={() => remove(i)} className="text-zinc-500 hover:text-rose-700" data-testid={`slot-remove-${i}`}><Trash2 size={13} /></button></td>
                 </tr>
-              ) : (
-                filteredRows.map((h) => {
-                  const z = h.zoneId != null ? zoneById(zones, h.zoneId) : null;
-                  const hubOn = Boolean(h.isActive);
-                  const zoneOn = z ? Boolean(z.isActive) : false;
-                  const role = hubRoleLabel(hubOn, zoneOn, Boolean(z));
-
-                  let hubBadge = "hubOff";
-                  if (hubOn && zoneOn) hubBadge = "hubActive";
-                  else if (hubOn && z && !zoneOn) hubBadge = "crossCity";
-
-                  return (
-                    <tr key={h.id}>
-                      <td className="px-4 py-3 border-0">
-                        <div className="d-flex align-items-center gap-2">
-                          <div
-                            className="rounded-3 p-2 d-flex align-items-center justify-content-center"
-                            style={{ background: "rgba(229, 24, 24, 0.08)" }}
-                          >
-                            <Warehouse size={18} style={{ color: "#E51818" }} />
-                          </div>
-                          <div>
-                            <p className="mb-0 fw-bold small">{h.name ?? "—"}</p>
-                            <p className="mb-0 text-muted font-monospace" style={{ fontSize: 10 }}>
-                              {h.lat != null && h.lng != null
-                                ? `${Number(h.lat).toFixed(4)}, ${Number(h.lng).toFixed(4)}`
-                                : "—"}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3 border-0 small">{h.city ?? "—"}</td>
-                      <td className="px-3 py-3 border-0 small">
-                        {z ? (
-                          <div>
-                            <span className="fw-semibold">{z.name}</span>
-                            <div className="mt-1">
-                              <StatusBadge
-                                variant={zoneOn ? "zoneActive" : "zonePaused"}
-                              />
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-danger fw-semibold">Not linked</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-3 border-0 small font-monospace">
-                        {h.intakeCutoff ? h.intakeCutoff : "—"}
-                      </td>
-                      <td className="px-3 py-3 border-0">
-                        <span className="fw-semibold small d-block">{role.short}</span>
-                        <span className="text-muted" style={{ fontSize: 11 }}>
-                          {role.detail}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 border-0">
-                        <StatusBadge variant={hubBadge} />
-                      </td>
-                      <td className="px-4 py-3 border-0 text-end">
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-light rounded-3"
-                          onClick={() => openEdit(h)}
-                        >
-                          <Pencil size={16} className="me-1" />
-                          Edit
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
+              ))}
+              {slots.length === 0 && <tr><td colSpan={8} className="empty">No slots configured. Add the first one below.</td></tr>}
             </tbody>
           </table>
+
+          <button onClick={addSlot} className="mt-3 chip" data-testid="slot-add"><Plus size={12} /> Add slot</button>
+        </div>
+
+        <div className="px-5 py-3 border-t border-[var(--border-default)] flex justify-end gap-2">
+          <button onClick={onClose} className="chip" data-testid="slot-cancel">Cancel</button>
+          <button onClick={save} className="btn-primary" data-testid="slot-save"><Save size={13} /> Save slots</button>
         </div>
       </div>
-
-      {editorOpen &&
-        createPortal(
-          <div
-            className="position-fixed zone-editor-overlay d-flex flex-column overflow-hidden bg-white"
-            style={{
-              zIndex: 2000,
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              width: "100vw",
-              height: "100dvh",
-              maxHeight: "100dvh",
-              margin: 0,
-            }}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="hub-editor-title"
-          >
-            <div className="flex-shrink-0 border-bottom bg-white px-3 py-3 px-md-4 d-flex align-items-center justify-content-between gap-3 shadow-sm">
-              <div>
-                <h5 className="fw-bold mb-0" id="hub-editor-title">
-                  {editingId != null ? "Edit hub" : "New hub"}
-                </h5>
-                <p className="text-muted small mb-0 d-none d-sm-block">
-                  Map on the left — click or drag the pin to set location.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="btn btn-outline-secondary rounded-3 d-flex align-items-center gap-2"
-                onClick={closeEditor}
-                disabled={saving}
-              >
-                <X size={20} />
-                <span className="d-none d-sm-inline">Close</span>
-              </button>
-            </div>
-
-            <div
-              className="d-flex flex-column flex-lg-row w-100 min-h-0 overflow-hidden"
-              style={{ flex: "1 1 0%", minHeight: 0 }}
-            >
-              <div className="d-flex flex-column min-h-0 border-bottom border-lg-0 border-lg-end position-relative bg-light zone-editor-map-col">
-                <div
-                  className="position-absolute top-0 start-0 p-2 p-md-3 z-2"
-                  style={{ pointerEvents: "none", zIndex: 2 }}
-                >
-                  <span
-                    className="badge rounded-pill px-3 py-2 bg-dark text-white shadow-sm"
-                    style={{ pointerEvents: "auto" }}
-                  >
-                    Click map or drag pin to set the hub location
-                  </span>
-                </div>
-                <div className="flex-grow-1 min-h-0 w-100 h-100" style={{ minHeight: 0 }}>
-                  <HubLocationMapView
-                    lat={mapLatNum}
-                    lng={mapLngNum}
-                    onPositionChange={handleHubPosition}
-                    visible={editorOpen}
-                    flyToToken={flyToToken}
-                  />
-                </div>
-              </div>
-
-              <div
-                className="d-flex flex-column min-h-0 bg-white border-start-lg overflow-auto"
-                style={{ flex: "1 1 42%", maxHeight: "100%" }}
-              >
-                <div
-                  className="p-4 flex-grow-1"
-                  style={{ maxWidth: 520, marginLeft: "auto", marginRight: "auto", width: "100%" }}
-                >
-                  <div className="mb-3">
-                    <label className="form-label small fw-semibold">Name</label>
-                    <input
-                      className="form-control border-0 bg-light rounded-3"
-                      value={form.name}
-                      onChange={(e) => setForm({ ...form, name: e.target.value })}
-                      disabled={saving}
-                      placeholder="Hub name"
-                    />
-                  </div>
-                  <div className="mb-3">
-                    <label className="form-label small fw-semibold">City</label>
-                    <input
-                      className="form-control border-0 bg-light rounded-3"
-                      value={form.city}
-                      onChange={(e) => setForm({ ...form, city: e.target.value })}
-                      disabled={saving}
-                      placeholder="City"
-                    />
-                  </div>
-                  <div className="row g-2 mb-2">
-                    <div className="col-6">
-                      <label className="form-label small">Latitude</label>
-                      <input
-                        type="number"
-                        step="any"
-                        className="form-control border-0 bg-light rounded-3"
-                        value={form.lat}
-                        onChange={(e) => setForm({ ...form, lat: e.target.value })}
-                        disabled={saving}
-                      />
-                    </div>
-                    <div className="col-6">
-                      <label className="form-label small">Longitude</label>
-                      <input
-                        type="number"
-                        step="any"
-                        className="form-control border-0 bg-light rounded-3"
-                        value={form.lng}
-                        onChange={(e) => setForm({ ...form, lng: e.target.value })}
-                        disabled={saving}
-                      />
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-outline-secondary btn-sm rounded-3 d-inline-flex align-items-center gap-2 mb-4"
-                    onClick={() => setFlyToToken((n) => n + 1)}
-                    disabled={saving}
-                  >
-                    <Crosshair size={16} />
-                    Center map on coordinates
-                  </button>
-
-                  <div className="mb-3">
-                    <label className="form-label small fw-semibold d-flex align-items-center gap-2">
-                      <MapPin size={14} />
-                      Linked zone
-                    </label>
-                    <select
-                      className="form-select border-0 bg-light rounded-3"
-                      value={form.zoneId}
-                      onChange={(e) => setForm({ ...form, zoneId: e.target.value })}
-                      disabled={saving}
-                    >
-                      <option value="">Select zone…</option>
-                      {zones.map((z) => (
-                        <option key={z.id} value={String(z.id)}>
-                          {z.name} — {z.city}
-                          {z.isActive ? " · Serving" : " · Paused"}
-                        </option>
-                      ))}
-                    </select>
-                    {selectedZone ? (
-                      <div className="mt-2">
-                        <StatusBadge
-                          variant={selectedZone.isActive ? "zoneActive" : "zonePaused"}
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div className="mb-3">
-                    <label className="form-label small fw-semibold">
-                      Last intake cutoff (local time)
-                    </label>
-                    <input
-                      type="time"
-                      className="form-control border-0 bg-light rounded-3"
-                      value={form.intakeCutoff}
-                      onChange={(e) =>
-                        setForm({ ...form, intakeCutoff: e.target.value })
-                      }
-                      disabled={saving}
-                    />
-                    <p className="text-muted small mb-0 mt-1">
-                      Optional latest handover if you do <strong>not</strong> use dispatch
-                      slots below (one deadline for all buses).
-                    </p>
-                  </div>
-
-                  {editingId != null ? (
-                    <HubCorridorSlaPanel
-                      hubId={editingId}
-                      hubZoneId={form.zoneId}
-                      zones={zones}
-                    />
-                  ) : (
-                    <p className="small text-muted mb-3">
-                      Save the hub once, then edit it to set per-zone delivery times (e.g.
-                      Vizag hub → Hyderabad).
-                    </p>
-                  )}
-
-                  <div className="mb-3 p-3 rounded-4 bg-light border">
-                    <div className="form-check form-switch mb-2">
-                      <input
-                        className="form-check-input"
-                        type="checkbox"
-                        id="hub-active"
-                        checked={form.isActive}
-                        onChange={(e) =>
-                          setForm({ ...form, isActive: e.target.checked })
-                        }
-                        disabled={saving}
-                      />
-                      <label className="form-check-label fw-semibold" htmlFor="hub-active">
-                        Hub is active
-                      </label>
-                    </div>
-                    <BookingImpactCard
-                      type="hub"
-                      hubActive={form.isActive}
-                      zoneActive={selectedZone ? Boolean(selectedZone.isActive) : false}
-                      zoneName={selectedZone?.city || selectedZone?.name}
-                    />
-                  </div>
-
-                  <div className="d-flex flex-column flex-sm-row gap-2 pt-2 border-top">
-                    <button
-                      type="button"
-                      className="btn btn-light flex-grow-1 py-2 rounded-3 fw-semibold"
-                      onClick={closeEditor}
-                      disabled={saving}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      className="btn text-white flex-grow-1 py-2 rounded-3 fw-semibold border-0"
-                      style={{ backgroundColor: "#E51818" }}
-                      onClick={handleSubmit}
-                      disabled={saving}
-                    >
-                      {saving ? (
-                        <span className="spinner-border spinner-border-sm" />
-                      ) : (
-                        "Save hub"
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
-
-      <style>{`
-        .zone-editor-map-col {
-          flex: 1 1 58%;
-          min-height: min(42vh, 360px);
-        }
-        @media (min-width: 992px) {
-          .border-start-lg { border-left: 1px solid var(--bs-border-color, #dee2e6) !important; }
-          .zone-editor-map-col {
-            min-height: 0;
-            flex: 1 1 58%;
-          }
-        }
-      `}</style>
     </div>
   );
-};
-
-export default Hubs;
+}

@@ -1,273 +1,36 @@
-import { useState, useEffect, useCallback } from "react";
-import { Save, RotateCcw, Pencil, Smartphone, Link } from "lucide-react";
-import { appVersionService, unwrapEntity } from "../services/apiService";
+import { useEffect, useState } from "react";
+import api from "@/lib/api";
+import PageHeader from "@/components/PageHeader";
+import { toast } from "sonner";
 
-const emptyForm = () => ({
-  id: "",
-  userVersionCode: "",
-  userPlayStoreUrl: "",
-  riderVersionCode: "",
-  riderPlayStoreUrl: "",
-});
-
-function mapFromApi(cfg) {
-  if (!cfg || typeof cfg !== "object") return emptyForm();
-  return {
-    id: cfg.id != null ? String(cfg.id) : "",
-    userVersionCode: cfg.userVersionCode ?? "",
-    userPlayStoreUrl: cfg.userPlayStoreUrl ?? "",
-    riderVersionCode: cfg.riderVersionCode ?? "",
-    riderPlayStoreUrl: cfg.riderPlayStoreUrl ?? "",
-  };
-}
-
-const AppVersion = () => {
-  const [form, setForm] = useState(emptyForm);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setLoadError("");
-    try {
-      const res = await appVersionService.getConfig();
-      const cfg = unwrapEntity(res);
-      setForm(mapFromApi(cfg));
-    } catch (e) {
-      setLoadError(e?.response?.data?.message || e?.message || "Failed to load version config.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const handleChange = (field) => (e) => {
-    const v = e.target.value;
-    setForm((f) => ({ ...f, [field]: v }));
-  };
-
-  const handleSave = async () => {
-    if (!isEditing) {
-      setIsEditing(true);
-      return;
-    }
-    setSaving(true);
-    setLoadError("");
-    try {
-      const payload = {
-        userVersionCode: parseInt(String(form.userVersionCode || "1"), 10) || 1,
-        userPlayStoreUrl: String(form.userPlayStoreUrl || "").trim(),
-        riderVersionCode: parseInt(String(form.riderVersionCode || "1"), 10) || 1,
-        riderPlayStoreUrl: String(form.riderPlayStoreUrl || "").trim(),
-      };
-      const res = await appVersionService.updateConfig(payload);
-      const cfg = unwrapEntity(res);
-      setForm(mapFromApi(cfg ?? payload));
-      setIsEditing(false);
-    } catch (e) {
-      setLoadError(e?.response?.data?.message || e?.message || "Failed to save version config.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleReset = () => {
-    if (!window.confirm("Reload config from server? Unsaved edits will be lost.")) return;
-    setIsEditing(false);
-    load();
-  };
-
+export default function AppVersion() {
+  const [data, setData] = useState({ user: { version_code: 0, play_store_url: "" }, rider: { version_code: 0, play_store_url: "" } });
+  async function load() { const r = await api.get("/config/app-version"); setData({ user: r.data.user || {}, rider: r.data.rider || {} }); }
+  useEffect(() => { load(); }, []);
+  async function save(app) {
+    const d = data[app];
+    await api.put("/config/app-version", { app, version_code: parseInt(d.version_code), play_store_url: d.play_store_url });
+    toast.success(`${app} app version saved`);
+  }
   return (
-    <div className="container-fluid fade-in" style={{ maxWidth: 960 }}>
-      <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3 mb-4">
-        <div>
-          <h2 className="fw-bold mb-1">App version control</h2>
-          <p className="text-muted small mb-0">
-            GET/PUT <code className="small">/admin/app-version</code> — Set version
-            codes and Play Store URLs for user and rider apps.
-          </p>
-          <p className="text-muted small mt-2 mb-0">
-            When an app's version code doesn't match the value set here, a full-screen
-            update prompt is shown to the user.
-          </p>
-        </div>
-        <div className="d-flex gap-2 flex-shrink-0">
-          <button
-            type="button"
-            onClick={handleReset}
-            className="btn btn-outline-secondary d-flex align-items-center gap-2 rounded-3"
-            disabled={loading || saving}
-          >
-            <RotateCcw size={18} />
-            Reload
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            className="btn d-flex align-items-center gap-2 rounded-3 text-white border-0 shadow-sm px-4"
-            style={{ backgroundColor: "#E51818" }}
-            disabled={loading || saving}
-          >
-            {saving ? (
-              <span className="spinner-border spinner-border-sm" />
-            ) : isEditing ? (
-              <Save size={18} />
-            ) : (
-              <Pencil size={18} />
-            )}
-            {isEditing ? "Save changes" : "Edit"}
-          </button>
-        </div>
+    <div data-testid="app-version-page">
+      <PageHeader title="App Version" subtitle="Force-update controls" />
+      <div className="grid grid-cols-2 gap-4 max-w-4xl">
+        {["user", "rider"].map(app => (
+          <div key={app} className="surface p-5" data-testid={`appver-${app}`}>
+            <h3 className="text-sm font-semibold mb-3" style={{ fontFamily: "Outfit" }}>{app === "user" ? "User App" : "Rider App"}</h3>
+            <label className="text-[11px] text-zinc-500 uppercase tracking-wider">Version code</label>
+            <input type="number" value={data[app].version_code || 0}
+              onChange={e => setData({ ...data, [app]: { ...data[app], version_code: e.target.value } })}
+              className="h-9 text-sm w-full mb-3 border border-[var(--border-default)] rounded-sm px-2 mono" data-testid={`ver-${app}`} />
+            <label className="text-[11px] text-zinc-500 uppercase tracking-wider">Play Store URL</label>
+            <input value={data[app].play_store_url || ""}
+              onChange={e => setData({ ...data, [app]: { ...data[app], play_store_url: e.target.value } })}
+              className="h-9 text-sm w-full mb-3 border border-[var(--border-default)] rounded-sm px-2" data-testid={`url-${app}`} />
+            <button onClick={() => save(app)} className="bg-zinc-900 text-white text-[13px] px-4 py-2 rounded-sm" data-testid={`save-${app}`}>Save</button>
+          </div>
+        ))}
       </div>
-
-      {loadError ? (
-        <div className="alert alert-danger rounded-4 border-0 shadow-sm mb-4">
-          {loadError}
-        </div>
-      ) : null}
-
-      {loading ? (
-        <div
-          className="dashboard-card border-0 d-flex flex-column align-items-center justify-content-center py-5 gap-3"
-          style={{ minHeight: 320 }}
-        >
-          <div
-            className="spinner-border text-danger"
-            style={{ width: "2.5rem", height: "2.5rem" }}
-            role="status"
-          />
-          <p className="text-muted small mb-0">Loading version config…</p>
-        </div>
-      ) : (
-        <div className="row g-3 g-md-4">
-          {/* User App */}
-          <div className="col-12 col-md-6">
-            <div className="dashboard-card border-0 h-100 shadow-sm">
-              <div className="d-flex align-items-center gap-3 mb-3">
-                <div
-                  className="rounded-3 p-2 d-flex align-items-center justify-content-center flex-shrink-0"
-                  style={{ background: "rgba(229, 24, 24, 0.08)" }}
-                >
-                  <Smartphone size={20} style={{ color: "#E51818" }} />
-                </div>
-                <div>
-                  <p className="fw-semibold mb-0">User app</p>
-                  <p className="text-muted small mb-0">Customer-facing app</p>
-                </div>
-              </div>
-
-              <div className="mb-3">
-                <label className="form-label fw-semibold mb-1">Version code</label>
-                <p className="text-muted small mb-2">
-                  Bump this number to force all user app installs to update.
-                </p>
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  className="form-control border-0 bg-light rounded-3 py-2"
-                  value={form.userVersionCode}
-                  onChange={handleChange("userVersionCode")}
-                  disabled={!isEditing}
-                />
-              </div>
-
-              <div>
-                <label className="form-label fw-semibold mb-1 d-flex align-items-center gap-2">
-                  <Link size={14} />
-                  Play Store URL
-                </label>
-                <p className="text-muted small mb-2">
-                  Users are redirected here when an update is required.
-                </p>
-                <input
-                  type="url"
-                  className="form-control border-0 bg-light rounded-3 py-2"
-                  placeholder="https://play.google.com/store/apps/details?id=..."
-                  value={form.userPlayStoreUrl}
-                  onChange={handleChange("userPlayStoreUrl")}
-                  disabled={!isEditing}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Rider App */}
-          <div className="col-12 col-md-6">
-            <div className="dashboard-card border-0 h-100 shadow-sm">
-              <div className="d-flex align-items-center gap-3 mb-3">
-                <div
-                  className="rounded-3 p-2 d-flex align-items-center justify-content-center flex-shrink-0"
-                  style={{ background: "rgba(229, 24, 24, 0.08)" }}
-                >
-                  <Smartphone size={20} style={{ color: "#E51818" }} />
-                </div>
-                <div>
-                  <p className="fw-semibold mb-0">Rider app</p>
-                  <p className="text-muted small mb-0">Delivery partner app</p>
-                </div>
-              </div>
-
-              <div className="mb-3">
-                <label className="form-label fw-semibold mb-1">Version code</label>
-                <p className="text-muted small mb-2">
-                  Bump this number to force all rider app installs to update.
-                </p>
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  className="form-control border-0 bg-light rounded-3 py-2"
-                  value={form.riderVersionCode}
-                  onChange={handleChange("riderVersionCode")}
-                  disabled={!isEditing}
-                />
-              </div>
-
-              <div>
-                <label className="form-label fw-semibold mb-1 d-flex align-items-center gap-2">
-                  <Link size={14} />
-                  Play Store URL
-                </label>
-                <p className="text-muted small mb-2">
-                  Riders are redirected here when an update is required.
-                </p>
-                <input
-                  type="url"
-                  className="form-control border-0 bg-light rounded-3 py-2"
-                  placeholder="https://play.google.com/store/apps/details?id=..."
-                  value={form.riderPlayStoreUrl}
-                  onChange={handleChange("riderPlayStoreUrl")}
-                  disabled={!isEditing}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* How it works */}
-          <div className="col-12">
-            <div
-              className="rounded-4 p-3 small"
-              style={{ background: "rgba(229, 24, 24, 0.05)", border: "1px solid rgba(229, 24, 24, 0.15)" }}
-            >
-              <p className="fw-semibold mb-1" style={{ color: "#E51818" }}>How it works</p>
-              <p className="text-muted mb-0">
-                On every app launch, the app sends its local version code to{" "}
-                <code>/public/version-check</code>. If it doesn't match the code set
-                above, a full-screen update screen is shown and the app is blocked until
-                the user updates via the Play Store URL.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
-};
-
-export default AppVersion;
+}
