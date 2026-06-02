@@ -39,9 +39,9 @@ export default function AssignRiderModal({ open, onOpenChange, orderId, role = "
           <button onClick={() => onOpenChange(false)} data-testid="assign-close"><X size={16} /></button>
         </div>
         <div className="px-5 py-3 border-b border-[var(--border-default)] flex gap-2">
-          {["pickup", "delivery", "both"].map(r => (
+          {["pickup", "delivery"].map(r => (
             <button key={r} onClick={() => setSelectedRole(r)} data-testid={`role-${r}`}
-              className={`chip ${selectedRole === r ? "chip-active" : ""}`}>{r === "both" ? "Both roles" : r}</button>
+              className={`chip ${selectedRole === r ? "chip-active" : ""}`}>{r}</button>
           ))}
         </div>
         <div className="overflow-y-auto flex-1">
@@ -58,8 +58,14 @@ export default function AssignRiderModal({ open, onOpenChange, orderId, role = "
               </div>
               <div className="flex items-center gap-2">
                 <span className={`pill ${r.availability === "ONLINE" ? "bg-emerald-50 text-emerald-800 border-emerald-300" : "bg-zinc-100 text-zinc-600 border-zinc-300"}`}>{r.availability}</span>
+                {r.has_active_order && (
+                  <span className="pill bg-amber-50 text-amber-800 border-amber-300" data-testid={`rider-busy-${r.id}`}>Busy</span>
+                )}
                 {r.blocked ? (
                   <span className="pill bg-rose-50 text-rose-800 border-rose-300" data-testid={`rider-blocked-${r.id}`}><ShieldAlert size={11} /> Blocked</span>
+                ) : r.has_active_order ? (
+                  <button disabled className="text-[12px] bg-zinc-200 text-zinc-400 px-3 py-1.5 rounded-sm cursor-not-allowed"
+                    data-testid={`assign-busy-${r.id}`}>Busy</button>
                 ) : (
                   <button onClick={() => assign(r.id)} disabled={loading}
                     data-testid={`assign-${r.id}`}

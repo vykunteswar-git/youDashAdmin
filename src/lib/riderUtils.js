@@ -108,6 +108,7 @@ export function normalizeRiderUi(rider = {}) {
     availability: rider.isAvailable ? "ONLINE" : "OFFLINE",
     isAvailable: Boolean(rider.isAvailable),
     blocked: rider.isBlocked || rider.dispatchBlocked || false,
+    has_active_order: rider.hasActiveOrder || false,
     wallet_balance: Number(rider.walletCurrentBalance ?? rider.wallet_balance ?? 0),
     wallet_total_earnings: Number(rider.walletTotalEarnings ?? 0),
     wallet_total_withdrawn: Number(rider.walletTotalWithdrawn ?? 0),
