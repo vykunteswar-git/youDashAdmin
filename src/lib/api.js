@@ -1035,32 +1035,17 @@ async function noopAdapter(config) {
 async function ridersListAdapter(config) {
   const instance = axios.create({ baseURL: API, timeout: config.timeout });
   const headers = adapterHeaders(config);
-  const tab = String(config.params?.tab || "ALL").toUpperCase();
-  const statusFilter = String(config.params?.status_filter || "ALL").toUpperCase();
 
-  let rawList = [];
-  if (statusFilter !== "ALL") {
-    const res = await safeGet(instance, "/admin/riders", headers, { data: { data: [] } }, { status: statusFilter });
-    rawList = res?.data?.data || [];
-  } else if (tab === "PENDING") {
-    const res = await safeGet(instance, "/admin/riders/pending", headers, { data: { data: [] } });
-    rawList = res?.data?.data || [];
-  } else if (tab === "AVAILABLE") {
-    const res = await safeGet(instance, "/admin/riders/available", headers, { data: { data: [] } });
-    rawList = res?.data?.data || [];
-  } else {
-    const [pendingRes, availableRes] = await Promise.all([
-      safeGet(instance, "/admin/riders/pending", headers, { data: { data: [] } }),
-      safeGet(instance, "/admin/riders/available", headers, { data: { data: [] } }),
-    ]);
-    const merged = new Map();
-    [...(pendingRes?.data?.data || []), ...(availableRes?.data?.data || [])].forEach((r) => {
-      if (r?.id != null) merged.set(Number(r.id), r);
-    });
-    rawList = Array.from(merged.values());
-  }
-
-  const riders = rawList.map((r) => normalizeRiderUi(r));
+  // Fetch all riders regardless of availability — APPROVED (includes ONLINE/OFFLINE/BUSY) + PENDING.
+  const [approvedRes, pendingRes] = await Promise.all([
+    safeGet(instance, "/admin/riders", headers, { data: { data: [] } }, { status: "APPROVED" }),
+    safeGet(instance, "/admin/riders/pending", headers, { data: { data: [] } }),
+  ]);
+  const merged = new Map();
+  [...(approvedRes?.data?.data || []), ...(pendingRes?.data?.data || [])].forEach((r) => {
+    if (r?.id != null) merged.set(Number(r.id), r);
+  });
+  const riders = Array.from(merged.values()).map((r) => normalizeRiderUi(r));
   return { config, data: { riders }, status: 200, statusText: "OK", headers: {}, request: null };
 }
 

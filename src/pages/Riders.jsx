@@ -9,7 +9,17 @@ const TABS = [
   ["ALL", "All"],
   ["PENDING", "Pending"],
   ["AVAILABLE", "Available"],
+  ["BUSY", "Busy"],
+  ["BLOCKED", "Blocked"],
+  ["OFFLINE", "Offline"],
 ];
+
+function RiderStatusPill({ status, blocked }) {
+  if (blocked || status === "BLOCKED") return <span className="pill pill-red">BLOCKED</span>;
+  if (status === "ORDER_ASSIGNED") return <span className="pill pill-amber">BUSY</span>;
+  if (status === "ONLINE") return <span className="pill pill-green">ONLINE</span>;
+  return <span className="pill pill-slate">{status || "OFFLINE"}</span>;
+}
 
 const STATUS_FILTERS = [
   ["ALL", "All statuses"],
@@ -41,16 +51,23 @@ export default function Riders() {
     }
   }
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [tab, statusFilter]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [statusFilter]);
 
   const filtered = useMemo(() => {
+    let list = riders;
+    if (tab === "PENDING") list = list.filter((r) => r.status === "PENDING");
+    else if (tab === "AVAILABLE") list = list.filter((r) => r.availability === "ONLINE");
+    else if (tab === "BUSY") list = list.filter((r) => r.availability === "ORDER_ASSIGNED");
+    else if (tab === "BLOCKED") list = list.filter((r) => r.blocked || r.availability === "BLOCKED");
+    else if (tab === "OFFLINE") list = list.filter((r) => r.availability === "OFFLINE");
+    if (statusFilter !== "ALL") list = list.filter((r) => r.status === statusFilter);
     const query = q.trim().toLowerCase();
-    if (!query) return riders;
-    return riders.filter((r) =>
+    if (query) list = list.filter((r) =>
       [r.name, r.phone, String(r.id), r.vehicle_type, r.city]
         .some((v) => String(v || "").toLowerCase().includes(query)),
     );
-  }, [riders, q]);
+    return list;
+  }, [riders, q, tab, statusFilter]);
 
   async function approve(e, id) {
     e.stopPropagation();
@@ -65,17 +82,20 @@ export default function Riders() {
     load();
   }
 
-  const pendingCount = riders.filter((r) => r.status === "PENDING").length;
-  const availableCount = riders.filter((r) => r.isAvailable).length;
+  const onlineCount = riders.filter((r) => r.availability === "ONLINE").length;
+  const busyCount = riders.filter((r) => r.availability === "ORDER_ASSIGNED").length;
+  const blockedCount = riders.filter((r) => r.blocked || r.availability === "BLOCKED").length;
+  const offlineCount = riders.filter((r) => r.availability === "OFFLINE").length;
 
   return (
     <div data-testid="riders-page">
-      <PageHeader title="Rider Management" subtitle="Pending approvals and available fleet (live API)" />
+      <PageHeader title="Rider Management" subtitle="All riders with live availability status" />
 
-      <div className="grid grid-cols-3 gap-3 mb-4">
-        <div className="kpi"><div className="label">Shown</div><div className="value">{filtered.length}</div></div>
-        <div className="kpi"><div className="label">Pending (in view)</div><div className="value">{pendingCount}</div></div>
-        <div className="kpi"><div className="label">Available (in view)</div><div className="value">{availableCount}</div></div>
+      <div className="grid grid-cols-4 gap-3 mb-4">
+        <div className="kpi"><div className="label">Online</div><div className="value" style={{ color: "var(--brand-green)" }}>{onlineCount}</div></div>
+        <div className="kpi"><div className="label">Busy</div><div className="value" style={{ color: "var(--brand-amber, #d97706)" }}>{busyCount}</div></div>
+        <div className="kpi"><div className="label">Blocked</div><div className="value" style={{ color: "var(--brand-red)" }}>{blockedCount}</div></div>
+        <div className="kpi"><div className="label">Offline</div><div className="value">{offlineCount}</div></div>
       </div>
 
       <div className="tabbar mb-3">
@@ -106,7 +126,7 @@ export default function Riders() {
           <thead>
             <tr>
               <th></th><th>Name</th><th>Phone</th><th>Vehicle</th><th>City</th><th>Rating</th>
-              <th>Status</th><th>Avail</th><th>Wallet</th><th>COD</th><th>Actions</th><th></th>
+              <th>Approval</th><th>Status</th><th>Wallet</th><th>COD</th><th>Actions</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -121,11 +141,10 @@ export default function Riders() {
                 <td>{r.city}</td>
                 <td className="mono">{r.rating ?? "—"}</td>
                 <td><span className={`pill ${r.status === "APPROVED" ? "pill-green" : r.status === "PENDING" ? "pill-amber" : "pill-red"}`}>{r.status}</span></td>
-                <td><span className={`pill ${r.availability === "ONLINE" ? "pill-green" : "pill-slate"}`}>{r.availability}</span></td>
+                <td><RiderStatusPill status={r.availability} blocked={r.blocked} /></td>
                 <td className="mono text-[12px]">₹{r.wallet_balance}</td>
                 <td className="mono text-[12px]" style={{ color: r.blocked ? "var(--brand-red)" : "var(--slate-600)" }}>₹{r.cod_pending}/{r.cod_limit}</td>
                 <td onClick={(e) => e.stopPropagation()}>
-                  {r.blocked && <span className="pill pill-red mr-1">Blocked</span>}
                   {r.status === "PENDING" && (
                     <div className="flex gap-1">
                       <button onClick={(e) => approve(e, r.id)} className="chip" data-testid={`approve-${r.id}`}>Approve</button>
