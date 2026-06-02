@@ -12,7 +12,7 @@ export default function ImageUploadField({
   accept = "image/*",
   testId = "image-upload",
   required = false,
-  hint = "JPEG, PNG, or WebP. Backend uploads to Cloudinary.",
+  hint = "JPEG, PNG, or WebP. Uploaded directly to Cloudinary.",
 }) {
   const inputId = useId();
   const [preview, setPreview] = useState("");
