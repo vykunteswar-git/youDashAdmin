@@ -544,6 +544,7 @@ function appConfigPayload(data = {}) {
     defaultPaymentType: data.defaultPaymentType,
     pickupLegTiers: normalizeTierPayload(data.pickupLegTiers),
     dropLegTiers: normalizeTierPayload(data.dropLegTiers),
+    weightCostSlabs: normalizeWeightSlabPayload(data.weightCostSlabs),
   };
 }
 
@@ -552,9 +553,24 @@ function normalizeTierPayload(tiers = []) {
     id: tier.id,
     minWeightKg: numberOrUndefined(tier.minWeightKg),
     maxWeightKg: numberOrUndefined(tier.maxWeightKg),
+    vehicleId: numberOrUndefined(tier.vehicleId),
+    baseFare: numberOrUndefined(tier.baseFare),
+    minimumKm: numberOrUndefined(tier.minimumKm),
     ratePerKm: numberOrUndefined(tier.ratePerKm),
     sortOrder: numberOrUndefined(tier.sortOrder) ?? index,
     isActive: tier.isActive ?? true,
+  }));
+}
+
+function normalizeWeightSlabPayload(slabs = []) {
+  if (!slabs) return [];
+  return slabs.map((slab, index) => ({
+    id: slab.id,
+    minWeightKg: numberOrUndefined(slab.minWeightKg),
+    maxWeightKg: numberOrUndefined(slab.maxWeightKg),
+    flatCost: numberOrUndefined(slab.flatCost),
+    sortOrder: numberOrUndefined(slab.sortOrder) ?? index,
+    isActive: slab.isActive ?? true,
   }));
 }
 
@@ -1364,6 +1380,7 @@ function normalizeAppConfig(config = {}) {
     defaultPaymentType: config.defaultPaymentType ?? "ONLINE",
     pickupLegTiers: (config.pickupLegTiers || []).map(normalizeTier),
     dropLegTiers: (config.dropLegTiers || []).map(normalizeTier),
+    weightCostSlabs: (config.weightCostSlabs || []).map(normalizeWeightSlab),
   };
 }
 
@@ -1372,9 +1389,24 @@ function normalizeTier(tier = {}) {
     id: tier.id,
     minWeightKg: tier.minWeightKg ?? 0,
     maxWeightKg: tier.maxWeightKg ?? 0,
+    vehicleId: tier.vehicleId ?? null,
+    vehicleName: tier.vehicleName ?? null,
+    baseFare: tier.baseFare ?? 0,
+    minimumKm: tier.minimumKm ?? 0,
     ratePerKm: tier.ratePerKm ?? 0,
     sortOrder: tier.sortOrder ?? 0,
     isActive: tier.isActive ?? true,
+  };
+}
+
+function normalizeWeightSlab(slab = {}) {
+  return {
+    id: slab.id,
+    minWeightKg: slab.minWeightKg ?? 0,
+    maxWeightKg: slab.maxWeightKg ?? 0,
+    flatCost: slab.flatCost ?? 0,
+    sortOrder: slab.sortOrder ?? 0,
+    isActive: slab.isActive ?? true,
   };
 }
 
