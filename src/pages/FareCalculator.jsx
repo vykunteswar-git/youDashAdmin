@@ -89,13 +89,16 @@ export default function FareCalculator() {
   function setMOS(key, val) { setManualOutstation(s => ({ ...s, [key]: val })); }
 
   async function fetchOrder() {
-    const id = orderId.trim();
-    if (!id) return;
+    const ref = orderId.trim();
+    if (!ref) return;
     setOrderLoading(true);
     setOrderError(null);
     setOrderData(null);
     try {
-      const res = await api.get(`/orders/${id}`);
+      const isNumeric = /^\d+$/.test(ref);
+      const res = isNumeric
+        ? await api.get(`/orders/${ref}`)
+        : await api.get("/orders/by-ref", { params: { ref } });
       setOrderData(res.data);
     } catch (err) {
       setOrderError(err?.response?.data?.message || err?.response?.data?.detail || "Order not found");
@@ -733,7 +736,7 @@ function OrderFareTab({ orderId, setOrderId, orderData, orderLoading, orderError
               value={orderId}
               onChange={e => setOrderId(e.target.value)}
               onKeyDown={e => e.key === "Enter" && onFetch()}
-              placeholder="Enter order ID (e.g. 1042)"
+              placeholder="Enter order ID or ref (e.g. 1042 or YP-5081780418185270)"
               className="input flex-1"
               data-testid="order-id-input"
             />

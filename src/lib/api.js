@@ -72,6 +72,10 @@ function rewriteAdminRequest(config) {
     config.url = url.replace("/orders", "/admin/orders");
     return config;
   }
+  if (url === "/orders/by-ref") {
+    config.url = "/admin/orders/by-ref";
+    return config;
+  }
   if (url.match(/^\/orders\/\d+\/activity$/)) {
     config.url = url.replace("/orders", "/admin/orders").replace("/activity", "");
     return config;
@@ -330,7 +334,7 @@ function normalizeAdminResponse(response) {
   else if (originalUrl === "/orders") response.data = { orders: filterOrders((data || []).map(normalizeOrder), response.config?.params) };
   else if (originalUrl === "/orders/grouped") response.data = { groups: groupOrders(filterOrders((data || []).map(normalizeOrder), response.config?.params)) };
   else if (originalUrl === "/orders/routes") response.data = { routes: routesFromOrders((data || []).map(normalizeOrder)) };
-  else if (originalUrl.match(/^\/orders\/\d+$/)) response.data = normalizeOrder(data);
+  else if (originalUrl.match(/^\/orders\/\d+$/) || originalUrl === "/orders/by-ref") response.data = normalizeOrder(data);
   else if (originalUrl.match(/^\/orders\/\d+\/activity$/)) response.data = { activity: normalizeActivity(data) };
   else if (originalUrl === "/riders/eligible") response.data = { riders: (data || []).map(normalizeRiderUi) };
   else if (originalUrl === "/users") response.data = { users: (data || []).map(normalizeUser) };
