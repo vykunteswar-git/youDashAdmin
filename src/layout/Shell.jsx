@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Package, Users, Truck, MapPin, Building2,
   CreditCard, ArrowDownToLine, Tags, ListChecks, Percent,
   Sparkles, BellRing, BarChart3, Smartphone, Settings,
-  Image, Bike, Banknote, Route, LogOut
+  Image, Bike, Banknote, Route, LogOut, Calculator
 } from "lucide-react";
 import { clearAuthSession, getAuthUser } from "@/lib/auth";
 import BrandLogo from "@/components/BrandLogo";
@@ -24,6 +24,7 @@ const NAV = [
     { to: "/hubs", label: "Hubs", icon: Building2, testid: "nav-hubs" },
     { to: "/app-config", label: "App Config", icon: Settings, testid: "nav-app-config" },
     { to: "/pricing", label: "Pricing Routes", icon: Route, testid: "nav-pricing" },
+    { to: "/fare-calculator", label: "Fare Calculator", icon: Calculator, testid: "nav-fare-calculator" },
   ]},
   { group: "People", items: [
     { to: "/users", label: "Users", icon: Users, testid: "nav-users" },

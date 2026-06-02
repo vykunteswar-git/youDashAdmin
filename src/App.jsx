@@ -27,6 +27,7 @@ import AppConfig from "@/pages/AppConfig";
 import CMS from "@/pages/CMS";
 import CodHandover from "@/pages/CodHandover";
 import Pricing from "@/pages/Pricing";
+import FareCalculator from "@/pages/FareCalculator";
 import ZoneForm from "@/pages/AddZone";
 import HubForm from "@/pages/AddHub";
 import RiderDetail from "@/pages/RiderDetail";
@@ -52,6 +53,7 @@ export default function App() {
           <Route path="hubs/new" element={<HubForm mode="create" />} />
           <Route path="hubs/:id/edit" element={<HubForm mode="edit" />} />
           <Route path="pricing" element={<Pricing />} />
+          <Route path="fare-calculator" element={<FareCalculator />} />
           <Route path="app-config" element={<AppConfig />} />
           <Route path="transactions" element={<Transactions />} />
           <Route path="payments" element={<Payments />} />
