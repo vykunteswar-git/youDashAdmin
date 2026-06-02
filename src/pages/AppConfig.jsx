@@ -301,15 +301,20 @@ function TierEditor({ tiers, vehicles, onChange, legLabel, fallbackRate }) {
                   )}
                 </label>
                 <select
-                  value={tier.vehicleId ?? ""}
-                  onChange={e => setTier(index, "vehicleId", e.target.value ? Number(e.target.value) : null)}
+                  value={tier.vehicleId != null ? String(tier.vehicleId) : ""}
+                  onChange={e => setTier(index, "vehicleId", e.target.value ? parseInt(e.target.value, 10) : null)}
                   className={`input ${!tier.vehicleId && tier.isActive !== false ? "border-rose-400 ring-1 ring-rose-300" : ""}`}
                 >
                   <option value="">Select vehicle</option>
                   {vehicles.map(v => (
-                    <option key={v.id} value={v.id}>{v.name}</option>
+                    <option key={v.id} value={String(v.id)}>{v.name}</option>
                   ))}
                 </select>
+                {tier.vehicleId && (
+                  <p className="text-[11px] text-emerald-600 mt-1">
+                    ✓ {vehicles.find(v => v.id === tier.vehicleId)?.name ?? `Vehicle #${tier.vehicleId}`}
+                  </p>
+                )}
               </div>
             </div>
 
