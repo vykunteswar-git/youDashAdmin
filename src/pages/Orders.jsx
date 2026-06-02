@@ -14,7 +14,7 @@ import {
   getOutstationPrimaryNextStatus,
   orderMatchesDateFilter,
 } from "@/lib/orderStatusUtils";
-import { Search, X, Layers, ListFilter, ChevronRight, Radio, Volume2, BellRing } from "lucide-react";
+import { Search, X, Layers, ListFilter, ChevronRight, Radio, Volume2, BellRing, Copy } from "lucide-react";
 import { toast } from "sonner";
 
 const STATUS_OPTIONS = ["ALL", ...ALL_STATUSES, ...EXCEPTION_STATUSES];
@@ -349,7 +349,15 @@ export default function Orders() {
                     <input type="checkbox" checked={selected.has(o.id)} onChange={() => toggleRow(o.id)}
                       data-testid={`select-${o.tracking_id}`} />
                   </td>
-                  <td onClick={() => nav(`/orders/${o.id}`)} className="mono text-[12px] font-semibold">{o.tracking_id}</td>
+                  <td className="mono text-[12px] font-semibold">
+                    <div className="flex items-center gap-1.5">
+                      <span onClick={() => nav(`/orders/${o.id}`)} className="cursor-pointer">{o.tracking_id}</span>
+                      <button type="button" onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(o.tracking_id); toast.success("Copied!"); }}
+                        className="text-zinc-300 hover:text-zinc-600 transition flex-shrink-0" title="Copy order ID">
+                        <Copy size={11} />
+                      </button>
+                    </div>
+                  </td>
                   <td onClick={() => nav(`/orders/${o.id}`)}>{o.origin_city} → {o.destination_city}</td>
                   <td onClick={() => nav(`/orders/${o.id}`)}><StatusPill status={o.status} /></td>
                   <td onClick={() => nav(`/orders/${o.id}`)} className="text-[11px] text-zinc-600">{o.delivery_type.replaceAll("_", "→")}</td>
@@ -433,7 +441,13 @@ export default function Orders() {
                               <input type="checkbox" checked={selected.has(o.id)} onChange={() => toggleRow(o.id)}
                                 data-testid={`group-select-${o.tracking_id}`} />
                               <div className="flex items-center justify-between flex-1 cursor-pointer" onClick={() => nav(`/orders/${o.id}`)}>
-                                <span className="mono font-semibold">{o.tracking_id}</span>
+                                <span className="mono font-semibold flex items-center gap-1">
+                                  {o.tracking_id}
+                                  <button type="button" onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(o.tracking_id); toast.success("Copied!"); }}
+                                    className="text-zinc-300 hover:text-zinc-600 transition" title="Copy order ID">
+                                    <Copy size={11} />
+                                  </button>
+                                </span>
                                 <span className="text-zinc-500">{o.sender?.name} → {o.receiver?.name}</span>
                                 <span className={`pill ${o.payment_mode === "COD" ? "bg-amber-50 text-amber-800 border-amber-300" : "bg-emerald-50 text-emerald-800 border-emerald-300"}`}>{o.payment_mode}</span>
                                 <span className="mono">{o.weight_kg} kg</span>

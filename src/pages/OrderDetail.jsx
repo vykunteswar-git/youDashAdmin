@@ -8,7 +8,7 @@ import { formatStatusLabel, getOutstationPrimaryNextStatus } from "@/lib/orderSt
 import AssignRiderModal from "@/components/modals/AssignRiderModal";
 import OtpModal from "@/components/modals/OtpModal";
 import { toast } from "sonner";
-import { ChevronLeft, Phone, BellRing, ArrowRight, Truck, Package, Coins, Activity as ActivityIcon } from "lucide-react";
+import { ChevronLeft, Phone, BellRing, ArrowRight, Truck, Package, Coins, Activity as ActivityIcon, Copy } from "lucide-react";
 
 export default function OrderDetail() {
   const { id } = useParams();
@@ -111,7 +111,18 @@ export default function OrderDetail() {
       </Link>
 
       <PageHeader
-        title={<span className="mono">{o.tracking_id}</span>}
+        title={
+          <span className="mono flex items-center gap-2">
+            {o.tracking_id}
+            <button type="button"
+              onClick={() => { navigator.clipboard.writeText(o.tracking_id); toast.success("Copied!"); }}
+              className="text-zinc-300 hover:text-zinc-600 transition"
+              title="Copy order ID"
+            >
+              <Copy size={14} />
+            </button>
+          </span>
+        }
         subtitle={`${o.origin_city} → ${o.destination_city} · ${o.delivery_type.replaceAll("_", " → ")}`}
         actions={
           <div className="flex gap-2 items-center">
