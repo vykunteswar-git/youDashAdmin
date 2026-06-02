@@ -149,7 +149,7 @@ function rewriteAdminRequest(config) {
   if (url === "/vehicles") {
     config.url = "/admin/vehicles";
     if (config.method === "post") {
-      config.data = adminMultipartFormData(vehicleMultipartPayload(config.data));
+      config.data = vehicleJsonPayload(config.data);
     }
     return config;
   }
@@ -157,7 +157,7 @@ function rewriteAdminRequest(config) {
     config.url = url.replace("/vehicles", "/admin/vehicles");
     if (config.method === "patch") config.method = "put";
     if (config.method === "put") {
-      config.data = adminMultipartFormData(vehicleMultipartPayload(config.data));
+      config.data = vehicleJsonPayload(config.data);
     }
     return config;
   }
@@ -472,6 +472,20 @@ function vehicleMultipartPayload(data = {}) {
     imageUrl: imageUrl || undefined,
     isActive: data.active ?? data.isActive,
     imageFile: data.imageFile,
+  };
+}
+
+function vehicleJsonPayload(data = {}) {
+  if (!data) return {};
+  const imageUrl = data.image || data.imageUrl;
+  return {
+    name: data.name,
+    pricePerKm: numberOrUndefined(data.per_km ?? data.pricePerKm),
+    baseFare: numberOrUndefined(data.base_fare ?? data.baseFare),
+    minimumKm: numberOrUndefined(data.min_distance ?? data.minimumKm),
+    maxWeight: numberOrUndefined(data.max_weight ?? data.maxWeight),
+    imageUrl: imageUrl || undefined,
+    isActive: data.active ?? data.isActive,
   };
 }
 
