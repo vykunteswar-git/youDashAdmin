@@ -1,0 +1,129 @@
+.hub-form-page {
+  margin: -24px;
+  min-height: calc(100vh - 56px);
+  display: flex;
+  flex-direction: column;
+  background: var(--app-bg);
+}
+
+.hub-form-topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px;
+  background: #fff;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.hub-form-topbar h2 {
+  font-family: "Outfit", sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 4px;
+  color: var(--text-dark);
+}
+
+.hub-form-topbar p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--slate-600);
+}
+
+.hub-form-layout {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+@media (min-width: 992px) {
+  .hub-form-layout {
+    flex-direction: row;
+  }
+}
+
+.hub-form-map-col {
+  position: relative;
+  flex: 1 1 58%;
+  min-height: min(42vh, 360px);
+  background: var(--slate-100);
+  border-bottom: 1px solid var(--border-default);
+}
+
+@media (min-width: 992px) {
+  .hub-form-map-col {
+    min-height: 0;
+    border-bottom: none;
+    border-right: 1px solid var(--border-default);
+  }
+}
+
+.hub-form-map-badge {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 2;
+  pointer-events: none;
+  background: #111827;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.hub-form-map-wrap {
+  position: absolute;
+  inset: 0;
+}
+
+.hub-form-panel {
+  flex: 1 1 42%;
+  overflow-y: auto;
+  background: #fff;
+  padding: 24px;
+}
+
+.hub-map-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--slate-600);
+  background: var(--slate-50);
+}
+
+.hub-map-placeholder--error {
+  color: var(--brand-red);
+}
+
+.hub-map-placeholder code {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  background: var(--slate-100);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.hub-map-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--slate-200);
+  border-top-color: var(--brand-red);
+  border-radius: 50%;
+  animation: hubMapSpin 0.75s linear infinite;
+}
+
+@keyframes hubMapSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}

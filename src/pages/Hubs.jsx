@@ -50,13 +50,12 @@ export default function Hubs() {
       </div>
       <div className="surface overflow-hidden">
         <table className="tbl">
-          <thead><tr><th>Name</th><th>City</th><th>Coords</th><th>Hours</th><th>Slots</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>Name</th><th>City</th><th>Hours</th><th>Slots</th><th>Status</th><th></th></tr></thead>
           <tbody>
             {filtered.map(h => (
               <tr key={h.id} data-testid={`hub-row-${h.id}`}>
                 <td className="font-medium">{h.name}</td>
                 <td>{h.city}</td>
-                <td className="mono text-[11px]">{h.lat}, {h.lng}</td>
                 <td className="text-[12px]">{h.hours}</td>
                 <td className="text-[12px]">{(h.slots || []).length} configured</td>
                 <td><span className={`pill ${h.status === "FULLY_OPERATIONAL" ? "pill-green" : "pill-red"}`}>{h.status.replaceAll("_", " ")}</span></td>
@@ -67,7 +66,7 @@ export default function Hubs() {
                 </td>
               </tr>
             ))}
-            {filtered.length === 0 && <tr><td colSpan={7} className="empty">No hubs found for selected filters</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={6} className="empty">No hubs found for selected filters</td></tr>}
           </tbody>
         </table>
       </div>

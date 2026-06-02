@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { GoogleMap, Marker, Circle, Polygon, useJsApiLoader } from "@react-google-maps/api";
+import { GoogleMap, Marker, Circle, Polygon } from "@react-google-maps/api";
 import api from "@/lib/api";
+import { useGoogleMapsLoader } from "@/config/googleMaps";
 import PageHeader from "@/components/PageHeader";
 import { toast } from "sonner";
 import { ArrowLeft, Save } from "lucide-react";
@@ -24,9 +25,7 @@ export default function ZoneForm({ mode = "create" }) {
   });
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(isEdit);
-  const { isLoaded: mapLoaded } = useJsApiLoader({
-    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "",
-  });
+  const { isLoaded: mapLoaded } = useGoogleMapsLoader();
 
   useEffect(() => {
     if (!isEdit) return;
