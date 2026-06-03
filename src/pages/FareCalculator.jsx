@@ -180,8 +180,8 @@ export default function FareCalculator() {
         wN = wt > 0 ? wNote(wt, cfg.weightCostSlabs, cfg.perKgRate) : null;
         vehicleName = vehicle.name;
       }
-      const billableKm = Math.max(dist, minKm);
-      const distCharge = r2(billableKm * perKm);
+      const underMin   = minKm > 0 && dist < minKm;
+      const distCharge = underMin ? 0 : r2(dist * perKm);
       const subtotal   = r2(baseFare + distCharge + weightCharge);
       const gstAmt     = r2(subtotal * ((Number(cfg.gstPercent)||0) / 100));
       const platFee    = Number(cfg.incityPlatformFee)||0;
@@ -191,8 +191,8 @@ export default function FareCalculator() {
       return {
         serviceType, deliveryType: null, vehicleName, paymentMode, commissionPct: commPct,
         rows: [
-          { label: "Base Fare", note: `Flat · ${vehicleName}`, amount: baseFare },
-          { label: "Distance",  note: `${billableKm} km × ₹${perKm}/km${dist < minKm ? ` (min ${minKm} km)` : ""}`, amount: distCharge },
+          { label: "Base Fare", note: underMin ? `Flat · ${vehicleName} (${dist} km < ${minKm} km min)` : `Flat · ${vehicleName}`, amount: baseFare },
+          ...(!underMin ? [{ label: "Distance", note: `${dist} km × ₹${perKm}/km`, amount: distCharge }] : []),
           ...(wt > 0 ? [{ label: "Weight", note: wN, amount: weightCharge }] : []),
         ],
         subtotal, gst: { pct: cfg.gstPercent, amount: gstAmt }, platformFee: platFee,
