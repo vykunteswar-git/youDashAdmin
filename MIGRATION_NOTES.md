@@ -61,6 +61,10 @@ shim translates the UI's clean paths to the real `/admin/...` endpoints.
 - Vite dev proxy must **not** include `/orders` (that path is the React route; proxying it returned
   raw `401 Authorization token is missing` JSON instead of the SPA).
 - Google Maps (Add/Edit Zone) still needs `VITE_GOOGLE_MAPS_API_KEY`.
+- **Vehicle images** upload from the browser to Cloudinary (unsigned preset). Build with
+  `VITE_CLOUDINARY_CLOUD_NAME` and `VITE_CLOUDINARY_UPLOAD_PRESET` (see `.env.production.example`).
+  **Banners** send `imageFile` multipart to the Spring API — Cloudinary must be configured on the
+  backend (`YouDashParcel`), not only in the admin `.env`.
 - **Production deploy:** set `VITE_BACKEND_URL=https://youdashexpress.com` at build time. Without it, the
   app defaults to that URL in production builds. Do not POST `/admin/login` to `admin.youdashexpress.com`
   (static nginx → 405); API calls must go to `youdashexpress.com`.
