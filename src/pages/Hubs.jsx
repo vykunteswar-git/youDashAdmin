@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
 import { toast } from "sonner";
-import { Plus, Save, X, Clock } from "lucide-react";
+import { Plus, Save, X, Clock, Trash2 } from "lucide-react";
 
 export default function Hubs() {
   const nav = useNavigate();
@@ -11,7 +11,8 @@ export default function Hubs() {
   const [zones, setZones] = useState([]);
   const [zone, setZone] = useState("ALL");
   const [status, setStatus] = useState("ALL");
-  const [editing, setEditing] = useState(null); // hub being edited for slots
+  const [editing, setEditing] = useState(null);
+  const [deleting, setDeleting] = useState(null);
 
   async function load() {
     const r = await api.get("/hubs");
@@ -27,6 +28,18 @@ export default function Hubs() {
     const ns = h.status === "FULLY_OPERATIONAL" ? "HUB_OFF" : "FULLY_OPERATIONAL";
     await api.patch(`/hubs/${h.id}`, { status: ns });
     toast.success("Updated"); load();
+  }
+
+  async function confirmDelete(h) {
+    try {
+      await api.delete(`/hubs/${h.id}`);
+      toast.success(`Hub "${h.name}" deleted`);
+      setDeleting(null);
+      load();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Delete failed");
+      setDeleting(null);
+    }
   }
   return (
     <div data-testid="hubs-page">
@@ -63,6 +76,7 @@ export default function Hubs() {
                   <button onClick={() => nav(`/hubs/${h.id}/edit`)} className="chip" data-testid={`edit-hub-${h.id}`}>Edit</button>
                   <button onClick={() => setEditing(h)} className="chip" data-testid={`edit-slots-${h.id}`}><Clock size={11} /> SLA</button>
                   <button onClick={() => toggle(h)} className="chip" data-testid={`toggle-hub-${h.id}`}>Toggle</button>
+                  <button onClick={() => setDeleting(h)} className="chip chip-danger" data-testid={`delete-hub-${h.id}`}><Trash2 size={11} /></button>
                 </td>
               </tr>
             ))}
@@ -72,6 +86,26 @@ export default function Hubs() {
       </div>
 
       <HubSlaEditor hub={editing} zones={zones} onClose={() => setEditing(null)} />
+
+      {deleting && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="surface w-[420px] p-6">
+            <h3 className="text-[15px] font-semibold mb-2" style={{ fontFamily: "Outfit" }}>Delete hub?</h3>
+            <p className="text-[13px] text-zinc-600 mb-1">
+              You are about to permanently delete <span className="font-semibold">{deleting.name}</span>.
+            </p>
+            <p className="text-[12px] text-zinc-400 mb-5">
+              This will fail if any orders are currently in progress at this hub.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDeleting(null)} className="chip">Cancel</button>
+              <button onClick={() => confirmDelete(deleting)} className="btn-danger" data-testid="confirm-delete-hub">
+                <Trash2 size={13} /> Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
