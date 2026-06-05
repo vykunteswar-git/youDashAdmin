@@ -314,6 +314,11 @@ function rewriteAdminRequest(config) {
     config.adapter = auditLogsAdapter;
     return config;
   }
+  if (url === "/earnings") {
+    config.url = "/admin/earnings";
+    config.params = { range: rangeToBackend(config.params?.range) };
+    return config;
+  }
 
   return config;
 }
@@ -365,6 +370,7 @@ function normalizeAdminResponse(response) {
   else if (originalUrl === "/zone-route-sla") response.data = { slas: Array.isArray(data) ? data : [] };
   else if (originalUrl === "/hub-corridor-sla") response.data = { slas: Array.isArray(data) ? data : [] };
   else if (originalUrl === "/hub-route-sla") response.data = { slas: Array.isArray(data) ? data : [] };
+  else if (originalUrl === "/earnings") response.data = normalizeEarnings(data);
   else response.data = data || payload;
 
   return response;
@@ -397,6 +403,7 @@ function emptyDataFor(originalUrl) {
   }
   if (originalUrl === "/dashboard/summary") return {};
   if (originalUrl === "/reports") return {};
+  if (originalUrl === "/earnings") return { orderCount: 0, totalRevenue: 0, totalCommission: 0, totalGst: 0, totalPlatformFee: 0, totalPlatformNet: 0, totalRiderPayouts: 0, orders: [] };
   if (originalUrl === "/transactions") return {};
   if (originalUrl === "/notifications/targets") return { cities: [], zones: [], users: [], riders: [] };
   return null;
@@ -1592,5 +1599,19 @@ function recommendationFor(status) {
   return {
     title: status ? status.replaceAll("_", " ") : "Review order",
     detail: "Check the order details and choose the next valid admin action.",
+  };
+}
+
+function normalizeEarnings(data = {}) {
+  return {
+    range: data.range ?? "",
+    orderCount: data.orderCount ?? 0,
+    totalRevenue: data.totalRevenue ?? 0,
+    totalCommission: data.totalCommission ?? 0,
+    totalGst: data.totalGst ?? 0,
+    totalPlatformFee: data.totalPlatformFee ?? 0,
+    totalPlatformNet: data.totalPlatformNet ?? 0,
+    totalRiderPayouts: data.totalRiderPayouts ?? 0,
+    orders: Array.isArray(data.orders) ? data.orders : [],
   };
 }

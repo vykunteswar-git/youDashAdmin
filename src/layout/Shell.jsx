@@ -5,7 +5,7 @@ import {
   CreditCard, ArrowDownToLine, Tags, ListChecks, Percent,
   Sparkles, BellRing, BarChart3, Smartphone, Settings,
   Image, Bike, Banknote, Route, LogOut, Calculator,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, TrendingUp
 } from "lucide-react";
 import { clearAuthSession, getAuthUser } from "@/lib/auth";
 import BrandLogo from "@/components/BrandLogo";
@@ -32,6 +32,7 @@ const NAV = [
     { to: "/users",          label: "Users",           icon: Users,           testid: "nav-users" },
   ]},
   { group: "Financials", items: [
+    { to: "/earnings",       label: "Earnings",        icon: TrendingUp,      testid: "nav-earnings" },
     { to: "/transactions",   label: "Transactions",    icon: CreditCard,      testid: "nav-txns" },
     { to: "/payments",       label: "Payments",        icon: Banknote,        testid: "nav-payments" },
     { to: "/withdrawals",    label: "Withdrawals",     icon: ArrowDownToLine, testid: "nav-withdrawals" },

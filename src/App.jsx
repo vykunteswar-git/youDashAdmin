@@ -26,6 +26,7 @@ import AppVersion from "@/pages/AppVersion";
 import AppConfig from "@/pages/AppConfig";
 import CMS from "@/pages/CMS";
 import CodHandover from "@/pages/CodHandover";
+import Earnings from "@/pages/Earnings";
 import Pricing from "@/pages/Pricing";
 import FareCalculator from "@/pages/FareCalculator";
 import ZoneForm from "@/pages/AddZone";
@@ -63,6 +64,7 @@ export default function App() {
           <Route path="commission" element={<Commission />} />
           <Route path="incentives" element={<Incentives />} />
           <Route path="cod-handover" element={<CodHandover />} />
+          <Route path="earnings" element={<Earnings />} />
           <Route path="notifications" element={<Notifications />} />
           <Route path="reports" element={<Reports />} />
           <Route path="app-version" element={<AppVersion />} />

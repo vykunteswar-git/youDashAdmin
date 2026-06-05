@@ -187,7 +187,8 @@ export default function FareCalculator() {
       const platFee    = Number(cfg.incityPlatformFee)||0;
       const beforeCoupon  = r2(subtotal + gstAmt + platFee);
       const customerTotal = r2(Math.max(0, beforeCoupon - couponAmt));
-      const commAmt    = r2(customerTotal * (commPct / 100));
+      // Commission applies on subtotal only — GST and platform fee are pass-throughs to platform
+      const commAmt    = r2(subtotal * (commPct / 100));
       return {
         serviceType, deliveryType: null, vehicleName, paymentMode, commissionPct: commPct,
         rows: [
@@ -197,7 +198,8 @@ export default function FareCalculator() {
         ],
         subtotal, gst: { pct: cfg.gstPercent, amount: gstAmt }, platformFee: platFee,
         couponAmt, beforeCoupon, customerTotal, commissionAmount: commAmt,
-        riderPayout: r2(customerTotal - commAmt),
+        riderPayout: r2(subtotal - commAmt),
+        platformNet: r2(commAmt + gstAmt + platFee),
         ratesUsed: { baseFare, perKm, minKm }, manualMode,
       };
 
@@ -239,7 +241,8 @@ export default function FareCalculator() {
       const platFee       = Number(cfg.outstationPlatformFee)||0;
       const beforeCoupon  = r2(subtotal + gstAmt + platFee);
       const customerTotal = r2(Math.max(0, beforeCoupon - couponAmt));
-      const commAmt       = r2(customerTotal * (commPct / 100));
+      // Commission applies on subtotal only — GST and platform fee are pass-throughs to platform
+      const commAmt       = r2(subtotal * (commPct / 100));
       return {
         serviceType, deliveryType, vehicleName: null, pickupVehicle, dropVehicle, paymentMode, commissionPct: commPct,
         rows: [
@@ -250,7 +253,8 @@ export default function FareCalculator() {
         ],
         subtotal, gst: { pct: cfg.gstPercent, amount: gstAmt }, platformFee: platFee,
         couponAmt, beforeCoupon, customerTotal, commissionAmount: commAmt,
-        riderPayout: r2(customerTotal - commAmt),
+        riderPayout: r2(subtotal - commAmt),
+        platformNet: r2(commAmt + gstAmt + platFee),
         ratesUsed, manualMode,
       };
     }
@@ -515,33 +519,33 @@ function ResultPanel({ result }) {
             </div>
           </div>
 
-          {/* Commission donut-style summary */}
+          {/* Commission split summary */}
           <div className="flex-shrink-0 text-right">
-            <div className="text-[10px] uppercase tracking-wider text-zinc-400 mb-2">Commission Split</div>
+            <div className="text-[10px] uppercase tracking-wider text-zinc-400 mb-2">Settlement Split</div>
             <div className="flex items-center gap-3 justify-end">
               <div>
-                <div className="text-[10px] text-zinc-400 mb-0.5">Platform</div>
-                <div className="text-[18px] font-bold mono text-zinc-900">₹{result.commissionAmount.toFixed(2)}</div>
-                <div className="text-[10px] text-zinc-400 mono">{commPct}%</div>
+                <div className="text-[10px] text-zinc-400 mb-0.5">Rider Gets</div>
+                <div className="text-[18px] font-bold mono text-emerald-700">₹{result.riderPayout.toFixed(2)}</div>
+                <div className="text-[10px] text-zinc-400 mono">{riderPct}% of subtotal</div>
               </div>
               <div className="text-zinc-200 text-[18px]">·</div>
               <div>
-                <div className="text-[10px] text-zinc-400 mb-0.5">Rider</div>
-                <div className="text-[18px] font-bold mono text-emerald-700">₹{result.riderPayout.toFixed(2)}</div>
-                <div className="text-[10px] text-zinc-400 mono">{riderPct}%</div>
+                <div className="text-[10px] text-zinc-400 mb-0.5">Platform Net</div>
+                <div className="text-[18px] font-bold mono text-zinc-900">₹{result.platformNet.toFixed(2)}</div>
+                <div className="text-[10px] text-zinc-400 mono">comm+GST+fee</div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Split bar */}
+        {/* Split bar — based on subtotal */}
         <div className="mt-4 h-2 rounded-full overflow-hidden bg-zinc-100 flex">
           <div className="bg-zinc-800 transition-all" style={{ width: `${commPct}%` }} />
           <div className="bg-emerald-500 flex-1" />
         </div>
         <div className="flex justify-between mt-1 text-[10px] text-zinc-400 mono">
-          <span>Platform {commPct}%</span>
-          <span>Rider {riderPct}%</span>
+          <span>Commission {commPct}% of subtotal</span>
+          <span>Rider {riderPct}% of subtotal</span>
         </div>
       </div>
 
@@ -612,6 +616,22 @@ function ResultPanel({ result }) {
             </div>
             <div className="mono font-bold text-[22px]">₹{result.customerTotal.toFixed(2)}</div>
           </div>
+
+          {/* Settlement summary */}
+          <div className="grid grid-cols-3 divide-x divide-[var(--border-default)]">
+            <div className="px-5 py-3 text-center">
+              <div className="text-[10px] text-zinc-400 mb-1">Commission ({commPct}% of ₹{result.subtotal.toFixed(2)})</div>
+              <div className="mono font-semibold text-[14px]">₹{result.commissionAmount.toFixed(2)}</div>
+            </div>
+            <div className="px-5 py-3 text-center bg-zinc-50">
+              <div className="text-[10px] text-zinc-400 mb-1">Platform Net (comm+GST+fee)</div>
+              <div className="mono font-bold text-[14px] text-zinc-900">₹{result.platformNet.toFixed(2)}</div>
+            </div>
+            <div className="px-5 py-3 text-center">
+              <div className="text-[10px] text-zinc-400 mb-1">Rider Earns ({riderPct}% of ₹{result.subtotal.toFixed(2)})</div>
+              <div className="mono font-semibold text-[14px] text-emerald-700">₹{result.riderPayout.toFixed(2)}</div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -633,8 +653,8 @@ function ResultPanel({ result }) {
             </>
           )}
           <RateChip>GST {result.gst.pct}%</RateChip>
-          <RateChip>Platform ₹{result.platformFee}</RateChip>
-          <RateChip>Commission {result.commissionPct}%</RateChip>
+          <RateChip>Platform fee ₹{result.platformFee}</RateChip>
+          <RateChip>Commission {result.commissionPct}% on subtotal</RateChip>
         </div>
       </div>
     </div>
