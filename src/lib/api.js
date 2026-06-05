@@ -349,8 +349,8 @@ function normalizeAdminResponse(response) {
     response.data = { orders };
   }
   else if (originalUrl === "/vehicles") response.data = { vehicles: (data || []).map(normalizeVehicle) };
-  else if (originalUrl === "/zones") response.data = { zones: (data || []).map(normalizeZone) };
-  else if (originalUrl === "/hubs") response.data = { hubs: (data || []).map(normalizeHubForUi) };
+  else if (originalUrl === "/zones") response.data = { zones: Array.isArray(data) ? data.map(normalizeZone) : [] };
+  else if (originalUrl === "/hubs") response.data = { hubs: Array.isArray(data) ? data.map(normalizeHubForUi) : [] };
   else if (originalUrl === "/coupons") response.data = { coupons: (data || []).map(normalizeCoupon) };
   else if (originalUrl === "/categories") response.data = { categories: (data || []).map(normalizeCategory) };
   else if (originalUrl === "/banners") response.data = { banners: (data || []).map(normalizeBanner) };

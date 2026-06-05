@@ -15,8 +15,12 @@ export default function Hubs() {
   const [deleting, setDeleting] = useState(null);
 
   async function load() {
-    const r = await api.get("/hubs");
-    setHs(r.data?.hubs ?? []);
+    try {
+      const r = await api.get("/hubs");
+      setHs(r.data?.hubs ?? []);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Failed to load hubs");
+    }
   }
   useEffect(() => { api.get("/zones").then(r => setZones(r.data?.zones ?? [])); }, []);
   useEffect(() => { load(); }, []);
