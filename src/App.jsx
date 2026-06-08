@@ -8,6 +8,7 @@ import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import Orders from "@/pages/Orders";
 import OrderDetail from "@/pages/OrderDetail";
+import CreateHubToHub from "@/pages/CreateHubToHub";
 import Riders from "@/pages/Riders";
 import Users from "@/pages/Users";
 import Vehicles from "@/pages/Vehicles";
@@ -42,6 +43,7 @@ export default function App() {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="orders" element={<Orders />} />
+          <Route path="orders/create-h2h" element={<CreateHubToHub />} />
           <Route path="orders/:id" element={<OrderDetail />} />
           <Route path="riders" element={<Riders />} />
           <Route path="riders/:id" element={<RiderDetail />} />

@@ -14,7 +14,7 @@ import {
   getOutstationPrimaryNextStatus,
   orderMatchesDateFilter,
 } from "@/lib/orderStatusUtils";
-import { Search, X, Layers, ListFilter, ChevronRight, Radio, Volume2, BellRing, Copy } from "lucide-react";
+import { Search, X, Layers, ListFilter, ChevronRight, Radio, Volume2, BellRing, Copy, Building2 } from "lucide-react";
 import { toast } from "sonner";
 
 const STATUS_OPTIONS = ["ALL", ...ALL_STATUSES, ...EXCEPTION_STATUSES];
@@ -261,6 +261,9 @@ export default function Orders() {
             <span className={`chip ${live ? "text-emerald-700" : "text-zinc-400"}`} data-testid="live-indicator" title="Live order updates">
               <Radio size={12} className={live ? "text-emerald-500" : "text-zinc-400"} /> {live ? "Live" : "Connecting…"}
             </span>
+            <button onClick={() => nav("/orders/create-h2h")} className="chip" data-testid="book-h2h">
+              <Building2 size={12} /> Book H2H
+            </button>
             <button data-testid="view-list" onClick={() => setView("list")} className={`chip ${view === "list" ? "chip-active" : ""}`}><ListFilter size={12} /> List</button>
             <button data-testid="view-grouped" onClick={() => setView("grouped")} className={`chip ${view === "grouped" ? "chip-active" : ""}`}><Layers size={12} /> Grouped</button>
           </div>

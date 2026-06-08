@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
 import StatusPill from "@/components/StatusPill";
@@ -8,11 +8,15 @@ import { formatStatusLabel, getOutstationPrimaryNextStatus } from "@/lib/orderSt
 import AssignRiderModal from "@/components/modals/AssignRiderModal";
 import OtpModal from "@/components/modals/OtpModal";
 import { toast } from "sonner";
-import { ChevronLeft, Phone, BellRing, ArrowRight, Truck, Package, Coins, Activity as ActivityIcon, Copy } from "lucide-react";
+import { downloadH2hInvoice } from "@/lib/h2hInvoicePdf";
+import { ChevronLeft, Phone, BellRing, ArrowRight, Truck, Package, Coins, Activity as ActivityIcon, Copy, FileDown, Trash2 } from "lucide-react";
 
 export default function OrderDetail() {
   const { id } = useParams();
+  const nav = useNavigate();
   const [o, setO] = useState(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [activity, setActivity] = useState([]);
   const [tab, setTab] = useState("overview");
   const [assignOpen, setAssignOpen] = useState(false);
@@ -48,10 +52,11 @@ export default function OrderDetail() {
     load();
   }
 
+  const isH2h = o.delivery_type === "HUB_TO_HUB";
   const milestones = milestonesFor(o.delivery_type);
   const currentIdx = milestones.indexOf(o.status);
 
-  const primaryNext = getOutstationPrimaryNextStatus(o);
+  const primaryNext = isH2h ? null : getOutstationPrimaryNextStatus(o);
   const reco = {
     title: primaryNext ? formatStatusLabel(primaryNext) : o.recommendation?.title,
     detail: primaryNext
@@ -70,7 +75,46 @@ export default function OrderDetail() {
     setAssignOpen(true);
   }
 
+  async function confirmDeleteH2h() {
+    setDeleting(true);
+    try {
+      await api.delete(`/orders/${id}/hub-to-hub`);
+      toast.success("Hub-to-hub order deleted");
+      nav("/orders");
+    } catch (e) {
+      toast.error(e.response?.data?.message || "Delete failed");
+    } finally {
+      setDeleting(false);
+      setDeleteOpen(false);
+    }
+  }
+
+  function downloadInvoice() {
+    downloadH2hInvoice({
+      displayOrderId: o.tracking_id,
+      senderName: o.sender?.name,
+      senderPhone: o.sender?.phone,
+      receiverName: o.receiver?.name,
+      receiverPhone: o.receiver?.phone,
+      fromHub: o.origin_hub_name || o.sender?.address,
+      toHub: o.destination_hub_name || o.receiver?.address,
+      paymentType: o.payment_mode,
+      createdAt: o.created_at,
+      categoryName: o.category,
+      subtotal: o.subtotal ?? o.fare?.subtotal,
+      platformFee: o.platform_fee ?? o.fare?.platform_fee,
+      gstAmount: o.gst_amount ?? o.fare?.gst,
+      totalAmount: o.total_amount ?? o.fare?.total,
+    });
+    toast.success("LR invoice downloaded");
+  }
+
   function renderPrimaryAction() {
+    if (isH2h) {
+      return (
+        <ActionBtn label="Download LR invoice" onClick={downloadInvoice} icon={FileDown} />
+      );
+    }
     if (isException) {
       return <span className="text-[12px] text-zinc-400">No standard action available — order is in {o.status}.</span>;
     }
@@ -127,9 +171,21 @@ export default function OrderDetail() {
         actions={
           <div className="flex gap-2 items-center">
             <StatusPill status={o.status} testid="header-status" />
-            <button onClick={notifyCustomer} className="chip" data-testid="notify-customer">
-              <BellRing size={12} /> Notify customer
-            </button>
+            {isH2h && (
+              <>
+                <button onClick={downloadInvoice} className="chip" data-testid="download-h2h-invoice">
+                  <FileDown size={12} /> Download LR
+                </button>
+                <button onClick={() => setDeleteOpen(true)} className="chip text-red-600" data-testid="delete-h2h-order">
+                  <Trash2 size={12} /> Delete
+                </button>
+              </>
+            )}
+            {!isH2h && (
+              <button onClick={notifyCustomer} className="chip" data-testid="notify-customer">
+                <BellRing size={12} /> Notify customer
+              </button>
+            )}
           </div>
         }
       />
@@ -153,7 +209,12 @@ export default function OrderDetail() {
           <h3>{reco.title}</h3>
           <p>{reco.detail}</p>
           <div className="mt-4">{renderPrimaryAction()}</div>
-          {!isException && (
+          {isH2h && (
+            <p className="mt-3 text-[11px] text-zinc-500">
+              Hub-to-hub booking — no rider assignment, OTP, or status changes.
+            </p>
+          )}
+          {!isH2h && !isException && (
             <div className="mt-3 text-[11px] text-zinc-400">
               OTP for testing: <span className="mono text-zinc-200">pickup {o.otp_pickup} · delivery {o.otp_delivery} · hub-drop {o.otp_hub_drop} · hub-collect {o.otp_hub_collect}</span>
             </div>
@@ -184,37 +245,62 @@ export default function OrderDetail() {
         </div>
       </div>
 
-      {/* Exception zone */}
-      <div className="surface p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="font-semibold text-[14px]" style={{ fontFamily: "Outfit" }}>Exception actions</h3>
-            <p className="text-[12px] text-zinc-500">Cancel, fail or initiate return — allowed at any status.</p>
-          </div>
-          <div className="flex gap-2">
-            {EXCEPTION_STATUSES.map(s => (
-              <button key={s} onClick={() => advance(s, { note: "Admin exception" })}
-                data-testid={`exception-${s}`}
-                className="chip">{s.replaceAll("_", " ")}</button>
-            ))}
+      {!isH2h && (
+        <div className="surface p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold text-[14px]" style={{ fontFamily: "Outfit" }}>Exception actions</h3>
+              <p className="text-[12px] text-zinc-500">Cancel, fail or initiate return — allowed at any status.</p>
+            </div>
+            <div className="flex gap-2">
+              {EXCEPTION_STATUSES.map(s => (
+                <button key={s} onClick={() => advance(s, { note: "Admin exception" })}
+                  data-testid={`exception-${s}`}
+                  className="chip">{s.replaceAll("_", " ")}</button>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      <AssignRiderModal open={assignOpen} onOpenChange={setAssignOpen} orderId={id} role={assignRole} onAssigned={load} />
-      <OtpModal open={otpOpen} onOpenChange={setOtpOpen} orderId={id}
-        action={otpAction.label} targetStatus={otpAction.status} requiresCod={otpAction.needsCod}
-        handoverType={otpAction.handoverType}
-        onDone={load} />
+      {!isH2h && (
+        <>
+          <AssignRiderModal open={assignOpen} onOpenChange={setAssignOpen} orderId={id} role={assignRole} onAssigned={load} />
+          <OtpModal open={otpOpen} onOpenChange={setOtpOpen} orderId={id}
+            action={otpAction.label} targetStatus={otpAction.status} requiresCod={otpAction.needsCod}
+            handoverType={otpAction.handoverType}
+            onDone={load} />
+        </>
+      )}
+
+      {deleteOpen && isH2h && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="surface w-[420px] p-6">
+            <h3 className="text-[15px] font-semibold mb-2" style={{ fontFamily: "Outfit" }}>Delete hub-to-hub order?</h3>
+            <p className="text-[13px] text-zinc-600 mb-1">
+              Permanently delete <span className="font-semibold mono">{o.tracking_id}</span>?
+            </p>
+            <p className="text-[12px] text-zinc-400 mb-5">
+              This cannot be undone. The booking will be removed from orders and earnings.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDeleteOpen(false)} className="chip" disabled={deleting}>Cancel</button>
+              <button onClick={confirmDeleteH2h} className="btn-danger" disabled={deleting} data-testid="confirm-delete-h2h">
+                <Trash2 size={13} /> {deleting ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function ActionBtn({ label, onClick }) {
+function ActionBtn({ label, onClick, icon: Icon = ArrowRight }) {
   return (
     <button onClick={onClick} className="w-full bg-white text-black text-[13px] font-medium py-2.5 rounded-sm hover:bg-zinc-100 flex items-center justify-center gap-2"
       data-testid="primary-action-btn">
-      {label} <ArrowRight size={14} />
+      {label} <Icon size={14} />
     </button>
   );
 }
@@ -223,18 +309,19 @@ function OverviewTab({ o, activity }) {
   return (
     <div className="grid grid-cols-2 gap-5 text-[13px]">
       <div>
-        <Section title="Pickup">
+        <Section title={o.delivery_type === "HUB_TO_HUB" ? "From hub" : "Pickup"}>
           <div>{o.sender.name}</div>
           <div className="text-zinc-500">{o.sender.phone}</div>
-          <div className="text-zinc-500 mt-1">{o.sender.address}</div>
+          <div className="text-zinc-500 mt-1">{o.origin_hub_name || o.sender.address}</div>
         </Section>
-        <Section title="Delivery">
+        <Section title={o.delivery_type === "HUB_TO_HUB" ? "To hub" : "Delivery"}>
           <div>{o.receiver.name}</div>
           <div className="text-zinc-500">{o.receiver.phone}</div>
-          <div className="text-zinc-500 mt-1">{o.receiver.address}</div>
+          <div className="text-zinc-500 mt-1">{o.destination_hub_name || o.receiver.address}</div>
         </Section>
       </div>
       <div>
+        {o.delivery_type !== "HUB_TO_HUB" && (
         <Section title="Riders">
           {o.pickup_rider ? (
             <div className="mb-2"><span className="text-zinc-500">Pickup:</span> {o.pickup_rider.name} · <Phone size={11} className="inline" /> <span className="mono">{o.pickup_rider.phone}</span></div>
@@ -243,6 +330,7 @@ function OverviewTab({ o, activity }) {
             <div><span className="text-zinc-500">Delivery:</span> {o.delivery_rider.name} · <span className="mono">{o.delivery_rider.phone}</span></div>
           ) : <div className="text-zinc-400">No delivery rider assigned</div>}
         </Section>
+        )}
         <Section title="Recent activity">
           {activity.slice(0, 5).map(a => (
             <div key={a.id} className="text-[12px] text-zinc-600 py-0.5">
