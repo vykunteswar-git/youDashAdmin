@@ -367,9 +367,9 @@ function normalizeAdminResponse(response) {
   }
   else if (originalUrl === "/zone-routes") response.data = { routes: (data || []).map(normalizeZoneRoute) };
   else if (originalUrl === "/hub-routes") response.data = { routes: (data || []).map(normalizeHubRoute) };
-  else if (originalUrl === "/zone-route-sla") response.data = { slas: Array.isArray(data) ? data : [] };
-  else if (originalUrl === "/hub-corridor-sla") response.data = { slas: Array.isArray(data) ? data : [] };
-  else if (originalUrl === "/hub-route-sla") response.data = { slas: Array.isArray(data) ? data : [] };
+  else if (originalUrl === "/zone-route-sla" && response.config?.method === "get") response.data = { slas: Array.isArray(data) ? data : [] };
+  else if (originalUrl === "/hub-corridor-sla" && response.config?.method === "get") response.data = { slas: Array.isArray(data) ? data : [] };
+  else if (originalUrl === "/hub-route-sla" && response.config?.method === "get") response.data = { slas: Array.isArray(data) ? data : [] };
   else if (originalUrl === "/earnings") response.data = normalizeEarnings(data);
   else response.data = data || payload;
 

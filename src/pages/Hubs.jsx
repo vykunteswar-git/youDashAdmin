@@ -119,6 +119,7 @@ const EMPTY_SLA = (hubId, destinationZoneId = "") => ({
   destinationZoneId,
   deliveryType: "NEXT_DAY",
   cutoffTime: "",
+  deliveryTime: "",
   deliveredWithinHours: "",
   priority: "1",
   isActive: true,
@@ -155,6 +156,7 @@ function HubSlaEditor({ hub, zones, onClose }) {
       destinationZoneId: String(row.destinationZoneId ?? ""),
       deliveryType: String(row.deliveryType || "NEXT_DAY").toUpperCase(),
       cutoffTime: row.cutoffTime ?? "",
+      deliveryTime: row.deliveryTime ?? "",
       deliveredWithinHours: row.deliveredWithinHours != null ? String(row.deliveredWithinHours) : "",
       priority: row.priority != null ? String(row.priority) : "1",
       isActive: Boolean(row.isActive),
@@ -165,6 +167,7 @@ function HubSlaEditor({ hub, zones, onClose }) {
     const destinationZoneId = parseInt(form.destinationZoneId, 10);
     if (Number.isNaN(destinationZoneId)) return toast.error("Select a destination zone");
     if (!form.cutoffTime.trim()) return toast.error("Cutoff time is required");
+    if (form.deliveryType === "NEXT_DAY" && !form.deliveryTime.trim()) return toast.error("Delivery time is required for Next Day");
     if (form.deliveryType === "HOURS" && !form.deliveredWithinHours.trim()) return toast.error("Enter delivery hours");
     const priority = parseInt(form.priority, 10);
     const payload = {
@@ -172,6 +175,7 @@ function HubSlaEditor({ hub, zones, onClose }) {
       destinationZoneId,
       deliveryType: form.deliveryType,
       cutoffTime: form.cutoffTime.trim(),
+      deliveryTime: form.deliveryType === "NEXT_DAY" && form.deliveryTime.trim() ? form.deliveryTime.trim() : null,
       deliveredWithinHours: form.deliveryType === "HOURS" && form.deliveredWithinHours.trim()
         ? parseInt(form.deliveredWithinHours, 10)
         : null,
@@ -200,6 +204,7 @@ function HubSlaEditor({ hub, zones, onClose }) {
   function slaSummary(row) {
     const t = String(row.deliveryType || "NEXT_DAY").toUpperCase();
     if (t === "HOURS") return `Within ${row.deliveredWithinHours ?? "?"}h`;
+    if (row.deliveryTime) return `Next day · by ${row.deliveryTime}`;
     return "Next day";
   }
 
@@ -264,6 +269,12 @@ function HubSlaEditor({ hub, zones, onClose }) {
                 <label className="label">Cutoff (HH:mm)</label>
                 <input type="time" value={form.cutoffTime} onChange={e => set("cutoffTime", e.target.value)} className="input mono" data-testid="sla-cutoff" />
               </div>
+              {form.deliveryType === "NEXT_DAY" && (
+                <div>
+                  <label className="label">Delivery Time (HH:mm)</label>
+                  <input type="time" value={form.deliveryTime} onChange={e => set("deliveryTime", e.target.value)} className="input mono" data-testid="sla-delivery-time" />
+                </div>
+              )}
               {form.deliveryType === "HOURS" && (
                 <div>
                   <label className="label">Within Hours</label>
