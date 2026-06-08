@@ -99,9 +99,9 @@ h1, h2, h3, h4 { font-family: "Outfit", sans-serif; letter-spacing: -0.01em; col
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
+  padding: 9px 12px;
   color: var(--sidebar-muted);
-  font-size: 13px;
+  font-size: 14px;
   border-radius: 6px;
   margin: 1px 0;
   transition: color 120ms, background 120ms, border-color 120ms;
@@ -122,14 +122,14 @@ h1, h2, h3, h4 { font-family: "Outfit", sans-serif; letter-spacing: -0.01em; col
 }
 .sidebar-group {
   font-family: "IBM Plex Sans";
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--sidebar-muted);
   padding: 14px 12px 6px;
 }
 .sidebar-footer {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--sidebar-muted);
 }
 .sidebar-footer .sidebar-live-dot {
@@ -139,12 +139,12 @@ h1, h2, h3, h4 { font-family: "Outfit", sans-serif; letter-spacing: -0.01em; col
 
 /* Tables */
 .tbl { width: 100%; border-collapse: collapse; }
-.tbl th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--slate-600); font-weight: 600; text-align: left; padding: 10px 12px; background: var(--slate-100); border-bottom: 1px solid var(--border-default); }
-.tbl td { padding: 10px 12px; border-bottom: 1px solid var(--slate-100); font-size: 13px; vertical-align: middle; color: var(--text-body); }
+.tbl th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--slate-600); font-weight: 600; text-align: left; padding: 11px 14px; background: var(--slate-100); border-bottom: 1px solid var(--border-default); }
+.tbl td { padding: 11px 14px; border-bottom: 1px solid var(--slate-100); font-size: 14px; vertical-align: middle; color: var(--text-body); }
 .tbl tr:hover td { background: var(--slate-50); }
 
 /* Status pill (utility classes set the color tokens) */
-.pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; font-size: 11px; font-weight: 600; border: 1px solid; border-radius: 3px; font-family: "IBM Plex Sans"; letter-spacing: 0.02em; }
+.pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; font-size: 12px; font-weight: 600; border: 1px solid; border-radius: 4px; font-family: "IBM Plex Sans"; letter-spacing: 0.02em; }
 .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.85; }
 
 /* Brand pill helpers (used directly when convenient) */
@@ -155,10 +155,10 @@ h1, h2, h3, h4 { font-family: "Outfit", sans-serif; letter-spacing: -0.01em; col
 .pill-slate  { background: var(--slate-100);      color: var(--slate-600); border-color: var(--slate-200); }
 
 /* Recommendation card */
-.reco { background: var(--text-dark); color: white; padding: 16px 18px; border-radius: 4px; }
-.reco .label { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--slate-400); }
-.reco h3 { font-family: "Outfit"; font-weight: 600; font-size: 18px; margin: 6px 0 4px; color: white; }
-.reco p { color: var(--slate-200); font-size: 13px; }
+.reco { background: var(--text-dark); color: white; padding: 18px 20px; border-radius: 6px; }
+.reco .label { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--slate-400); }
+.reco h3 { font-family: "Outfit"; font-weight: 600; font-size: 20px; margin: 6px 0 4px; color: white; }
+.reco p { color: var(--slate-200); font-size: 14px; }
 
 /* Milestone */
 .milestone { display: flex; align-items: center; gap: 6px; overflow-x: auto; }
@@ -171,29 +171,29 @@ h1, h2, h3, h4 { font-family: "Outfit", sans-serif; letter-spacing: -0.01em; col
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
 
 /* KPI card */
-.kpi { background: white; border: 1px solid var(--border-default); padding: 16px; border-radius: 4px; }
-.kpi .label { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--slate-400); }
-.kpi .value { font-family: "Outfit"; font-size: 26px; font-weight: 600; margin-top: 6px; color: var(--text-dark); }
-.kpi .sub { font-size: 11px; color: var(--slate-600); margin-top: 4px; }
+.kpi { background: white; border: 1px solid var(--border-default); padding: 18px; border-radius: 6px; }
+.kpi .label { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--slate-400); }
+.kpi .value { font-family: "Outfit"; font-size: 28px; font-weight: 600; margin-top: 6px; color: var(--text-dark); }
+.kpi .sub { font-size: 12px; color: var(--slate-600); margin-top: 4px; }
 
 /* Buttons */
-.btn-primary { background: var(--brand-red); color: white; font-size: 13px; padding: 8px 14px; border-radius: 4px; font-weight: 600; transition: background 120ms; display: inline-flex; align-items: center; gap: 6px; }
+.btn-primary { background: var(--brand-red); color: white; font-size: 14px; padding: 9px 16px; border-radius: 6px; font-weight: 600; transition: background 120ms; display: inline-flex; align-items: center; gap: 7px; }
 .btn-primary:hover { background: var(--brand-red-hover); }
 .btn-primary:disabled { background: var(--slate-300); cursor: not-allowed; }
 
-.btn-secondary { background: white; color: var(--text-dark); border: 1px solid var(--border-default); font-size: 13px; padding: 8px 14px; border-radius: 4px; font-weight: 500; transition: background 120ms; display: inline-flex; align-items: center; gap: 6px; }
+.btn-secondary { background: white; color: var(--text-dark); border: 1px solid var(--border-default); font-size: 14px; padding: 9px 16px; border-radius: 6px; font-weight: 500; transition: background 120ms; display: inline-flex; align-items: center; gap: 7px; }
 .btn-secondary:hover { background: var(--slate-50); }
 
-.btn-ghost { color: var(--brand-red); font-size: 13px; padding: 8px 12px; font-weight: 500; }
-.btn-ghost:hover { background: var(--brand-red-tint); border-radius: 4px; }
+.btn-ghost { color: var(--brand-red); font-size: 14px; padding: 8px 12px; font-weight: 500; }
+.btn-ghost:hover { background: var(--brand-red-tint); border-radius: 6px; }
 
 /* Inputs */
 input, select, textarea { font-family: "IBM Plex Sans"; }
-.input { height: 36px; width: 100%; padding: 0 10px; font-size: 13px; background: var(--slate-50); border: 1px solid var(--border-default); border-radius: 4px; color: var(--text-dark); transition: border-color 100ms, background 100ms; }
+.input { height: 38px; width: 100%; padding: 0 11px; font-size: 14px; background: var(--slate-50); border: 1px solid var(--border-default); border-radius: 6px; color: var(--text-dark); transition: border-color 100ms, background 100ms; }
 .input:focus { outline: none; border-color: var(--brand-red); background: white; }
 .input::placeholder { color: var(--slate-400); }
 .input[disabled] { background: var(--slate-100); color: var(--slate-400); }
-.label { display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--slate-600); margin-bottom: 6px; }
+.label { display: block; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--slate-600); margin-bottom: 6px; }
 
 /* Bulk action bar */
 .bulkbar { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--text-dark); color: white; padding: 10px 14px; border-radius: 4px; display: flex; gap: 10px; align-items: center; box-shadow: 0 6px 18px rgba(0,0,0,0.22); z-index: 50; }
@@ -208,19 +208,19 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--brand-red); out
 
 /* Misc */
 .row-link { cursor: pointer; }
-.empty { padding: 32px; text-align: center; color: var(--slate-400); font-size: 13px; }
-.section-title { font-family: "Outfit"; font-weight: 600; font-size: 20px; letter-spacing: -0.01em; color: var(--text-dark); }
-.section-subtitle { color: var(--slate-600); font-size: 13px; margin-top: 2px; }
-.chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border: 1px solid var(--border-default); border-radius: 3px; font-size: 11px; background: white; color: var(--text-body); transition: all 120ms; }
+.empty { padding: 36px; text-align: center; color: var(--slate-400); font-size: 14px; }
+.section-title { font-family: "Outfit"; font-weight: 600; font-size: 22px; letter-spacing: -0.01em; color: var(--text-dark); }
+.section-subtitle { color: var(--slate-600); font-size: 14px; margin-top: 2px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border: 1px solid var(--border-default); border-radius: 5px; font-size: 12px; background: white; color: var(--text-body); transition: all 120ms; }
 .chip:hover { border-color: var(--slate-400); }
 .chip-active { background: var(--brand-red); color: white; border-color: var(--brand-red); }
 .chip-danger { color: #dc2626; border-color: #fecaca; }
 .chip-danger:hover { background: #fef2f2; border-color: #dc2626; }
-.btn-danger { background: #dc2626; color: white; font-size: 13px; padding: 8px 14px; border-radius: 4px; font-weight: 600; transition: background 120ms; display: inline-flex; align-items: center; gap: 6px; }
+.btn-danger { background: #dc2626; color: white; font-size: 14px; padding: 9px 16px; border-radius: 6px; font-weight: 600; transition: background 120ms; display: inline-flex; align-items: center; gap: 7px; }
 .btn-danger:hover { background: #b91c1c; }
 
 /* Tabs */
 .tabbar { display: flex; gap: 4px; border-bottom: 1px solid var(--border-default); }
-.tabbar button { padding: 10px 14px; font-size: 13px; color: var(--slate-600); border-bottom: 2px solid transparent; transition: color 100ms, border-color 100ms; font-weight: 500; }
+.tabbar button { padding: 11px 16px; font-size: 14px; color: var(--slate-600); border-bottom: 2px solid transparent; transition: color 100ms, border-color 100ms; font-weight: 500; }
 .tabbar button.active { color: var(--brand-red); border-color: var(--brand-red); }
 .tabbar button:hover { color: var(--text-dark); }
