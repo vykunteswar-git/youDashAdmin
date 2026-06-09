@@ -22,7 +22,7 @@ const EMPTY = {
   packageContents: "",
   pricingMode: "auto",
   manualFreight: "",
-  manualGst: "",
+  manualGstPct: "",
   manualPlatformFee: "",
 };
 
@@ -97,12 +97,17 @@ export default function CreateHubToHub() {
     return () => clearTimeout(timer);
   }, [form.originHubId, form.destinationHubId, form.weight]);
 
+  const manualGstAmt = useMemo(() => {
+    const f = parseFloat(form.manualFreight) || 0;
+    const pct = parseFloat(form.manualGstPct) || 0;
+    return parseFloat(((f * pct) / 100).toFixed(2));
+  }, [form.manualFreight, form.manualGstPct]);
+
   const manualTotal = useMemo(() => {
     const f = parseFloat(form.manualFreight) || 0;
-    const g = parseFloat(form.manualGst) || 0;
     const p = parseFloat(form.manualPlatformFee) || 0;
-    return f + g + p;
-  }, [form.manualFreight, form.manualGst, form.manualPlatformFee]);
+    return parseFloat((f + manualGstAmt + p).toFixed(2));
+  }, [form.manualFreight, manualGstAmt, form.manualPlatformFee]);
 
   const isManual = form.pricingMode === "manual";
 
@@ -146,7 +151,7 @@ export default function CreateHubToHub() {
         ...(isManual && {
           manualPricing: true,
           manualFreight: parseFloat(form.manualFreight) || 0,
-          manualGst: parseFloat(form.manualGst) || 0,
+          manualGst: manualGstAmt,
           manualPlatformFee: parseFloat(form.manualPlatformFee) || 0,
         }),
       });
@@ -154,7 +159,7 @@ export default function CreateHubToHub() {
       toast.success(`Booked ${order.displayOrderId || order.tracking_id}`);
 
       const effectiveQuote = isManual
-        ? { subtotal: parseFloat(form.manualFreight) || 0, gstAmount: parseFloat(form.manualGst) || 0, platformFee: parseFloat(form.manualPlatformFee) || 0, total: manualTotal }
+        ? { subtotal: parseFloat(form.manualFreight) || 0, gstAmount: manualGstAmt, platformFee: parseFloat(form.manualPlatformFee) || 0, total: manualTotal }
         : quote;
       downloadH2hInvoice(
         buildLrPdfData({
@@ -324,10 +329,13 @@ export default function CreateHubToHub() {
                   placeholder="0.00" value={form.manualFreight}
                   onChange={(e) => set("manualFreight", e.target.value)} />
               </Field>
-              <Field label="GST (₹)">
-                <input type="number" min="0" step="0.01" className="input w-full"
-                  placeholder="0.00" value={form.manualGst}
-                  onChange={(e) => set("manualGst", e.target.value)} />
+              <Field label="GST (%)">
+                <input type="number" min="0" max="100" step="0.1" className="input w-full"
+                  placeholder="0" value={form.manualGstPct}
+                  onChange={(e) => set("manualGstPct", e.target.value)} />
+                {manualGstAmt > 0 && (
+                  <span className="text-[11px] text-zinc-500 mt-0.5 block">= ₹{manualGstAmt.toFixed(2)}</span>
+                )}
               </Field>
               <Field label="Platform fee (₹)">
                 <input type="number" min="0" step="0.01" className="input w-full"
