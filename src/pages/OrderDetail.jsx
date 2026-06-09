@@ -107,6 +107,8 @@ export default function OrderDetail() {
           destinationHubCity: o.destination_city,
           category: o.category,
           weight: o.weight_kg,
+          quantity: o.pieceCount,
+          declaredValue: o.declaredValue,
           subtotal: o.subtotal ?? o.fare?.subtotal,
           platformFee: o.platform_fee ?? o.fare?.platform_fee,
           gstAmount: o.gst_amount ?? o.fare?.gst,
@@ -375,6 +377,8 @@ function PackageTab({ o }) {
       <Section title="Parcel">
         <Row k="Category" v={o.category} />
         <Row k="Weight" v={`${o.weight_kg} kg`} />
+        {o.pieceCount != null && <Row k="Qty" v={o.pieceCount} />}
+        {o.declaredValue != null && <Row k="Declared value" v={`₹${o.declaredValue}`} mono />}
         <Row k="Dimensions" v={o.dimensions} />
         <Row k="Fragile" v={o.fragile ? "Yes" : "No"} />
         <Row k="Delivery type" v={o.delivery_type.replaceAll("_", " → ")} />

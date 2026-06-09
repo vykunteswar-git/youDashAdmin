@@ -157,7 +157,7 @@ export function buildLrPdfData({
     platformFee: Number(order.platformFee ?? order.platform_fee ?? order.fare?.platform_fee ?? quote?.platformFee ?? 0),
     netAmountPayable: Number(order.totalAmount ?? order.total_amount ?? order.fare?.total ?? quote?.total ?? 0),
     hubDistanceKm: order.hubDistanceKm ?? quote?.hubDistanceKm,
-    remarks: packageContents || `Weight: ${weightKg} kg`,
+    valueOfGoods: Number(form.valueOfGoods || order.declaredValue || order.declared_value || order.valueOfGoods || 0) || null,
   };
 }
 
@@ -280,7 +280,7 @@ function renderLrPdf(data) {
 
   const bodyTop = y;
   const col4 = CONTENT_W / 4;
-  const rowH = 9;
+  const rowH = 7;
   const fromCity = pdfSafe(data.pickupZoneName || data.originHub.city || "-");
   const toCity = pdfSafe(data.dropZoneName || data.destinationHub.city || "-");
 
@@ -292,7 +292,7 @@ function renderLrPdf(data) {
   y += rowH;
 
   // ── Sender / Receiver (label | value | label | value per row) ──
-  const partyH = 8;
+  const partyH = 6.5;
   drawLabelValueRow(doc, y, partyH, [
     { label: "Sender Name", value: data.senderName },
     { label: "Receiver Name", value: data.receiverName },
@@ -309,7 +309,7 @@ function renderLrPdf(data) {
   const qtyW = CONTENT_W * 0.12;
   const freightW = CONTENT_W - descW - qtyW;
   const tblCols = [descW, qtyW, freightW];
-  const tblRowH = 7.5;
+  const tblRowH = 6;
 
   drawTableRow(
     doc,
@@ -337,12 +337,12 @@ function renderLrPdf(data) {
   // ── Charges block — clean two-column rows ──
   const labelW = CONTENT_W * 0.65;
   const amtW = CONTENT_W - labelW;
-  const chRowH = 7;
+  const chRowH = 6;
 
   const chargeRows = [
-    { label: "Value of the Goods", amount: null, bold: false },
+    { label: "Value of the Goods", amount: data.valueOfGoods != null ? formatInr(data.valueOfGoods) : null, bold: false },
     { label: `GST (${RS})`, amount: formatInr(data.gstAmount), bold: false },
-    { label: `Platform / L Charges (${RS})`, amount: formatInr(data.platformFee), bold: false },
+    { label: `L Charges (${RS})`, amount: formatInr(data.platformFee), bold: false },
     { label: `Net Amt Payable (${RS})`, amount: formatInr(data.netAmountPayable), bold: true },
   ];
 
@@ -396,19 +396,6 @@ function renderLrPdf(data) {
     doc.text(lines, MARGIN, y);
     y += lines.length * 3.5;
   });
-
-  y += 2;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.setTextColor(0);
-  doc.text("Remarks :", MARGIN, y);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
-  let remarkText = pdfSafe(data.remarks || "-");
-  if (data.hubDistanceKm != null) {
-    remarkText += ` | Corridor: ${Number(data.hubDistanceKm).toFixed(1)} km`;
-  }
-  doc.text(remarkText, MARGIN + 18, y);
 
   return doc;
 }
