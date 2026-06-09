@@ -90,11 +90,7 @@ function drawCompanyLetterhead(doc, y) {
   doc.text(LETTERHEAD.gstin, cx, y, { align: "center" });
   y += 4;
 
-  doc.setFontSize(6.5);
-  doc.setTextColor(GREY);
-  doc.text(`Printed @ ${printedAt()}`, PAGE_W - MARGIN, y, { align: "right" });
-  doc.setTextColor(0);
-  return y + 4;
+  return y;
 }
 
 function paymentToLrType(paymentType) {
