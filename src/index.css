@@ -95,6 +95,67 @@ h1, h2, h3, h4 { font-family: "Outfit", sans-serif; letter-spacing: -0.01em; col
   color: var(--sidebar-text);
   border-right: 1px solid var(--sidebar-border);
 }
+
+.sidebar-brand {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 20px 16px 18px;
+  position: relative;
+}
+
+.sidebar-brand::after {
+  content: "";
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--sidebar-border) 12%,
+    var(--sidebar-border) 88%,
+    transparent 100%
+  );
+  opacity: 0.7;
+}
+
+.sidebar-brand__logo {
+  min-width: 0;
+  flex: 1;
+}
+
+.sidebar-brand__toggle {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--sidebar-muted);
+  flex-shrink: 0;
+  transition: color 120ms, background 120ms;
+}
+
+.sidebar-brand__toggle:hover {
+  color: var(--sidebar-text);
+  background: var(--sidebar-hover);
+}
+
+.sidebar-brand--collapsed {
+  flex-direction: column;
+  justify-content: center;
+  padding: 16px 8px 14px;
+  gap: 12px;
+}
+
+.sidebar-brand--collapsed::after {
+  left: 10px;
+  right: 10px;
+}
 .sidebar-link {
   display: flex;
   align-items: center;
@@ -126,7 +187,11 @@ h1, h2, h3, h4 { font-family: "Outfit", sans-serif; letter-spacing: -0.01em; col
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--sidebar-muted);
-  padding: 14px 12px 6px;
+  padding: 10px 12px 6px;
+}
+
+.sidebar-group:first-of-type {
+  padding-top: 6px;
 }
 .sidebar-footer {
   font-size: 12px;

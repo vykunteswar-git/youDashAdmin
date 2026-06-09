@@ -66,8 +66,14 @@
 }
 
 /* Dark sidebar */
+.brand-logo--sidebar {
+  gap: 10px;
+}
+
 .brand-logo--sidebar .brand-logo__name {
   color: #fff;
+  font-size: 17px;
+  line-height: 1.15;
 }
 
 .brand-logo--sidebar .brand-logo__name strong {
@@ -75,11 +81,28 @@
 }
 
 .brand-logo--sidebar .brand-logo__tag {
-  color: #ef4444;
+  color: #f87171;
+  margin-top: 2px;
+  letter-spacing: 0.14em;
 }
 
 .brand-logo--sidebar .brand-logo__icon {
+  width: 36px;
+  height: 36px;
   filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.35));
+}
+
+.brand-logo--sidebar.brand-logo--compact .brand-logo__icon {
+  width: 34px;
+  height: 34px;
+}
+
+.brand-logo--sidebar.brand-logo--compact .brand-logo__name {
+  font-size: 16px;
+}
+
+.brand-logo--sidebar.brand-logo--compact .brand-logo__tag {
+  font-size: 9px;
 }
 
 .brand-logo--compact .brand-logo__name {

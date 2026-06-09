@@ -85,13 +85,13 @@ export default function Shell() {
         data-testid="sidebar"
       >
         {/* Header */}
-        <div className={`flex items-center border-b border-[var(--sidebar-border)] h-14 flex-shrink-0 ${collapsed ? "justify-center px-0" : "justify-between px-4"}`}>
-          {!collapsed && <BrandLogo variant="sidebar" />}
+        <div className={`sidebar-brand ${collapsed ? "sidebar-brand--collapsed" : ""}`}>
+          {!collapsed && <BrandLogo variant="sidebar" compact className="sidebar-brand__logo" />}
           <button
             type="button"
             onClick={toggleCollapse}
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="w-7 h-7 flex items-center justify-center rounded-sm text-[var(--sidebar-muted)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-text)] transition flex-shrink-0"
+            className="sidebar-brand__toggle"
             data-testid="sidebar-collapse-toggle"
           >
             {collapsed ? <ChevronRight size={14} strokeWidth={2} /> : <ChevronLeft size={14} strokeWidth={2} />}
