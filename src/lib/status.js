@@ -39,7 +39,10 @@ export const DOOR_TO_HUB_MILESTONES = [
   "BOOKED", "RIDER_ASSIGNED", "PICKED_UP", "AT_ORIGIN_HUB", "IN_TRANSIT", "AT_DESTINATION_HUB", "AWAITING_HUB_COLLECTION", "COLLECTED",
 ];
 
+export const HUB_TO_HUB_MILESTONES = ["BOOKED"];
+
 export function milestonesFor(delivery_type) {
+  if (delivery_type === "HUB_TO_HUB") return HUB_TO_HUB_MILESTONES;
   if (delivery_type === "HUB_TO_DOOR") return HUB_TO_DOOR_MILESTONES;
   if (delivery_type === "DOOR_TO_HUB") return DOOR_TO_HUB_MILESTONES;
   return MILESTONE_ORDER;

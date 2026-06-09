@@ -64,6 +64,10 @@ function rewriteAdminRequest(config) {
     config.params = { range: rangeToBackend(config.params?.range) };
     return config;
   }
+  if (url === "/orders/hub-to-hub/preview" || url === "/orders/hub-to-hub") {
+    config.url = url.replace("/orders", "/admin/orders");
+    return config;
+  }
   if (url === "/orders" || url === "/orders/grouped" || url === "/orders/routes") {
     config.url = "/admin/orders";
     return config;
@@ -97,6 +101,10 @@ function rewriteAdminRequest(config) {
   if (url.match(/^\/orders\/\d+\/hub-handover$/)) {
     config.url = url.replace("/orders", "/admin/orders").replace("/hub-handover", "/verify-hub-handover");
     config.data = hubHandoverPayload(config.data);
+    return config;
+  }
+  if (url.match(/^\/orders\/\d+\/hub-to-hub$/)) {
+    config.url = url.replace("/orders", "/admin/orders");
     return config;
   }
   if (url === "/riders") {
@@ -1136,6 +1144,12 @@ function normalizeOrder(order = {}) {
     tracking_id: order.displayOrderId || order.tracking_id || `YD-${order.id ?? ""}`,
     origin_city: order.originHubCity || order.pickupTag || order.origin_city || "Pickup",
     destination_city: order.destinationHubCity || order.dropTag || order.destination_city || "Drop",
+    origin_hub_name: order.originHubName || order.origin_hub_name || null,
+    destination_hub_name: order.destinationHubName || order.destination_hub_name || null,
+    subtotal: order.subtotal ?? null,
+    gst_amount: order.gstAmount ?? order.gst_amount ?? null,
+    platform_fee: order.platformFee ?? order.platform_fee ?? null,
+    total_amount: order.totalAmount ?? order.total_amount ?? total,
     delivery_type: order.deliveryType || order.delivery_type || "DOOR_TO_DOOR",
     payment_mode: paymentMode === "ONLINE" ? "PREPAID" : paymentMode,
     weight_kg: order.weight ?? order.weight_kg ?? 0,
