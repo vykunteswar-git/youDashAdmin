@@ -145,12 +145,14 @@ export default function Riders() {
                 <td className="mono text-[12px]">₹{r.wallet_balance}</td>
                 <td className="mono text-[12px]" style={{ color: r.blocked ? "var(--brand-red)" : "var(--slate-600)" }}>₹{r.cod_pending}/{r.cod_limit}</td>
                 <td onClick={(e) => e.stopPropagation()}>
-                  {r.status === "PENDING" && (
-                    <div className="flex gap-1">
-                      <button onClick={(e) => approve(e, r.id)} className="chip" data-testid={`approve-${r.id}`}>Approve</button>
-                      <button onClick={(e) => reject(e, r.id)} className="chip" style={{ color: "var(--brand-red)" }} data-testid={`reject-${r.id}`}>Reject</button>
-                    </div>
-                  )}
+                  <div className="flex gap-1">
+                    {r.status === "PENDING" && (
+                      <>
+                        <button onClick={(e) => approve(e, r.id)} className="chip" data-testid={`approve-${r.id}`}>Approve</button>
+                        <button onClick={(e) => reject(e, r.id)} className="chip" style={{ color: "var(--brand-red)" }} data-testid={`reject-${r.id}`}>Reject</button>
+                      </>
+                    )}
+                  </div>
                 </td>
                 <td><ChevronRight size={14} className="text-[var(--slate-400)]" /></td>
               </tr>

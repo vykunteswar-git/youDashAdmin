@@ -120,6 +120,10 @@ function rewriteAdminRequest(config) {
     config.url = url.replace("/riders", "/admin/riders");
     return config;
   }
+  if (url.match(/^\/riders\/\d+$/) && config.method === "delete") {
+    config.url = url.replace("/riders", "/admin/riders");
+    return config;
+  }
   if (url.match(/^\/riders\/\d+$/)) {
     config.adapter = riderDetailAdapter;
     return config;

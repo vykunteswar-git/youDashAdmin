@@ -94,7 +94,12 @@ export default function OrderDetail() {
         if (o.delivery_type === "DOOR_TO_HUB") {
           return <ActionBtn label="Mark awaiting hub collection" onClick={() => advance("AWAITING_HUB_COLLECTION")} />;
         }
-        return <ActionBtn label="Assign delivery rider" onClick={() => openAssign("delivery")} />;
+        return (
+          <div className="space-y-2">
+            <ActionBtn label="Assign delivery rider" onClick={() => openAssign("delivery")} />
+            <ActionBtn label="Mark as Delivered" onClick={() => openOtp("Mark as Delivered", "DELIVERED", o.payment_mode === "COD" && !o.cod_already_collected)} variant="secondary" />
+          </div>
+        );
       case "OUT_FOR_DELIVERY":
         return <ActionBtn label="Confirm delivery" onClick={() => openOtp("Confirm delivery", "DELIVERED")} />;
       case "AWAITING_HUB_COLLECTION":
@@ -210,10 +215,13 @@ export default function OrderDetail() {
   );
 }
 
-function ActionBtn({ label, onClick }) {
+function ActionBtn({ label, onClick, variant = "primary" }) {
+  const base = "w-full text-[13px] font-medium py-2.5 rounded-sm flex items-center justify-center gap-2";
+  const styles = variant === "secondary"
+    ? `${base} bg-white/10 text-zinc-300 hover:bg-white/20 border border-white/20`
+    : `${base} bg-white text-black hover:bg-zinc-100`;
   return (
-    <button onClick={onClick} className="w-full bg-white text-black text-[13px] font-medium py-2.5 rounded-sm hover:bg-zinc-100 flex items-center justify-center gap-2"
-      data-testid="primary-action-btn">
+    <button onClick={onClick} className={styles} data-testid="primary-action-btn">
       {label} <ArrowRight size={14} />
     </button>
   );

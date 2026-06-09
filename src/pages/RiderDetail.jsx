@@ -6,7 +6,7 @@ import StatusPill from "@/components/StatusPill";
 import { toast } from "sonner";
 import {
   ArrowLeft, Phone, MapPin, Bike, Star, Wallet, Banknote,
-  CheckCircle2, Package, TrendingUp, Ban, ShieldCheck, Pencil, X,
+  CheckCircle2, Package, TrendingUp, Ban, ShieldCheck, Pencil, X, Trash2,
 } from "lucide-react";
 
 const TABS = [
@@ -29,6 +29,7 @@ export default function RiderDetail() {
   const [editOpen, setEditOpen] = useState(false);
   const [limitEdit, setLimitEdit] = useState("");
   const [savingLimit, setSavingLimit] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   async function loadAll() {
     const [r, o, w, c, p] = await Promise.all([
@@ -57,6 +58,22 @@ export default function RiderDetail() {
     await api.post(`/riders/${id}/reject`);
     toast.success("Rider rejected");
     loadAll();
+  }
+
+  async function confirmDelete() {
+    try {
+      const res = await api.delete(`/riders/${id}`);
+      if (res?.data?.success === false) {
+        toast.error(res.data.message || "Delete failed");
+        setDeleting(false);
+        return;
+      }
+      toast.success(`Rider "${rider.name}" deleted`);
+      nav("/riders");
+    } catch (e) {
+      toast.error(e.response?.data?.message || "Delete failed");
+      setDeleting(false);
+    }
   }
 
   async function saveHandoverLimit() {
@@ -120,6 +137,9 @@ export default function RiderDetail() {
                 <button onClick={reject} className="btn-secondary" data-testid="reject-rider-detail">Reject</button>
               </>
             )}
+            <button onClick={() => setDeleting(true)} className="chip chip-danger" data-testid="delete-rider-btn">
+              <Trash2 size={12} /> Delete rider
+            </button>
           </div>
         </div>
 
@@ -145,6 +165,34 @@ export default function RiderDetail() {
       {tab === "wallet" && <WalletTab wallet={wallet} />}
       {tab === "cod" && <CodTab cod={cod} riderId={id} reload={loadAll} />}
       {tab === "performance" && <PerformanceTab perf={perf} />}
+
+      {deleting && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="surface w-[420px] p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+                <Trash2 size={18} className="text-red-600" />
+              </span>
+              <div>
+                <h3 className="text-base font-semibold" style={{ fontFamily: "Outfit" }}>Delete rider?</h3>
+                <p className="text-xs text-zinc-400 mt-0.5">{rider.phone}</p>
+              </div>
+            </div>
+            <p className="text-sm text-zinc-600 mb-1">
+              You are about to permanently delete <span className="font-semibold">{rider.name}</span>.
+            </p>
+            <p className="text-xs text-zinc-400 mb-5">
+              This will fail if the rider has any active orders. All historical data will be removed.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDeleting(false)} className="btn-secondary">Cancel</button>
+              <button onClick={confirmDelete} className="btn-danger" data-testid="confirm-delete-rider">
+                <Trash2 size={13} /> Delete permanently
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {editOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center" data-testid="edit-rider-modal">
