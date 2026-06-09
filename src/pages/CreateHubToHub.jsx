@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
-import { downloadH2hInvoice } from "@/lib/h2hInvoicePdf";
+import { buildLrPdfData, downloadH2hInvoice } from "@/lib/h2hInvoicePdf";
 import { toast } from "sonner";
 import { ArrowLeft, Building2, Calculator, FileDown, Package, User } from "lucide-react";
 
@@ -61,6 +61,8 @@ export default function CreateHubToHub() {
     [hubs, form.dropZoneId],
   );
 
+  const pickupZone = zones.find((z) => String(z.id) === String(form.pickupZoneId));
+  const dropZone = zones.find((z) => String(z.id) === String(form.dropZoneId));
   const originHub = pickupHubs.find((h) => String(h.id) === String(form.originHubId));
   const destHub = dropHubs.find((h) => String(h.id) === String(form.destinationHubId));
   const category = categories.find((c) => String(c.id) === String(form.categoryId));
@@ -126,24 +128,18 @@ export default function CreateHubToHub() {
       const order = res.data;
       toast.success(`Booked ${order.displayOrderId || order.tracking_id}`);
 
-      downloadH2hInvoice({
-        displayOrderId: order.displayOrderId || order.tracking_id,
-        senderName: order.senderName || form.senderName,
-        senderPhone: order.senderPhone || form.senderPhone,
-        receiverName: order.receiverName || form.receiverName,
-        receiverPhone: order.receiverPhone || form.receiverPhone,
-        fromHub: order.originHubName || originHub?.name,
-        fromHubAddress: originHub?.address,
-        toHub: order.destinationHubName || destHub?.name,
-        toHubAddress: destHub?.address,
-        paymentType: order.paymentType || form.paymentType,
-        createdAt: order.createdAt || new Date().toISOString(),
-        categoryName: category?.name || order.packageContents || "Parcel",
-        subtotal: order.subtotal ?? quote?.subtotal,
-        platformFee: order.platformFee ?? quote?.platformFee,
-        gstAmount: order.gstAmount ?? quote?.gstAmount,
-        totalAmount: order.totalAmount ?? quote?.total,
-      });
+      downloadH2hInvoice(
+        buildLrPdfData({
+          form,
+          originHub,
+          destinationHub: destHub,
+          pickupZone,
+          dropZone,
+          category,
+          order: { ...order, weight },
+          quote,
+        }),
+      );
 
       nav(`/orders/${order.id}`);
     } catch (err) {

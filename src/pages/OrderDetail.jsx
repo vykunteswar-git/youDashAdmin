@@ -8,7 +8,7 @@ import { formatStatusLabel, getOutstationPrimaryNextStatus } from "@/lib/orderSt
 import AssignRiderModal from "@/components/modals/AssignRiderModal";
 import OtpModal from "@/components/modals/OtpModal";
 import { toast } from "sonner";
-import { downloadH2hInvoice } from "@/lib/h2hInvoicePdf";
+import { buildLrPdfData, downloadH2hInvoice } from "@/lib/h2hInvoicePdf";
 import AppLoadingScreen from "@/components/AppLoadingScreen";
 import { ChevronLeft, Phone, BellRing, ArrowRight, Truck, Package, Coins, Activity as ActivityIcon, Copy, FileDown, Trash2 } from "lucide-react";
 
@@ -91,22 +91,39 @@ export default function OrderDetail() {
   }
 
   function downloadInvoice() {
-    downloadH2hInvoice({
-      displayOrderId: o.tracking_id,
-      senderName: o.sender?.name,
-      senderPhone: o.sender?.phone,
-      receiverName: o.receiver?.name,
-      receiverPhone: o.receiver?.phone,
-      fromHub: o.origin_hub_name || o.sender?.address,
-      toHub: o.destination_hub_name || o.receiver?.address,
-      paymentType: o.payment_mode,
-      createdAt: o.created_at,
-      categoryName: o.category,
-      subtotal: o.subtotal ?? o.fare?.subtotal,
-      platformFee: o.platform_fee ?? o.fare?.platform_fee,
-      gstAmount: o.gst_amount ?? o.fare?.gst,
-      totalAmount: o.total_amount ?? o.fare?.total,
-    });
+    downloadH2hInvoice(
+      buildLrPdfData({
+        order: {
+          displayOrderId: o.tracking_id,
+          createdAt: o.created_at,
+          paymentType: o.payment_mode,
+          senderName: o.sender?.name,
+          senderPhone: o.sender?.phone,
+          receiverName: o.receiver?.name,
+          receiverPhone: o.receiver?.phone,
+          originHubName: o.origin_hub_name,
+          destinationHubName: o.destination_hub_name,
+          originHubCity: o.origin_city,
+          destinationHubCity: o.destination_city,
+          category: o.category,
+          weight: o.weight_kg,
+          subtotal: o.subtotal ?? o.fare?.subtotal,
+          platformFee: o.platform_fee ?? o.fare?.platform_fee,
+          gstAmount: o.gst_amount ?? o.fare?.gst,
+          totalAmount: o.total_amount ?? o.fare?.total,
+        },
+        originHub: {
+          name: o.origin_hub_name,
+          city: o.origin_city,
+          address: o.sender?.address !== "—" ? o.sender?.address : "",
+        },
+        destinationHub: {
+          name: o.destination_hub_name,
+          city: o.destination_city,
+          address: o.receiver?.address !== "—" ? o.receiver?.address : "",
+        },
+      }),
+    );
     toast.success("LR invoice downloaded");
   }
 
