@@ -193,7 +193,7 @@ function strokeRect(doc, x, y, w, h) {
 }
 
 function drawHubHeader(doc, y, hub) {
-  const addrParts = [pdfSafe(hub.address), pdfSafe(hub.city)].filter(Boolean);
+  const addrParts = [pdfSafe(hub.address)].filter(Boolean);
   const phone = hub.phoneNumber ? `Ph.No: ${pdfSafe(hub.phoneNumber)}` : "";
 
   doc.setFont("helvetica", "bold");

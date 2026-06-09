@@ -113,9 +113,9 @@ export default function Earnings() {
                         </span>
                       </td>
                       <td className="text-right mono">{fmt(row.totalAmount)}</td>
-                      <td className="text-right mono">{fmt(row.subtotal)}</td>
-                      <td className="text-right mono">{row.commissionPercent?.toFixed(1) ?? "—"}%</td>
-                      <td className="text-right mono">{fmt(row.commissionAmount)}</td>
+                      <td className="text-right mono">{row.serviceMode === "HUB_TO_HUB" ? "—" : fmt(row.subtotal)}</td>
+                      <td className="text-right mono">{row.serviceMode === "HUB_TO_HUB" ? "—" : (row.commissionPercent?.toFixed(1) ?? "—") + "%"}</td>
+                      <td className="text-right mono">{row.serviceMode === "HUB_TO_HUB" ? fmt(row.subtotal) : fmt(row.commissionAmount)}</td>
                       <td className="text-right mono">{fmt(row.riderEarning)}</td>
                       <td className="text-right mono font-semibold">{fmt(row.platformNet)}</td>
                     </tr>
