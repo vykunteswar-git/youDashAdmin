@@ -15,6 +15,7 @@ const NAV = [
   { group: "Operations", items: [
     { to: "/dashboard",      label: "Dashboard",       icon: LayoutDashboard, testid: "nav-dashboard" },
     { to: "/orders",         label: "Orders",          icon: Package,         testid: "nav-orders" },
+    { to: "/orders/create-h2h", label: "Hub to Hub",  icon: Building2,       testid: "nav-h2h" },
   ]},
   { group: "Fleet", items: [
     { to: "/riders",         label: "Riders",          icon: Bike,            testid: "nav-riders" },
