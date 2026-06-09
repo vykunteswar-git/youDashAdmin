@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
+import AppLoadingScreen from "@/components/AppLoadingScreen";
 import { toast } from "sonner";
 import { ChevronRight, Search, X } from "lucide-react";
 
@@ -130,7 +131,13 @@ export default function Riders() {
             </tr>
           </thead>
           <tbody>
-            {loading && <tr><td colSpan={12} className="empty">Loading riders…</td></tr>}
+            {loading && (
+              <tr>
+                <td colSpan={12} className="p-0">
+                  <AppLoadingScreen message="Loading riders…" variant="inline" testId="riders-loading" />
+                </td>
+              </tr>
+            )}
             {!loading && filtered.length === 0 && <tr><td colSpan={12} className="empty">No riders in this view.</td></tr>}
             {!loading && filtered.map(r => (
               <tr key={r.id} onClick={() => nav(`/riders/${r.id}`)} className="row-link" data-testid={`rider-row-${r.id}`}>

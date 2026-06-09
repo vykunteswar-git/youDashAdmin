@@ -5,6 +5,8 @@ import HubLocationMapView from "@/components/hubs/HubLocationMapView";
 import { useGoogleMapsLoader } from "@/config/googleMaps";
 import { toast } from "sonner";
 import { ArrowLeft, Crosshair, MapPin, Save, X } from "lucide-react";
+import { indianMobileError, normalizeIndianMobile } from "@/lib/indianPhone";
+import AppLoadingScreen from "@/components/AppLoadingScreen";
 import "./AddHub.css";
 
 const DEFAULT_CENTER = { lat: 17.4065, lng: 78.4772 };
@@ -14,6 +16,7 @@ const EMPTY_FORM = {
   zone_id: "",
   city: "",
   address: "",
+  phoneNumber: "",
   lat: String(DEFAULT_CENTER.lat),
   lng: String(DEFAULT_CENTER.lng),
   status: "FULLY_OPERATIONAL",
@@ -28,6 +31,7 @@ export default function HubForm({ mode = "create" }) {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(isEdit);
   const [flyToToken, setFlyToToken] = useState(0);
+  const [phoneError, setPhoneError] = useState("");
   const { isLoaded: mapLoaded, loadError: mapLoadError } = useGoogleMapsLoader();
 
   useEffect(() => {
@@ -45,6 +49,7 @@ export default function HubForm({ mode = "create" }) {
           zone_id: h.zone_id || "",
           city: h.city || "",
           address: h.address || "",
+          phoneNumber: h.phoneNumber || h.phone_number || h.phone || "",
           lat: h.lat != null ? String(h.lat) : String(DEFAULT_CENTER.lat),
           lng: h.lng != null ? String(h.lng) : String(DEFAULT_CENTER.lng),
           status: h.status || "FULLY_OPERATIONAL",
@@ -76,12 +81,19 @@ export default function HubForm({ mode = "create" }) {
 
   const selectedZone = zones.find((z) => String(z.id) === String(form.zone_id));
 
+  function validatePhone({ required } = { required: !isEdit }) {
+    const message = indianMobileError(form.phoneNumber, { required });
+    setPhoneError(message);
+    return !message;
+  }
+
   async function submit(e) {
     e.preventDefault();
     if (!form.name.trim() || !form.zone_id || !form.city.trim()) {
       toast.error("Name, zone and city are required");
       return;
     }
+    if (!validatePhone({ required: !isEdit })) return;
     const lat = parseFloat(form.lat);
     const lng = parseFloat(form.lng);
     if (Number.isNaN(lat) || Number.isNaN(lng)) {
@@ -90,7 +102,12 @@ export default function HubForm({ mode = "create" }) {
     }
     setSaving(true);
     try {
-      const payload = { ...form, lat, lng };
+      const payload = {
+        ...form,
+        lat,
+        lng,
+        phoneNumber: normalizeIndianMobile(form.phoneNumber),
+      };
       if (isEdit) {
         await api.patch(`/hubs/${id}`, payload);
         toast.success(`Hub "${form.name}" updated`);
@@ -106,7 +123,7 @@ export default function HubForm({ mode = "create" }) {
     }
   }
 
-  if (loading) return <div className="empty">Loading hub…</div>;
+  if (loading) return <AppLoadingScreen message="Loading hub…" testId="hub-loading" />;
 
   return (
     <div data-testid={isEdit ? "edit-hub-page" : "add-hub-page"} className="hub-form-page">
@@ -179,6 +196,28 @@ export default function HubForm({ mode = "create" }) {
                 rows={4}
                 data-testid="hub-address-input"
               />
+            </div>
+
+            <div>
+              <label className="label">Phone Number</label>
+              <input
+                type="tel"
+                inputMode="numeric"
+                value={form.phoneNumber}
+                onChange={(e) => {
+                  set("phoneNumber", e.target.value);
+                  if (phoneError) setPhoneError("");
+                }}
+                onBlur={() => validatePhone({ required: !isEdit })}
+                placeholder="e.g. 9876543210"
+                className={`input mono ${phoneError ? "border-rose-400 ring-1 ring-rose-300" : ""}`}
+                data-testid="hub-phone-input"
+              />
+              {phoneError ? (
+                <p className="text-[12px] text-rose-600 mt-1" data-testid="hub-phone-error">
+                  {phoneError}
+                </p>
+              ) : null}
             </div>
 
             <div className="grid grid-cols-2 gap-3">

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api, { BACKEND_URL } from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
+import AppLoadingScreen from "@/components/AppLoadingScreen";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Tooltip } from "recharts";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
@@ -20,7 +21,7 @@ export default function Reports() {
     toast.success(`Exporting ${range} report…`);
   }
 
-  if (!data) return <div className="p-10 text-[var(--slate-500)]">Loading…</div>;
+  if (!data) return <AppLoadingScreen message="Loading reports…" testId="reports-loading" />;
   return (
     <div data-testid="reports-page">
       <PageHeader

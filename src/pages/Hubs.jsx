@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
+import AppLoadingScreen from "@/components/AppLoadingScreen";
 import { toast } from "sonner";
 import {
   Plus, Save, X, Trash2, SlidersHorizontal, Pencil, Power,
@@ -145,6 +146,7 @@ export default function Hubs() {
               <th style={{ width: 32 }}></th>
               <th>Hub</th>
               <th>City</th>
+              <th>Phone</th>
               <th>Status</th>
               <th></th>
             </tr>
@@ -179,6 +181,10 @@ export default function Hubs() {
 
                     <td className="text-[var(--text-secondary)]">{h.city}</td>
 
+                    <td className="mono text-[12px] text-[var(--text-secondary)]">
+                      {h.phoneNumber || "—"}
+                    </td>
+
                     <td>
                       <span className={`pill ${meta.cls}`}><span className="dot" />{meta.label}</span>
                     </td>
@@ -209,7 +215,7 @@ export default function Hubs() {
                   {/* Inline SLA panel */}
                   {isExpanded && (
                     <tr data-testid={`sla-panel-${h.id}`}>
-                      <td colSpan={5} className="p-0 border-b border-[var(--border-default)]">
+                      <td colSpan={6} className="p-0 border-b border-[var(--border-default)]">
                         <HubSlaPanel hub={h} zones={zones} onCollapse={() => setExpandedId(null)} />
                       </td>
                     </tr>
@@ -218,7 +224,7 @@ export default function Hubs() {
               );
             })}
             {filtered.length === 0 && (
-              <tr><td colSpan={5} className="empty">No hubs found for selected filters</td></tr>
+              <tr><td colSpan={6} className="empty">No hubs found for selected filters</td></tr>
             )}
           </tbody>
         </table>
@@ -336,7 +342,7 @@ function HubSlaPanel({ hub, zones, onCollapse }) {
         {/* SLA list */}
         <div className="px-6 py-4">
           {loading ? (
-            <div className="py-6 text-center text-sm text-slate-400">Loading…</div>
+            <AppLoadingScreen message="Loading SLAs…" variant="inline" testId="hub-sla-loading" />
           ) : filteredRows.length > 0 ? (
             <div className="space-y-2">
               {filteredRows.map(row => {

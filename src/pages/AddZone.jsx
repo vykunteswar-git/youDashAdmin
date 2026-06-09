@@ -4,6 +4,7 @@ import { GoogleMap, Marker, Circle, Polygon } from "@react-google-maps/api";
 import api from "@/lib/api";
 import { useGoogleMapsLoader } from "@/config/googleMaps";
 import PageHeader from "@/components/PageHeader";
+import AppLoadingScreen from "@/components/AppLoadingScreen";
 import { toast } from "sonner";
 import { ArrowLeft, Save } from "lucide-react";
 import "./AddZone.css";
@@ -208,7 +209,7 @@ export default function ZoneForm({ mode = "create" }) {
     }
   }
 
-  if (loading) return <div className="empty">Loading zone…</div>;
+  if (loading) return <AppLoadingScreen message="Loading zone…" testId="zone-loading" />;
 
   const center = zoneGeometryCenter(form);
   const polygonPath = form.coordinates.map(([lat, lng]) => ({ lat, lng }));
@@ -421,7 +422,7 @@ export default function ZoneForm({ mode = "create" }) {
                   )}
                 </GoogleMap>
               ) : (
-                <div className="zone-form-map-loading">Loading map…</div>
+                <AppLoadingScreen message="Loading map…" variant="inline" testId="zone-map-loading" />
               )}
             </div>
           </div>

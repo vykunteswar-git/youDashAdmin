@@ -9,6 +9,7 @@ import AssignRiderModal from "@/components/modals/AssignRiderModal";
 import OtpModal from "@/components/modals/OtpModal";
 import { toast } from "sonner";
 import { downloadH2hInvoice } from "@/lib/h2hInvoicePdf";
+import AppLoadingScreen from "@/components/AppLoadingScreen";
 import { ChevronLeft, Phone, BellRing, ArrowRight, Truck, Package, Coins, Activity as ActivityIcon, Copy, FileDown, Trash2 } from "lucide-react";
 
 export default function OrderDetail() {
@@ -34,7 +35,7 @@ export default function OrderDetail() {
   }
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
 
-  if (!o) return <div className="p-10 text-zinc-500" data-testid="order-loading">Loading order…</div>;
+  if (!o) return <AppLoadingScreen message="Loading order…" testId="order-loading" />;
 
   async function advance(status, opts = {}) {
     try {

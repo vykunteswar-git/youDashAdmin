@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
+import AppLoadingScreen from "@/components/AppLoadingScreen";
 import { toast } from "sonner";
 import { Pencil, Search, Trash2, X } from "lucide-react";
 
@@ -231,8 +232,8 @@ export default function Users() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="text-center py-8 text-zinc-500 text-sm">
-                    Loading users…
+                  <td colSpan={5} className="p-0">
+                    <AppLoadingScreen message="Loading users…" variant="inline" testId="users-loading" />
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (

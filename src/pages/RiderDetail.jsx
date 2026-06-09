@@ -4,6 +4,7 @@ import api from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
 import StatusPill from "@/components/StatusPill";
 import { toast } from "sonner";
+import AppLoadingScreen from "@/components/AppLoadingScreen";
 import {
   ArrowLeft, Phone, MapPin, Bike, Star, Wallet, Banknote,
   CheckCircle2, Package, TrendingUp, Ban, ShieldCheck, Pencil, X, Trash2,
@@ -95,7 +96,7 @@ export default function RiderDetail() {
     }
   }
 
-  if (!rider) return <div className="empty" data-testid="rider-loading">Loading rider…</div>;
+  if (!rider) return <AppLoadingScreen message="Loading rider…" testId="rider-loading" />;
 
   return (
     <div data-testid="rider-detail-page">
@@ -343,7 +344,7 @@ function OrdersTab({ orders, nav }) {
 }
 
 function WalletTab({ wallet }) {
-  if (!wallet) return <div className="empty">Loading wallet…</div>;
+  if (!wallet) return <AppLoadingScreen message="Loading wallet…" variant="inline" testId="rider-wallet-loading" />;
   const txs = wallet.transactions || [];
   return (
     <div className="space-y-4" data-testid="wallet-tab">
@@ -439,7 +440,7 @@ function CodTab({ cod, riderId, reload }) {
 }
 
 function PerformanceTab({ perf }) {
-  if (!perf) return <div className="empty">Loading…</div>;
+  if (!perf) return <AppLoadingScreen message="Loading performance…" variant="inline" testId="rider-performance-loading" />;
   return (
     <div className="space-y-4" data-testid="performance-tab">
       <div className="grid grid-cols-4 gap-3">

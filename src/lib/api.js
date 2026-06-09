@@ -526,10 +526,20 @@ function zonePayload(data = {}) {
   };
 }
 
+function normalizeHubPhoneNumber(value) {
+  if (value == null || String(value).trim() === "") return undefined;
+  const digits = String(value).replace(/\D/g, "");
+  if (digits.length === 12 && digits.startsWith("91")) return digits.slice(2);
+  if (digits.length === 11 && digits.startsWith("0")) return digits.slice(1);
+  return digits;
+}
+
 function hubPayload(data = {}) {
   if (!data) return data;
+  const phoneNumber = normalizeHubPhoneNumber(data.phoneNumber ?? data.phone_number ?? data.phone);
   return {
     ...data,
+    phoneNumber,
     zoneId: numberOrUndefined(data.zone_id ?? data.zoneId),
     isActive: data.status ? data.status !== "HUB_OFF" : data.active ?? data.isActive,
   };
@@ -1359,6 +1369,7 @@ function normalizeHubForUi(hub = {}) {
     slots: hub.slots || [],
     status: hub.status || (hub.isActive === false ? "HUB_OFF" : "FULLY_OPERATIONAL"),
     zone_id: hub.zoneId || hub.zone_id,
+    phoneNumber: hub.phoneNumber ?? hub.phone_number ?? hub.phone ?? "",
   };
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
+import AppLoadingScreen from "@/components/AppLoadingScreen";
 import { Calculator, Truck, CheckCircle2, Info, SlidersHorizontal, MapPin, Route, Tag, CreditCard, Settings, Search, Package } from "lucide-react";
 
 const PAYMENT_MODES = [
@@ -264,7 +265,7 @@ export default function FareCalculator() {
     return (
       <div data-testid="fare-calculator-page">
         <PageHeader title="Fare Calculator" subtitle="Simulate full fare breakdown for any trip" />
-        <div className="surface p-10 flex items-center justify-center text-[13px] text-zinc-400">Loading…</div>
+        <AppLoadingScreen message="Loading fare calculator…" testId="fare-calculator-loading" />
       </div>
     );
   }

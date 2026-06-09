@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
+import AppLoadingScreen from "@/components/AppLoadingScreen";
 
 const RANGES = [["today", "Today"], ["week", "This Week"], ["month", "This Month"]];
 
@@ -44,7 +45,7 @@ export default function Earnings() {
         ))}
       </div>
 
-      {loading && <div className="p-10 text-[var(--slate-500)]">Loading…</div>}
+      {loading && <AppLoadingScreen message="Loading earnings…" testId="earnings-loading" />}
 
       {!loading && data && (
         <>

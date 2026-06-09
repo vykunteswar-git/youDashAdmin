@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
+import AppLoadingScreen from "@/components/AppLoadingScreen";
 import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import { ArrowUpRight, Clock, AlertTriangle, CheckCircle2, IndianRupee } from "lucide-react";
 
@@ -53,11 +54,7 @@ export default function Dashboard() {
   );
 
   if (loading && !data) {
-    return (
-      <div data-testid="dashboard-loading" className="p-10 text-zinc-500">
-        Loading…
-      </div>
-    );
+    return <AppLoadingScreen message="Loading dashboard…" testId="dashboard-loading" />;
   }
 
   if (!data) {
