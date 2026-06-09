@@ -10,7 +10,8 @@ const GREY = 117;
 const MARGIN = 8;
 const PAGE_W = 210;
 const CONTENT_W = PAGE_W - MARGIN * 2;
-const LINE_W = 0.35;
+const LINE_W = 0.25;       // inner cell borders — thin
+const OUTER_LINE_W = 0.5;  // outer body frame — thicker
 const RS = "Rs.";
 
 /** jsPDF standard fonts are Latin-1 only — strip rupee and other non-ASCII. */
@@ -78,18 +79,18 @@ function drawCompanyLetterhead(doc, y) {
   const cx = PAGE_W / 2;
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
+  doc.setFontSize(13);
   doc.text(LETTERHEAD.title, cx, y, { align: "center" });
-  y += 6;
+  y += 5.5;
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
+  doc.setFontSize(8.5);
   doc.text(LETTERHEAD.address, cx, y, { align: "center" });
   y += 4;
   doc.text(LETTERHEAD.gstin, cx, y, { align: "center" });
   y += 4;
 
-  doc.setFontSize(7);
+  doc.setFontSize(6.5);
   doc.setTextColor(GREY);
   doc.text(`Printed @ ${printedAt()}`, PAGE_W - MARGIN, y, { align: "right" });
   doc.setTextColor(0);
@@ -150,7 +151,7 @@ export function buildLrPdfData({
     receiverPhone: order.receiverPhone || order.receiver?.phone || form.receiverPhone || "",
     categoryName: category?.name || order.category || packageContents || "Parcel",
     weightKg,
-    quantity: 1,
+    quantity: Number(order.quantity ?? order.pieceCount ?? order.piece_count ?? form.qty ?? 1),
     freightCharge: Number(order.subtotal ?? order.fare?.subtotal ?? quote?.subtotal ?? 0),
     gstAmount: Number(order.gstAmount ?? order.gst_amount ?? order.fare?.gst ?? quote?.gstAmount ?? 0),
     platformFee: Number(order.platformFee ?? order.platform_fee ?? order.fare?.platform_fee ?? quote?.platformFee ?? 0),
@@ -197,28 +198,29 @@ function drawHubHeader(doc, y, hub) {
   const phones = hub.phoneNumber ? `Ph.No: ${pdfSafe(hub.phoneNumber)}` : "";
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
+  doc.setFontSize(10);
   doc.text(`${name} :-`, MARGIN, y);
-  y += 5;
+  y += 4.5;
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
+  doc.setFontSize(9);
   let detail = COMPANY;
   if (addrParts.length) detail += `; ${addrParts.join(", ")}`;
   if (phones) detail += ` ${phones}`;
   const lines = doc.splitTextToSize(detail, CONTENT_W);
   doc.text(lines, MARGIN, y);
-  return y + lines.length * 4.2 + 4;
+  return y + lines.length * 4 + 3;
 }
 
-/** Compact cell — small label on top, value directly below (reference proportions). */
-function drawFieldCell(doc, x, y, w, h, label, value) {
+/** Compact cell — small label on top, bold value below. Pass large=true for LR Number. */
+function drawFieldCell(doc, x, y, w, h, label, value, { large = false } = {}) {
   strokeRect(doc, x, y, w, h);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.2);
-  doc.text(pdfSafe(label), x + 1.5, y + 3.2);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.8);
+  doc.setFontSize(6);
+  doc.setTextColor(0);
+  doc.text(pdfSafe(label), x + 1.5, y + 3);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(large ? 10 : 8.5);
   const valLine = doc.splitTextToSize(pdfSafe(value || "-"), w - 3)[0];
   doc.text(valLine, x + 1.5, y + h - 1.8);
 }
@@ -230,12 +232,13 @@ function drawLabelValueRow(doc, y, h, pairs) {
   pairs.forEach(({ label, value }) => {
     strokeRect(doc, x, y, colW, h);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(6.2);
+    doc.setFontSize(6);
+    doc.setTextColor(0);
     doc.text(pdfSafe(label), x + 1.5, y + h / 2 + 0.8);
     x += colW;
     strokeRect(doc, x, y, colW, h);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.8);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
     const line = doc.splitTextToSize(pdfSafe(value || "-"), colW - 3)[0];
     doc.text(line, x + 1.5, y + h / 2 + 0.8);
     x += colW;
@@ -246,8 +249,10 @@ function drawTableRow(doc, y, h, cols, values, { bold = false, header = false } 
   let x = MARGIN;
   cols.forEach((w, i) => {
     strokeRect(doc, x, y, w, h);
-    doc.setFont("helvetica", header || (bold && i === cols.length - 1) ? "bold" : "normal");
-    doc.setFontSize(header ? 7 : 7.5);
+    const isBold = header || bold;
+    doc.setFont("helvetica", isBold ? "bold" : "normal");
+    doc.setFontSize(header ? 7 : 8);
+    doc.setTextColor(0);
     const val = pdfSafe(values[i] ?? "");
     if (i === 1) {
       doc.text(val, x + w / 2, y + h / 2 + 0.8, { align: "center" });
@@ -280,17 +285,10 @@ function renderLrPdf(data) {
   const toCity = pdfSafe(data.dropZoneName || data.destinationHub.city || "-");
 
   // ── Row 1: LR Number | From | To | Date ──
-  drawFieldCell(doc, MARGIN, y, col4, rowH, "LR Number", data.lrNumber);
+  drawFieldCell(doc, MARGIN, y, col4, rowH, "LR Number", data.lrNumber, { large: true });
   drawFieldCell(doc, MARGIN + col4, y, col4, rowH, "From", fromCity);
   drawFieldCell(doc, MARGIN + col4 * 2, y, col4, rowH, "To", toCity);
   drawFieldCell(doc, MARGIN + col4 * 3, y, col4, rowH, "Date", data.bookingDate);
-  y += rowH;
-
-  // ── Row 2: LR Type | From Branch | To Branch | WayBill ──
-  drawFieldCell(doc, MARGIN, y, col4, rowH, "LR Type", data.lrType);
-  drawFieldCell(doc, MARGIN + col4, y, col4, rowH, "From Branch", data.originHub.name);
-  drawFieldCell(doc, MARGIN + col4 * 2, y, col4, rowH, "To Branch", data.destinationHub.name);
-  drawFieldCell(doc, MARGIN + col4 * 3, y, col4, rowH, "WayBill No.", "N/A");
   y += rowH;
 
   // ── Sender / Receiver (label | value | label | value per row) ──
@@ -336,68 +334,55 @@ function renderLrPdf(data) {
   );
   y += tblRowH;
 
-  // ── Charges block (reference layout) ──
-  const chargesH = 26;
-  strokeRect(doc, MARGIN, y, CONTENT_W, chargesH);
+  // ── Charges block — clean two-column rows ──
+  const labelW = CONTENT_W * 0.65;
+  const amtW = CONTENT_W - labelW;
+  const chRowH = 7;
 
-  doc.setFont("helvetica", "normal");
+  const chargeRows = [
+    { label: "Value of the Goods", amount: null, bold: false },
+    { label: `GST (${RS})`, amount: formatInr(data.gstAmount), bold: false },
+    { label: `Platform / L Charges (${RS})`, amount: formatInr(data.platformFee), bold: false },
+    { label: `Net Amt Payable (${RS})`, amount: formatInr(data.netAmountPayable), bold: true },
+  ];
+
+  chargeRows.forEach(({ label, amount, bold }) => {
+    strokeRect(doc, MARGIN, y, labelW, chRowH);
+    strokeRect(doc, MARGIN + labelW, y, amtW, chRowH);
+    doc.setFont("helvetica", bold ? "bold" : "normal");
+    doc.setFontSize(bold ? 8.5 : 7.5);
+    doc.setTextColor(0);
+    doc.text(pdfSafe(label), MARGIN + 2, y + chRowH / 2 + 0.8);
+    if (amount != null) {
+      doc.setFont("helvetica", bold ? "bold" : "normal");
+      doc.text(amount, MARGIN + CONTENT_W - 2, y + chRowH / 2 + 0.8, { align: "right" });
+    }
+    y += chRowH;
+  });
+
+  // Outer frame — thicker than inner cell borders
+  doc.setDrawColor(0);
+  doc.setLineWidth(OUTER_LINE_W);
+  doc.rect(MARGIN, bodyTop, CONTENT_W, y - bodyTop, "S");
+  doc.setLineWidth(LINE_W);
+  y += 4;
+
+  // Booked by Admin — outside the box, small italic
+  doc.setFont("helvetica", "italic");
   doc.setFontSize(7);
-  doc.text("Value of the Goods", MARGIN + 2, y + 4.5);
-  doc.text("-", MARGIN + 38, y + 4.5);
-
-  const otherCharges = Number(data.gstAmount) + Number(data.platformFee);
-  const chargesLine = pdfSafe(
-    `( GST ${formatInr(data.gstAmount)}  L Charges ${formatInr(data.platformFee)} ) Other Charges (${RS}) ${formatInr(otherCharges)}`,
-  );
-  doc.text(chargesLine, MARGIN + 2, y + 9);
-
-  doc.text("Condition of the Goods", MARGIN + 2, y + 13.5);
-  doc.text("-", MARGIN + 38, y + 13.5);
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.text(`Net Amt Payable (${RS})`, MARGIN + 2, y + 18);
-  doc.text(formatInr(data.netAmountPayable), MARGIN + 48, y + 18);
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.text("Mode Of Transport", MARGIN + 2, y + 22.5);
-  doc.text("Road", MARGIN + 38, y + 22.5);
-
-  doc.text("Vehicle Number", MARGIN + CONTENT_W * 0.55, y + 22.5);
-  doc.text("-", MARGIN + CONTENT_W * 0.55 + 30, y + 22.5);
-  y += chargesH;
-
-  // ── Signature row (inside body) ──
-  const sigH = 10;
-  const sigW = CONTENT_W / 3;
-  strokeRect(doc, MARGIN, y, sigW, sigH);
-  strokeRect(doc, MARGIN + sigW, y, sigW, sigH);
-  strokeRect(doc, MARGIN + sigW * 2, y, sigW, sigH);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(7);
-  doc.text("Sender Copy", MARGIN + 2, y + sigH / 2 + 0.8);
-  doc.text("Signature", MARGIN + sigW + sigW / 2, y + sigH / 2 + 0.8, { align: "center" });
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(6.5);
-  const booked = doc.splitTextToSize(
-    pdfSafe(`Booked by Admin at ${data.bookingDateTime}`),
-    sigW - 4,
-  );
-  doc.text(booked, MARGIN + sigW * 2 + 2, y + 4);
-  y += sigH;
-
-  // Outer frame around body (reference single box feel)
-  strokeRect(doc, MARGIN, bodyTop, CONTENT_W, y - bodyTop);
-  y += 5;
+  doc.setTextColor(GREY);
+  doc.text(pdfSafe(`Booked by Admin at ${data.bookingDateTime}`), MARGIN, y);
+  doc.setTextColor(0);
+  y += 6;
 
   // ── Terms & Conditions ──
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
+  doc.setFontSize(8.5);
+  doc.setTextColor(0);
   doc.text("Terms & Conditions :", MARGIN, y);
-  y += 4.5;
+  y += 5;
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(6.8);
+  doc.setFontSize(7);
   const terms = [
     "1. We are not responsible for damages to perishable articles or goods improperly packed.",
     "2. No complaint regarding shortage or damage will be entertained unless reported at the time of delivery.",
@@ -409,14 +394,16 @@ function renderLrPdf(data) {
   terms.forEach((t) => {
     const lines = doc.splitTextToSize(pdfSafe(t), CONTENT_W);
     doc.text(lines, MARGIN, y);
-    y += lines.length * 3.3;
+    y += lines.length * 3.5;
   });
 
   y += 2;
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.5);
+  doc.setFontSize(8);
+  doc.setTextColor(0);
   doc.text("Remarks :", MARGIN, y);
   doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
   let remarkText = pdfSafe(data.remarks || "-");
   if (data.hubDistanceKm != null) {
     remarkText += ` | Corridor: ${Number(data.hubDistanceKm).toFixed(1)} km`;
