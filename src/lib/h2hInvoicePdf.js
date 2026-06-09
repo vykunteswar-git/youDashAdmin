@@ -64,7 +64,9 @@ export function downloadH2hInvoice({
   receiverName,
   receiverPhone,
   fromHub,
+  fromHubAddress,
   toHub,
+  toHubAddress,
   paymentType,
   createdAt,
   categoryName,
@@ -115,7 +117,7 @@ export function downloadH2hInvoice({
   doc.text(String(paymentType || "-").toUpperCase(), MARGIN, y);
   y += 6;
 
-  function endpointBlock(title, hubName) {
+  function endpointBlock(title, hubName, hubAddress) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(GREY);
@@ -123,16 +125,17 @@ export function downloadH2hInvoice({
     y += 4;
     doc.setTextColor(0);
     doc.setFont("helvetica", "bold");
-    doc.text(`Door No: -`, MARGIN, y);
+    doc.text(`Hub: ${hubName || "-"}`, MARGIN, y);
     y += 4;
-    doc.text(`LandMark: -`, MARGIN, y);
-    y += 4;
-    doc.text(`FullAddress: ${hubName || "-"}`, MARGIN, y);
-    y += 5;
+    doc.setFont("helvetica", "normal");
+    const addr = hubAddress || hubName || "-";
+    const lines = doc.splitTextToSize(`Address: ${addr}`, 210 - MARGIN * 2);
+    doc.text(lines, MARGIN, y);
+    y += lines.length * 4 + 1;
   }
 
-  endpointBlock("From", fromHub);
-  endpointBlock("To", toHub);
+  endpointBlock("From", fromHub, fromHubAddress);
+  endpointBlock("To", toHub, toHubAddress);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);

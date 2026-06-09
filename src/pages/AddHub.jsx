@@ -13,9 +13,9 @@ const EMPTY_FORM = {
   name: "",
   zone_id: "",
   city: "",
+  address: "",
   lat: String(DEFAULT_CENTER.lat),
   lng: String(DEFAULT_CENTER.lng),
-  hours: "06:00 - 22:00",
   status: "FULLY_OPERATIONAL",
 };
 
@@ -44,9 +44,9 @@ export default function HubForm({ mode = "create" }) {
           name: h.name || "",
           zone_id: h.zone_id || "",
           city: h.city || "",
+          address: h.address || "",
           lat: h.lat != null ? String(h.lat) : String(DEFAULT_CENTER.lat),
           lng: h.lng != null ? String(h.lng) : String(DEFAULT_CENTER.lng),
-          hours: h.hours || "06:00 - 22:00",
           status: h.status || "FULLY_OPERATIONAL",
         });
         setLoading(false);
@@ -169,6 +169,19 @@ export default function HubForm({ mode = "create" }) {
               />
             </div>
 
+            <div>
+              <label className="label">Full Address</label>
+              <textarea
+                value={form.address}
+                onChange={(e) => set("address", e.target.value)}
+                placeholder="e.g. 15-7-4, 38 Bus Stop Back Side, Old Gajuwaka, Vizag - 530026"
+                className="input"
+                rows={3}
+                style={{ resize: "vertical" }}
+                data-testid="hub-address-input"
+              />
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label">Latitude</label>
@@ -228,17 +241,6 @@ export default function HubForm({ mode = "create" }) {
                   </span>
                 </p>
               ) : null}
-            </div>
-
-            <div>
-              <label className="label">Last intake cutoff (local time)</label>
-              <input
-                value={form.hours}
-                onChange={(e) => set("hours", e.target.value)}
-                placeholder="06:00 - 22:00"
-                className="input"
-                data-testid="hub-hours-input"
-              />
             </div>
 
             <div>

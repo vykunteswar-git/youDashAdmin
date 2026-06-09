@@ -531,7 +531,6 @@ function hubPayload(data = {}) {
   return {
     ...data,
     zoneId: numberOrUndefined(data.zone_id ?? data.zoneId),
-    intakeCutoff: data.hours || data.intakeCutoff,
     isActive: data.status ? data.status !== "HUB_OFF" : data.active ?? data.isActive,
   };
 }
@@ -1357,7 +1356,6 @@ function normalizeHubForUi(hub = {}) {
     ...hub,
     lat: hub.lat ?? "—",
     lng: hub.lng ?? "—",
-    hours: hub.hours || hub.intakeCutoff || "—",
     slots: hub.slots || [],
     status: hub.status || (hub.isActive === false ? "HUB_OFF" : "FULLY_OPERATIONAL"),
     zone_id: hub.zoneId || hub.zone_id,
