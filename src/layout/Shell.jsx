@@ -14,8 +14,8 @@ import "@/components/BrandLogo.css";
 const NAV = [
   { group: "Operations", items: [
     { to: "/dashboard",      label: "Dashboard",       icon: LayoutDashboard, testid: "nav-dashboard" },
-    { to: "/orders",         label: "Orders",          icon: Package,         testid: "nav-orders" },
-    { to: "/orders/create-h2h", label: "Hub to Hub",  icon: Building2,       testid: "nav-h2h" },
+    { to: "/orders", label: "Orders", icon: Package, testid: "nav-orders", end: true },
+    { to: "/orders/create-h2h", label: "Hub to Hub", icon: Building2, testid: "nav-h2h" },
   ]},
   { group: "Fleet", items: [
     { to: "/riders",         label: "Riders",          icon: Bike,            testid: "nav-riders" },
@@ -114,6 +114,7 @@ export default function Shell() {
                 <NavLink
                   key={it.to}
                   to={it.to}
+                  end={it.end}
                   data-testid={it.testid}
                   title={collapsed ? it.label : undefined}
                   className={({ isActive }) =>

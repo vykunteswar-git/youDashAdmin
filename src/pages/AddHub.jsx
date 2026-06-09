@@ -175,9 +175,8 @@ export default function HubForm({ mode = "create" }) {
                 value={form.address}
                 onChange={(e) => set("address", e.target.value)}
                 placeholder="e.g. 15-7-4, 38 Bus Stop Back Side, Old Gajuwaka, Vizag - 530026"
-                className="input"
-                rows={5}
-                style={{ resize: "vertical" }}
+                className="input hub-address-textarea"
+                rows={4}
                 data-testid="hub-address-input"
               />
             </div>
