@@ -97,7 +97,7 @@ export default function OrderDetail() {
         return (
           <div className="space-y-2">
             <ActionBtn label="Assign delivery rider" onClick={() => openAssign("delivery")} />
-            <ActionBtn label="Mark as Delivered" onClick={() => openOtp("Mark as Delivered", "DELIVERED", o.payment_mode === "COD" && !o.cod_already_collected)} variant="secondary" />
+            <ActionBtn label="Mark as Delivered" onClick={() => openOtp("Mark as Delivered", "DELIVERED")} variant="secondary" />
           </div>
         );
       case "OUT_FOR_DELIVERY":
