@@ -193,20 +193,14 @@ function strokeRect(doc, x, y, w, h) {
 }
 
 function drawHubHeader(doc, y, hub) {
-  const name = pdfSafe(hub.name || "-");
   const addrParts = [pdfSafe(hub.address), pdfSafe(hub.city)].filter(Boolean);
-  const phones = hub.phoneNumber ? `Ph.No: ${pdfSafe(hub.phoneNumber)}` : "";
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.text(`${name} :-`, MARGIN, y);
-  y += 4.5;
+  const phone = hub.phoneNumber ? `Ph.No: ${pdfSafe(hub.phoneNumber)}` : "";
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  let detail = COMPANY;
-  if (addrParts.length) detail += `; ${addrParts.join(", ")}`;
-  if (phones) detail += ` ${phones}`;
+  let detail = addrParts.join(", ");
+  if (phone) detail += (detail ? "  " : "") + phone;
+  if (!detail) detail = "-";
   const lines = doc.splitTextToSize(detail, CONTENT_W);
   doc.text(lines, MARGIN, y);
   return y + lines.length * 4 + 3;
@@ -280,14 +274,16 @@ function renderLrPdf(data) {
 
   const bodyTop = y;
   const col4 = CONTENT_W / 4;
-  const rowH = 7;
-  const fromCity = pdfSafe(data.pickupZoneName || data.originHub.city || "-");
-  const toCity = pdfSafe(data.dropZoneName || data.destinationHub.city || "-");
+  const rowH = 11;
+  const hubLabel = (hub) => {
+    const parts = [hub.name, hub.address, hub.city].filter(Boolean).map(pdfSafe);
+    return parts.join(", ") || "-";
+  };
 
   // ── Row 1: LR Number | From | To | Date ──
   drawFieldCell(doc, MARGIN, y, col4, rowH, "LR Number", data.lrNumber, { large: true });
-  drawFieldCell(doc, MARGIN + col4, y, col4, rowH, "From", fromCity);
-  drawFieldCell(doc, MARGIN + col4 * 2, y, col4, rowH, "To", toCity);
+  drawFieldCell(doc, MARGIN + col4, y, col4, rowH, "From", hubLabel(data.originHub));
+  drawFieldCell(doc, MARGIN + col4 * 2, y, col4, rowH, "To", hubLabel(data.destinationHub));
   drawFieldCell(doc, MARGIN + col4 * 3, y, col4, rowH, "Date", data.bookingDate);
   y += rowH;
 
