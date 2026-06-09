@@ -4,7 +4,7 @@ import api from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
 import { buildLrPdfData, downloadH2hInvoice } from "@/lib/h2hInvoicePdf";
 import { toast } from "sonner";
-import { ArrowLeft, Building2, Calculator, FileDown, Package, User } from "lucide-react";
+import { ArrowLeft, Building2, Calculator, FileDown, Package, PenLine, User } from "lucide-react";
 
 const EMPTY = {
   pickupZoneId: "",
@@ -12,6 +12,7 @@ const EMPTY = {
   dropZoneId: "",
   destinationHubId: "",
   weight: "",
+  qty: "1",
   categoryId: "",
   paymentType: "COD",
   senderName: "",
@@ -19,6 +20,10 @@ const EMPTY = {
   receiverName: "",
   receiverPhone: "",
   packageContents: "",
+  pricingMode: "auto",
+  manualFreight: "",
+  manualGst: "",
+  manualPlatformFee: "",
 };
 
 function Field({ label, children }) {
@@ -92,6 +97,15 @@ export default function CreateHubToHub() {
     return () => clearTimeout(timer);
   }, [form.originHubId, form.destinationHubId, form.weight]);
 
+  const manualTotal = useMemo(() => {
+    const f = parseFloat(form.manualFreight) || 0;
+    const g = parseFloat(form.manualGst) || 0;
+    const p = parseFloat(form.manualPlatformFee) || 0;
+    return f + g + p;
+  }, [form.manualFreight, form.manualGst, form.manualPlatformFee]);
+
+  const isManual = form.pricingMode === "manual";
+
   function set(k, v) {
     setForm((s) => ({ ...s, [k]: v }));
   }
@@ -111,12 +125,17 @@ export default function CreateHubToHub() {
       toast.error("Sender and receiver details are required");
       return;
     }
+    if (isManual && !(parseFloat(form.manualFreight) > 0)) {
+      toast.error("Enter freight charge for manual pricing");
+      return;
+    }
     setBooking(true);
     try {
       const res = await api.post("/orders/hub-to-hub", {
         originHubId: Number(form.originHubId),
         destinationHubId: Number(form.destinationHubId),
         weight,
+        quantity: parseInt(form.qty) || 1,
         categoryId: Number(form.categoryId),
         paymentType: form.paymentType,
         senderName: form.senderName.trim(),
@@ -124,10 +143,19 @@ export default function CreateHubToHub() {
         receiverName: form.receiverName.trim(),
         receiverPhone: form.receiverPhone.trim(),
         packageContents: form.packageContents.trim() || undefined,
+        ...(isManual && {
+          manualPricing: true,
+          manualFreight: parseFloat(form.manualFreight) || 0,
+          manualGst: parseFloat(form.manualGst) || 0,
+          manualPlatformFee: parseFloat(form.manualPlatformFee) || 0,
+        }),
       });
       const order = res.data;
       toast.success(`Booked ${order.displayOrderId || order.tracking_id}`);
 
+      const effectiveQuote = isManual
+        ? { subtotal: parseFloat(form.manualFreight) || 0, gstAmount: parseFloat(form.manualGst) || 0, platformFee: parseFloat(form.manualPlatformFee) || 0, total: manualTotal }
+        : quote;
       downloadH2hInvoice(
         buildLrPdfData({
           form,
@@ -136,8 +164,8 @@ export default function CreateHubToHub() {
           pickupZone,
           dropZone,
           category,
-          order: { ...order, weight },
-          quote,
+          order: { ...order, weight, quantity: parseInt(form.qty) || 1 },
+          quote: effectiveQuote,
         }),
       );
 
@@ -217,10 +245,14 @@ export default function CreateHubToHub() {
           <div className="flex items-center gap-2 text-[13px] font-medium text-zinc-700 pt-2">
             <Package size={14} /> Parcel
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-4 gap-4">
             <Field label="Weight (kg)">
               <input type="number" min="0.1" step="0.1" className="input w-full"
                 value={form.weight} onChange={(e) => set("weight", e.target.value)} />
+            </Field>
+            <Field label="Qty">
+              <input type="number" min="1" step="1" className="input w-full"
+                value={form.qty} onChange={(e) => set("qty", e.target.value)} />
             </Field>
             <Field label="Category">
               <select className="input w-full" value={form.categoryId} onChange={(e) => set("categoryId", e.target.value)}>
@@ -241,34 +273,80 @@ export default function CreateHubToHub() {
           </Field>
         </div>
 
-        <div className="surface p-5 h-fit">
-          <div className="flex items-center gap-2 text-[13px] font-medium mb-3">
-            <Calculator size={14} /> Price preview
+        <div className="surface p-5 h-fit space-y-4">
+          {/* Pricing mode toggle */}
+          <div className="flex items-center gap-2 text-[13px] font-medium">
+            <Calculator size={14} /> Pricing
           </div>
-          {quoteLoading && <p className="text-[12px] text-zinc-500">Calculating…</p>}
-          {!quoteLoading && !quote && (
-            <p className="text-[12px] text-zinc-500">Select hubs and weight to see pricing.</p>
-          )}
-          {quote && (
-            <div className="text-[13px] space-y-1 mono">
-              <Row label="Hub corridor" value={quote.hubCost} />
-              <Row label="Weight" value={quote.weightCost} />
-              <hr className="my-2 border-zinc-200" />
-              <Row label="Freight (subtotal)" value={quote.subtotal} bold />
-              <Row label="L Charges" value={quote.platformFee} />
-              <Row label="GST" value={quote.gstAmount} />
-              <hr className="my-2 border-zinc-200" />
-              <Row label="Total" value={quote.total} bold />
-              {quote.hubDistanceKm != null && (
-                <p className="text-[11px] text-zinc-500 pt-2">Corridor: {quote.hubDistanceKm} km</p>
+          <div className="flex rounded-sm border border-[var(--border-default)] overflow-hidden text-[12px]">
+            <button type="button"
+              onClick={() => set("pricingMode", "auto")}
+              className={`flex-1 py-1.5 transition ${!isManual ? "bg-zinc-900 text-white" : "hover:bg-zinc-50"}`}>
+              Auto (Config)
+            </button>
+            <button type="button"
+              onClick={() => set("pricingMode", "manual")}
+              className={`flex-1 py-1.5 transition border-l border-[var(--border-default)] flex items-center justify-center gap-1.5 ${isManual ? "bg-zinc-900 text-white" : "hover:bg-zinc-50"}`}>
+              <PenLine size={12} /> Manual
+            </button>
+          </div>
+
+          {/* Auto mode — quote display */}
+          {!isManual && (
+            <>
+              {quoteLoading && <p className="text-[12px] text-zinc-500">Calculating…</p>}
+              {!quoteLoading && !quote && (
+                <p className="text-[12px] text-zinc-500">Select hubs and weight to see pricing.</p>
               )}
+              {quote && (
+                <div className="text-[13px] space-y-1 mono">
+                  <Row label="Hub corridor" value={quote.hubCost} />
+                  <Row label="Weight" value={quote.weightCost} />
+                  <hr className="my-2 border-zinc-200" />
+                  <Row label="Freight (subtotal)" value={quote.subtotal} bold />
+                  <Row label="L Charges" value={quote.platformFee} />
+                  <Row label="GST" value={quote.gstAmount} />
+                  <hr className="my-2 border-zinc-200" />
+                  <Row label="Total" value={quote.total} bold />
+                  {quote.hubDistanceKm != null && (
+                    <p className="text-[11px] text-zinc-500 pt-2">Corridor: {quote.hubDistanceKm} km</p>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Manual mode — price inputs */}
+          {isManual && (
+            <div className="space-y-3">
+              <Field label="Freight charge (₹)">
+                <input type="number" min="0" step="0.01" className="input w-full"
+                  placeholder="0.00" value={form.manualFreight}
+                  onChange={(e) => set("manualFreight", e.target.value)} />
+              </Field>
+              <Field label="GST (₹)">
+                <input type="number" min="0" step="0.01" className="input w-full"
+                  placeholder="0.00" value={form.manualGst}
+                  onChange={(e) => set("manualGst", e.target.value)} />
+              </Field>
+              <Field label="Platform fee (₹)">
+                <input type="number" min="0" step="0.01" className="input w-full"
+                  placeholder="0.00" value={form.manualPlatformFee}
+                  onChange={(e) => set("manualPlatformFee", e.target.value)} />
+              </Field>
+              <div className="flex justify-between text-[13px] font-semibold border-t border-zinc-200 pt-2 mono">
+                <span>Total</span>
+                <span>₹{manualTotal.toFixed(2)}</span>
+              </div>
             </div>
           )}
-          <button type="submit" disabled={booking || !quote}
-            className="mt-5 w-full bg-white text-black text-[13px] font-medium py-2.5 rounded-sm hover:bg-zinc-100 disabled:opacity-50 flex items-center justify-center gap-2">
+
+          <button type="submit"
+            disabled={booking || (!isManual && !quote)}
+            className="w-full bg-white text-black text-[13px] font-medium py-2.5 rounded-sm hover:bg-zinc-100 disabled:opacity-50 flex items-center justify-center gap-2">
             <FileDown size={14} /> {booking ? "Booking…" : "Book & download LR"}
           </button>
-          <p className="text-[11px] text-zinc-500 mt-3">
+          <p className="text-[11px] text-zinc-500">
             Walk-in customers are fine — any sender/receiver name and phone. Status stays BOOKED; no riders or OTP.
           </p>
         </div>
