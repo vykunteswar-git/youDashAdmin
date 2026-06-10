@@ -2,7 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
-import { buildLrPdfData, downloadH2hInvoice, formatWeightLabel, normalizeWeightUnit } from "@/lib/h2hInvoicePdf";
+import {
+  buildLrPdfData,
+  downloadH2hInvoice,
+  formatWeightLabel,
+  LR_MAX_CONTENT_CHARS,
+  LR_MAX_CONTENT_WORDS,
+  normalizeWeightUnit,
+} from "@/lib/h2hInvoicePdf";
 import { toast } from "sonner";
 import { ArrowLeft, Building2, Calculator, FileDown, Package, PenLine, User, X } from "lucide-react";
 
@@ -226,7 +233,17 @@ export default function CreateHubToHub() {
           pickupZone,
           dropZone,
           category,
-          order: { ...order, weight, weightUnit, quantity: parseInt(form.qty) || 1 },
+          order: {
+            ...order,
+            weight,
+            weightUnit,
+            quantity: parseInt(form.qty) || 1,
+            senderName: form.senderName.trim(),
+            senderPhone: form.senderPhone.trim(),
+            receiverName: form.receiverName.trim(),
+            receiverPhone: form.receiverPhone.trim(),
+            packageContents: form.packageContents.trim(),
+          },
           quote: effectiveQuote,
         }),
       );
@@ -361,8 +378,16 @@ export default function CreateHubToHub() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Contents (optional)">
-              <input className="input w-full" value={form.packageContents}
-                onChange={(e) => set("packageContents", e.target.value)} placeholder="e.g. Documents, clothes" />
+              <input
+                className="input w-full"
+                value={form.packageContents}
+                maxLength={LR_MAX_CONTENT_CHARS}
+                onChange={(e) => set("packageContents", e.target.value)}
+                placeholder="e.g. Documents, clothes"
+              />
+              <span className="text-[10px] text-zinc-400 mt-0.5 block">
+                Max {LR_MAX_CONTENT_WORDS} words ({LR_MAX_CONTENT_CHARS} chars) on LR
+              </span>
             </Field>
             <Field label="Value of Goods (₹)">
               <input type="number" min="0" step="0.01" className="input w-full"

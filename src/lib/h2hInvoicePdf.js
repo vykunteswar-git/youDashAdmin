@@ -109,9 +109,31 @@ export function formatWeightLabel(weight, unit) {
   return normalizeWeightUnit(unit) === "G" ? `${w} g` : `${w} kg`;
 }
 
+export const LR_MAX_CONTENT_WORDS = 8;
+export const LR_MAX_CONTENT_CHARS = 50;
+const LR_MAX_DESC_LINES = 2;
+const PARTY_PLACEHOLDERS = new Set(["sender", "receiver", "—", "-", "n/a", "na"]);
+
+/** Trim user contents to a fixed word count for the LR item cell. */
+export function truncateWords(text, maxWords = LR_MAX_CONTENT_WORDS) {
+  const words = String(text || "").trim().split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return words.join(" ");
+  return `${words.slice(0, maxWords).join(" ")}...`;
+}
+
+function pickPartyField(...candidates) {
+  for (const v of candidates) {
+    const s = String(v ?? "").trim();
+    if (!s || PARTY_PLACEHOLDERS.has(s.toLowerCase())) continue;
+    return s;
+  }
+  return "";
+}
+
 /** User contents override category label on the LR item row. */
 export function buildItemDescription({ packageContents, categoryName, weightLabel }) {
-  const base = (packageContents || categoryName || "Parcel").trim();
+  const raw = (packageContents || categoryName || "Parcel").trim();
+  const base = packageContents ? truncateWords(raw) : raw;
   return weightLabel ? `${base} (${weightLabel})` : base;
 }
 
@@ -163,10 +185,10 @@ export function buildLrPdfData({
     bookingDate: formatDateOnly(createdAt),
     bookingDateTime: formatDateTime(createdAt),
     lrType: paymentToLrType(paymentType),
-    senderName: order.senderName || order.sender?.name || form.senderName || "",
-    senderPhone: order.senderPhone || order.sender?.phone || form.senderPhone || "",
-    receiverName: order.receiverName || order.receiver?.name || form.receiverName || "",
-    receiverPhone: order.receiverPhone || order.receiver?.phone || form.receiverPhone || "",
+    senderName: pickPartyField(order.senderName, form.senderName, order.sender?.name),
+    senderPhone: pickPartyField(order.senderPhone, form.senderPhone, order.sender?.phone),
+    receiverName: pickPartyField(order.receiverName, form.receiverName, order.receiver?.name),
+    receiverPhone: pickPartyField(order.receiverPhone, form.receiverPhone, order.receiver?.phone),
     categoryName,
     packageContents,
     itemDescription: buildItemDescription({ packageContents, categoryName, weightLabel }),
@@ -271,7 +293,12 @@ function drawTableRow(doc, y, h, cols, values, { bold = false, header = false, w
     doc.setTextColor(0);
     const val = pdfSafe(values[i] ?? "");
     if (i === wrapCol) {
-      const lines = doc.splitTextToSize(val, w - 3);
+      const allLines = doc.splitTextToSize(val, w - 3);
+      const lines = allLines.slice(0, LR_MAX_DESC_LINES);
+      if (allLines.length > LR_MAX_DESC_LINES && lines.length) {
+        const last = lines[lines.length - 1];
+        lines[lines.length - 1] = last.length > 3 ? `${last.slice(0, -3)}...` : `${last}...`;
+      }
       const lineH = 3.4;
       const blockH = lines.length * lineH;
       const startY = y + Math.max(2.2, (h - blockH) / 2 + lineH);
@@ -289,7 +316,8 @@ function drawTableRow(doc, y, h, cols, values, { bold = false, header = false, w
 
 function itemRowHeight(doc, desc, colW, minH = 6) {
   const lines = doc.splitTextToSize(pdfSafe(desc), colW - 3);
-  return Math.max(minH, lines.length * 3.4 + 2.4);
+  const lineCount = Math.min(lines.length, LR_MAX_DESC_LINES);
+  return Math.max(minH, lineCount * 3.4 + 2.4);
 }
 
 function renderLrPdf(data) {
