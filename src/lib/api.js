@@ -383,6 +383,8 @@ function normalizeAdminResponse(response) {
   else if (originalUrl === "/hub-corridor-sla" && response.config?.method === "get") response.data = { slas: Array.isArray(data) ? data : [] };
   else if (originalUrl === "/hub-route-sla" && response.config?.method === "get") response.data = { slas: Array.isArray(data) ? data : [] };
   else if (originalUrl === "/earnings") response.data = normalizeEarnings(data);
+  else if (originalUrl === "/orders/hub-to-hub/preview") response.data = normalizeH2hQuote(data);
+  else if (originalUrl === "/orders/hub-to-hub" && response.config?.method === "post") response.data = normalizeOrder(data);
   else response.data = data || payload;
 
   return response;
@@ -1145,6 +1147,54 @@ function normalizeReport(data = {}) {
   };
 }
 
+function normalizeH2hQuote(raw = {}) {
+  const hubCost =
+    raw.hubCost ??
+    raw.hub_cost ??
+    raw.hubCorridorCost ??
+    raw.hub_corridor_cost ??
+    raw.hubToHubAmount ??
+    raw.hub_to_hub_amount ??
+    0;
+  const weightCost =
+    raw.weightCost ??
+    raw.weight_cost ??
+    raw.weightCharge ??
+    raw.weight_charge ??
+    raw.weightSurcharge ??
+    raw.weight_surcharge ??
+    0;
+  const subtotal =
+    raw.subtotal ??
+    raw.freight ??
+    raw.freightCharge ??
+    raw.freight_charge ??
+    Number(hubCost) + Number(weightCost);
+  const gstAmount = raw.gstAmount ?? raw.gst_amount ?? raw.gst ?? 0;
+  const platformFee =
+    raw.platformFee ?? raw.platform_fee ?? raw.lCharges ?? raw.l_charges ?? 0;
+  const total =
+    raw.total ??
+    raw.totalAmount ??
+    raw.total_amount ??
+    Number(subtotal) + Number(gstAmount) + Number(platformFee);
+  const hubDistanceKm =
+    raw.hubDistanceKm ?? raw.hub_distance_km ?? raw.distanceKm ?? raw.distance_km ?? null;
+  const weightInKg =
+    raw.weightInKg ?? raw.weight_in_kg ?? raw.weightKg ?? raw.weight_kg ?? null;
+
+  return {
+    hubCost: Number(hubCost) || 0,
+    weightCost: Number(weightCost) || 0,
+    subtotal: Number(subtotal) || 0,
+    gstAmount: Number(gstAmount) || 0,
+    platformFee: Number(platformFee) || 0,
+    total: Number(total) || 0,
+    hubDistanceKm: hubDistanceKm != null ? Number(hubDistanceKm) : null,
+    weightInKg: weightInKg != null ? Number(weightInKg) : null,
+  };
+}
+
 function normalizeOrder(order = {}) {
   const paymentMode = order.paymentType || order.payment_mode || "PREPAID";
   const total = order.totalAmount ?? order.total ?? 0;
@@ -1161,10 +1211,13 @@ function normalizeOrder(order = {}) {
     total_amount: order.totalAmount ?? order.total_amount ?? total,
     delivery_type: order.deliveryType || order.delivery_type || "DOOR_TO_DOOR",
     payment_mode: paymentMode === "ONLINE" ? "PREPAID" : paymentMode,
-    weight_kg: order.weight ?? order.weight_kg ?? 0,
+    weight: order.weight ?? order.weight_kg ?? 0,
+    weight_kg: order.weightInKg ?? order.weightKg ?? order.weight_kg ?? order.weight ?? 0,
+    weight_unit: order.weightUnit ?? order.weight_unit ?? "KG",
     created_at: order.createdAt || order.created_at || new Date().toISOString(),
     distance_km: order.distanceKm ?? order.distance_km ?? 0,
-    category: order.packageContents || order.category || "Parcel",
+    category: order.categoryName || order.category || "Parcel",
+    packageContents: order.packageContents || order.package_contents || "",
     fragile: order.isFragile ?? order.fragile ?? false,
     sender: {
       name: order.senderName || order.sender?.name || "Sender",

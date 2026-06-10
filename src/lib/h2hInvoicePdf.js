@@ -98,6 +98,23 @@ function paymentToLrType(paymentType) {
   return pt === "COD" ? "COD" : "Paid";
 }
 
+export function normalizeWeightUnit(unit) {
+  const u = String(unit || "KG").toUpperCase();
+  return u === "G" || u === "GRAM" || u === "GRAMS" ? "G" : "KG";
+}
+
+export function formatWeightLabel(weight, unit) {
+  const w = Number(weight);
+  if (!Number.isFinite(w) || w <= 0) return "";
+  return normalizeWeightUnit(unit) === "G" ? `${w} g` : `${w} kg`;
+}
+
+/** User contents override category label on the LR item row. */
+export function buildItemDescription({ packageContents, categoryName, weightLabel }) {
+  const base = (packageContents || categoryName || "Parcel").trim();
+  return weightLabel ? `${base} (${weightLabel})` : base;
+}
+
 function hubFromObject(hub = {}, orderFallback = {}) {
   return {
     name: hub.name || orderFallback.name || "",
@@ -120,10 +137,15 @@ export function buildLrPdfData({
   quote = {},
 }) {
   const dest = destinationHub || destHub;
-  const weightKg = Number(order.weight ?? order.weight_kg ?? form.weight ?? 0);
+  const weight = Number(order.weight ?? form.weight ?? order.weight_kg ?? 0);
+  const weightUnit = normalizeWeightUnit(
+    order.weightUnit ?? order.weight_unit ?? form.weightUnit ?? "KG",
+  );
   const createdAt = order.createdAt || order.created_at || new Date().toISOString();
   const paymentType = order.paymentType || order.payment_mode || form.paymentType;
-  const packageContents = (form.packageContents || order.packageContents || "").trim();
+  const packageContents = (form.packageContents || order.packageContents || order.package_contents || "").trim();
+  const categoryName = category?.name || order.categoryName || order.category || "Parcel";
+  const weightLabel = formatWeightLabel(weight, weightUnit);
 
   return {
     companyName: COMPANY,
@@ -145,8 +167,12 @@ export function buildLrPdfData({
     senderPhone: order.senderPhone || order.sender?.phone || form.senderPhone || "",
     receiverName: order.receiverName || order.receiver?.name || form.receiverName || "",
     receiverPhone: order.receiverPhone || order.receiver?.phone || form.receiverPhone || "",
-    categoryName: category?.name || order.category || packageContents || "Parcel",
-    weightKg,
+    categoryName,
+    packageContents,
+    itemDescription: buildItemDescription({ packageContents, categoryName, weightLabel }),
+    weight,
+    weightUnit,
+    weightLabel,
     quantity: Number(order.quantity ?? order.pieceCount ?? order.piece_count ?? form.qty ?? 1),
     freightCharge: Number(order.subtotal ?? order.fare?.subtotal ?? quote?.subtotal ?? 0),
     gstAmount: Number(order.gstAmount ?? order.gst_amount ?? order.fare?.gst ?? quote?.gstAmount ?? 0),
@@ -235,7 +261,7 @@ function drawLabelValueRow(doc, y, h, pairs) {
   });
 }
 
-function drawTableRow(doc, y, h, cols, values, { bold = false, header = false } = {}) {
+function drawTableRow(doc, y, h, cols, values, { bold = false, header = false, wrapCol = -1 } = {}) {
   let x = MARGIN;
   cols.forEach((w, i) => {
     strokeRect(doc, x, y, w, h);
@@ -244,7 +270,13 @@ function drawTableRow(doc, y, h, cols, values, { bold = false, header = false } 
     doc.setFontSize(header ? 7 : 8);
     doc.setTextColor(0);
     const val = pdfSafe(values[i] ?? "");
-    if (i === 1) {
+    if (i === wrapCol) {
+      const lines = doc.splitTextToSize(val, w - 3);
+      const lineH = 3.4;
+      const blockH = lines.length * lineH;
+      const startY = y + Math.max(2.2, (h - blockH) / 2 + lineH);
+      lines.forEach((line, li) => doc.text(line, x + 1.5, startY + li * lineH));
+    } else if (i === 1) {
       doc.text(val, x + w / 2, y + h / 2 + 0.8, { align: "center" });
     } else if (i === cols.length - 1) {
       doc.text(val, x + w - 1.5, y + h / 2 + 0.8, { align: "right" });
@@ -253,6 +285,11 @@ function drawTableRow(doc, y, h, cols, values, { bold = false, header = false } 
     }
     x += w;
   });
+}
+
+function itemRowHeight(doc, desc, colW, minH = 6) {
+  const lines = doc.splitTextToSize(pdfSafe(desc), colW - 3);
+  return Math.max(minH, lines.length * 3.4 + 2.4);
 }
 
 function renderLrPdf(data) {
@@ -308,9 +345,14 @@ function renderLrPdf(data) {
   );
   y += tblRowH;
 
-  const itemDesc = pdfSafe(data.categoryName?.trim() || "Parcel");
-  drawTableRow(doc, y, tblRowH, tblCols, [itemDesc, String(data.quantity ?? 1), formatInr(data.freightCharge)]);
-  y += tblRowH;
+  const itemDesc = data.itemDescription || buildItemDescription({
+    packageContents: data.packageContents,
+    categoryName: data.categoryName,
+    weightLabel: data.weightLabel,
+  });
+  const itemH = itemRowHeight(doc, itemDesc, descW, tblRowH);
+  drawTableRow(doc, y, itemH, tblCols, [itemDesc, String(data.quantity ?? 1), formatInr(data.freightCharge)], { wrapCol: 0 });
+  y += itemH;
   drawTableRow(
     doc,
     y,

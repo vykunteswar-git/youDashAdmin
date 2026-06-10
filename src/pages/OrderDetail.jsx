@@ -8,7 +8,7 @@ import { formatStatusLabel, getOutstationPrimaryNextStatus } from "@/lib/orderSt
 import AssignRiderModal from "@/components/modals/AssignRiderModal";
 import OtpModal from "@/components/modals/OtpModal";
 import { toast } from "sonner";
-import { buildLrPdfData, downloadH2hInvoice } from "@/lib/h2hInvoicePdf";
+import { buildLrPdfData, downloadH2hInvoice, formatWeightLabel } from "@/lib/h2hInvoicePdf";
 import AppLoadingScreen from "@/components/AppLoadingScreen";
 import { ChevronLeft, Phone, BellRing, ArrowRight, Truck, Package, Coins, Activity as ActivityIcon, Copy, FileDown, Trash2 } from "lucide-react";
 
@@ -106,7 +106,9 @@ export default function OrderDetail() {
           originHubCity: o.origin_city,
           destinationHubCity: o.destination_city,
           category: o.category,
-          weight: o.weight_kg,
+          packageContents: o.packageContents || o.package_contents,
+          weight: o.weight ?? o.weight_kg,
+          weightUnit: o.weight_unit,
           quantity: o.pieceCount,
           declaredValue: o.declaredValue,
           subtotal: o.subtotal ?? o.fare?.subtotal,
@@ -376,7 +378,13 @@ function PackageTab({ o }) {
     <div className="grid grid-cols-2 gap-5 text-[13px]">
       <Section title="Parcel">
         <Row k="Category" v={o.category} />
-        <Row k="Weight" v={`${o.weight_kg} kg`} />
+        <Row
+          k="Weight"
+          v={
+            formatWeightLabel(o.weight ?? o.weight_kg, o.weight_unit)
+            || `${o.weight_kg} kg`
+          }
+        />
         {o.pieceCount != null && <Row k="Qty" v={o.pieceCount} />}
         {o.declaredValue != null && <Row k="Declared value" v={`₹${o.declaredValue}`} mono />}
         <Row k="Dimensions" v={o.dimensions} />

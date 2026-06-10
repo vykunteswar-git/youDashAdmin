@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
-import { buildLrPdfData, downloadH2hInvoice } from "@/lib/h2hInvoicePdf";
+import { buildLrPdfData, downloadH2hInvoice, formatWeightLabel, normalizeWeightUnit } from "@/lib/h2hInvoicePdf";
 import { toast } from "sonner";
 import { ArrowLeft, Building2, Calculator, FileDown, Package, PenLine, User, X } from "lucide-react";
 
@@ -12,6 +12,7 @@ const EMPTY = {
   dropZoneId: "",
   destinationHubId: "",
   weight: "",
+  weightUnit: "KG",
   qty: "1",
   categoryId: "",
   paymentType: "COD",
@@ -57,8 +58,10 @@ export default function CreateHubToHub() {
   const [form, setForm] = useState(EMPTY);
   const [quote, setQuote] = useState(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
+  const [quoteError, setQuoteError] = useState("");
   const [showDialog, setShowDialog] = useState(false);
   const [booking, setBooking] = useState(false);
+  const previewSeq = useRef(0);
 
   useEffect(() => {
     Promise.all([
@@ -88,29 +91,51 @@ export default function CreateHubToHub() {
   const category = categories.find((c) => String(c.id) === String(form.categoryId));
 
   useEffect(() => {
-    const weight = parseFloat(form.weight);
-    if (!form.originHubId || !form.destinationHubId || !Number.isFinite(weight) || weight <= 0) {
-      setQuote(null);
+    if (form.pricingMode !== "auto") {
+      setQuoteLoading(false);
+      setQuoteError("");
       return;
     }
+
+    const weight = parseFloat(form.weight);
+    const weightUnit = normalizeWeightUnit(form.weightUnit);
+    if (!form.originHubId || !form.destinationHubId || !Number.isFinite(weight) || weight <= 0) {
+      setQuote(null);
+      setQuoteLoading(false);
+      setQuoteError("");
+      return;
+    }
+
+    const seq = ++previewSeq.current;
     const timer = setTimeout(async () => {
       setQuoteLoading(true);
+      setQuoteError("");
       try {
         const res = await api.post("/orders/hub-to-hub/preview", {
           originHubId: Number(form.originHubId),
           destinationHubId: Number(form.destinationHubId),
           weight,
+          weightUnit,
         });
+        if (seq !== previewSeq.current) return;
         setQuote(res.data);
       } catch (err) {
+        if (seq !== previewSeq.current) return;
         setQuote(null);
-        toast.error(err?.response?.data?.message || "Could not calculate price");
+        setQuoteError(err?.response?.data?.message || "Could not calculate price");
       } finally {
-        setQuoteLoading(false);
+        if (seq === previewSeq.current) setQuoteLoading(false);
       }
     }, 400);
+
     return () => clearTimeout(timer);
-  }, [form.originHubId, form.destinationHubId, form.weight]);
+  }, [
+    form.pricingMode,
+    form.originHubId,
+    form.destinationHubId,
+    form.weight,
+    form.weightUnit,
+  ]);
 
   const manualGstAmt = useMemo(() => {
     const f = parseFloat(form.manualFreight) || 0;
@@ -166,12 +191,14 @@ export default function CreateHubToHub() {
 
   async function confirmBooking() {
     const weight = parseFloat(form.weight);
+    const weightUnit = normalizeWeightUnit(form.weightUnit);
     setBooking(true);
     try {
       const res = await api.post("/orders/hub-to-hub", {
         originHubId: Number(form.originHubId),
         destinationHubId: Number(form.destinationHubId),
         weight,
+        weightUnit,
         quantity: parseInt(form.qty) || 1,
         categoryId: Number(form.categoryId),
         paymentType: form.paymentType,
@@ -199,7 +226,7 @@ export default function CreateHubToHub() {
           pickupZone,
           dropZone,
           category,
-          order: { ...order, weight, quantity: parseInt(form.qty) || 1 },
+          order: { ...order, weight, weightUnit, quantity: parseInt(form.qty) || 1 },
           quote: effectiveQuote,
         }),
       );
@@ -281,23 +308,52 @@ export default function CreateHubToHub() {
           <div className="flex items-center gap-2 text-[13px] font-medium text-zinc-700 pt-2">
             <Package size={14} /> Parcel
           </div>
-          <div className="grid grid-cols-4 gap-4">
-            <Field label="Weight (kg)">
-              <input type="number" min="0.1" step="0.1" className="input w-full"
-                value={form.weight} onChange={(e) => set("weight", e.target.value)} />
-            </Field>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="md:col-span-2">
+              <Field label="Weight">
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <input
+                    type="number"
+                    min={form.weightUnit === "G" ? "1" : "0.1"}
+                    step={form.weightUnit === "G" ? "1" : "0.1"}
+                    placeholder={form.weightUnit === "G" ? "e.g. 500" : "e.g. 10"}
+                    className="input w-full sm:flex-[1.4] min-w-0 h-10 text-[15px] [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    value={form.weight}
+                    onChange={(e) => set("weight", e.target.value)}
+                    data-testid="h2h-weight-input"
+                  />
+                  <select
+                    className="input w-full sm:flex-1 sm:min-w-[168px] h-10 text-[14px]"
+                    value={form.weightUnit}
+                    onChange={(e) => set("weightUnit", e.target.value)}
+                    data-testid="h2h-weight-unit"
+                  >
+                    <option value="KG">Kilograms (kg)</option>
+                    <option value="G">Grams (g)</option>
+                  </select>
+                </div>
+              </Field>
+            </div>
             <Field label="Qty">
-              <input type="number" min="1" step="1" className="input w-full"
-                value={form.qty} onChange={(e) => set("qty", e.target.value)} />
+              <input
+                type="number"
+                min="1"
+                step="1"
+                className="input w-full h-10"
+                value={form.qty}
+                onChange={(e) => set("qty", e.target.value)}
+              />
             </Field>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field label="Category">
-              <select className="input w-full" value={form.categoryId} onChange={(e) => set("categoryId", e.target.value)}>
+              <select className="input w-full h-10" value={form.categoryId} onChange={(e) => set("categoryId", e.target.value)}>
                 <option value="">Select category</option>
                 {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </Field>
             <Field label="Payment">
-              <select className="input w-full" value={form.paymentType} onChange={(e) => set("paymentType", e.target.value)}>
+              <select className="input w-full h-10" value={form.paymentType} onChange={(e) => set("paymentType", e.target.value)}>
                 <option value="COD">COD (collected at desk)</option>
                 <option value="ONLINE">Online / Prepaid</option>
               </select>
@@ -334,12 +390,20 @@ export default function CreateHubToHub() {
 
           {!isManual && (
             <>
-              {quoteLoading && <p className="text-[12px] text-zinc-500">Calculating…</p>}
-              {!quoteLoading && !quote && (
+              {quoteLoading && !quote && (
+                <p className="text-[12px] text-zinc-500">Calculating…</p>
+              )}
+              {quoteLoading && quote && (
+                <p className="text-[11px] text-zinc-400 mb-1">Updating…</p>
+              )}
+              {!quoteLoading && !quote && !quoteError && (
                 <p className="text-[12px] text-zinc-500">Select hubs and weight to see pricing.</p>
               )}
+              {quoteError && (
+                <p className="text-[12px] text-red-600">{quoteError}</p>
+              )}
               {quote && (
-                <div className="text-[13px] space-y-1 mono">
+                <div className={`text-[13px] space-y-1 mono ${quoteLoading ? "opacity-60" : ""}`}>
                   <PriceRow label="Hub corridor" value={quote.hubCost} />
                   <PriceRow label="Weight" value={quote.weightCost} />
                   <hr className="my-2 border-zinc-200" />
@@ -420,7 +484,7 @@ export default function CreateHubToHub() {
 
               <SectionTitle>Parcel</SectionTitle>
               <SummaryRow label="Category" value={category?.name ?? "—"} />
-              <SummaryRow label="Weight" value={`${form.weight} kg`} />
+              <SummaryRow label="Weight" value={formatWeightLabel(form.weight, form.weightUnit) || "—"} />
               <SummaryRow label="Qty" value={form.qty || "1"} />
               <SummaryRow label="Payment" value={form.paymentType} />
               {form.packageContents && <SummaryRow label="Contents" value={form.packageContents} />}
