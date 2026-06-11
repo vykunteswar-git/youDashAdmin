@@ -58,7 +58,7 @@ export default function Notifications() {
       targetType: form.targetType,
       title: form.title.trim(),
       body: form.body.trim(),
-      type: form.type,
+      notificationType: form.type,
       city: isCity ? form.city : null,
       zoneId: isZone ? Number(form.zoneId) || null : null,
       data,
