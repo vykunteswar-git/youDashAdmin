@@ -97,6 +97,9 @@ export default function CreateHubToHub() {
   const destHub = dropHubs.find((h) => String(h.id) === String(form.destinationHubId));
   const category = categories.find((c) => String(c.id) === String(form.categoryId));
 
+  const originHubMissingInfo = originHub && (!originHub.address?.trim() || !originHub.phoneNumber?.trim());
+  const destHubMissingInfo = destHub && (!destHub.address?.trim() || !destHub.phoneNumber?.trim());
+
   useEffect(() => {
     if (form.pricingMode !== "auto") {
       setQuoteLoading(false);
@@ -303,6 +306,18 @@ export default function CreateHubToHub() {
               </select>
             </Field>
           </div>
+
+          {(originHubMissingInfo || destHubMissingInfo) && (
+            <div className="rounded-sm border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] text-amber-800 space-y-0.5">
+              <p className="font-semibold">Hub address / phone missing — invoice will be incomplete</p>
+              {originHubMissingInfo && (
+                <p>Origin hub <strong>{originHub.name}</strong> is missing {!originHub.address?.trim() ? "address" : ""}{!originHub.address?.trim() && !originHub.phoneNumber?.trim() ? " and " : ""}{!originHub.phoneNumber?.trim() ? "phone number" : ""}. <a href={`/hubs/${originHub.id}/edit`} className="underline hover:text-amber-900">Edit hub</a></p>
+              )}
+              {destHubMissingInfo && (
+                <p>Destination hub <strong>{destHub.name}</strong> is missing {!destHub.address?.trim() ? "address" : ""}{!destHub.address?.trim() && !destHub.phoneNumber?.trim() ? " and " : ""}{!destHub.phoneNumber?.trim() ? "phone number" : ""}. <a href={`/hubs/${destHub.id}/edit`} className="underline hover:text-amber-900">Edit hub</a></p>
+              )}
+            </div>
+          )}
 
           <div className="flex items-center gap-2 text-[13px] font-medium text-zinc-700 pt-2">
             <User size={14} /> Parties

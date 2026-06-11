@@ -90,7 +90,12 @@ export default function OrderDetail() {
     }
   }
 
-  function downloadInvoice() {
+  async function downloadInvoice() {
+    const hubsRes = await api.get("/hubs").catch(() => ({ data: { hubs: [] } }));
+    const allHubs = hubsRes.data?.hubs ?? [];
+    const originHubData = allHubs.find((h) => Number(h.id) === Number(o.originHubId)) ?? {};
+    const destHubData = allHubs.find((h) => Number(h.id) === Number(o.destinationHubId)) ?? {};
+
     downloadH2hInvoice(
       buildLrPdfData({
         order: {
@@ -119,12 +124,14 @@ export default function OrderDetail() {
         originHub: {
           name: o.origin_hub_name,
           city: o.origin_city,
-          address: o.sender?.address !== "—" ? o.sender?.address : "",
+          address: originHubData.address || "",
+          phoneNumber: originHubData.phoneNumber || "",
         },
         destinationHub: {
           name: o.destination_hub_name,
           city: o.destination_city,
-          address: o.receiver?.address !== "—" ? o.receiver?.address : "",
+          address: destHubData.address || "",
+          phoneNumber: destHubData.phoneNumber || "",
         },
       }),
     );

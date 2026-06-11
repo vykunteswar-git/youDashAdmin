@@ -93,7 +93,11 @@ export default function HubForm({ mode = "create" }) {
       toast.error("Name, zone and city are required");
       return;
     }
-    if (!validatePhone({ required: !isEdit })) return;
+    if (!form.address.trim()) {
+      toast.error("Address is required — it prints on the LR invoice");
+      return;
+    }
+    if (!validatePhone({ required: true })) return;
     const lat = parseFloat(form.lat);
     const lng = parseFloat(form.lng);
     if (Number.isNaN(lat) || Number.isNaN(lng)) {
