@@ -58,9 +58,9 @@ export default function Earnings() {
     return true;
   });
 
-  /* Sum of all To Pay H2H orders in current range */
+  /* Sum of all To Pay orders in current range */
   const toCollectTotal = allOrders
-    .filter(row => isToPayRow(row) && row.serviceMode === "HUB_TO_HUB")
+    .filter(row => isToPayRow(row))
     .reduce((sum, row) => sum + Number(row.totalAmount ?? 0), 0);
 
   async function handleCollect() {
@@ -128,7 +128,7 @@ export default function Earnings() {
             <div className="kpi" style={{ borderColor: "#F59E0B", background: toCollectTotal > 0 ? "#FFFBEB" : undefined }}>
               <div className="label" style={{ color: "#92400E" }}>To Collect</div>
               <div className="value mono" style={{ color: "#D97706" }}>{fmt(toCollectTotal)}</div>
-              <div className="sub">H2H unpaid</div>
+              <div className="sub">Unpaid (To Pay orders)</div>
             </div>
           </div>
 
@@ -165,7 +165,7 @@ export default function Earnings() {
                     <th className="text-right">Commission</th>
                     <th className="text-right">Rider Earned</th>
                     <th className="text-right">Platform Net</th>
-                    {payFilter === "to_pay" && <th></th>}
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -187,23 +187,21 @@ export default function Earnings() {
                       <td className="text-right mono">{row.serviceMode === "HUB_TO_HUB" ? fmt(row.subtotal) : fmt(row.commissionAmount)}</td>
                       <td className="text-right mono">{fmt(row.riderEarning)}</td>
                       <td className="text-right mono font-semibold">{fmt(row.platformNet)}</td>
-                      {payFilter === "to_pay" && (
-                        <td>
-                          {isToPayRow(row) && (
-                            <button
-                              onClick={() => setCollectDialog({ orderId: row.orderId, displayOrderId: row.displayOrderId, amount: row.totalAmount })}
-                              className="px-3 py-1 text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white rounded transition whitespace-nowrap"
-                            >
-                              Collected
-                            </button>
-                          )}
-                        </td>
-                      )}
+                      <td>
+                        {isToPayRow(row) && (
+                          <button
+                            onClick={() => setCollectDialog({ orderId: row.orderId, displayOrderId: row.displayOrderId, amount: row.totalAmount })}
+                            className="px-3 py-1 text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white rounded transition whitespace-nowrap"
+                          >
+                            Collected
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                   {filteredOrders.length === 0 && (
                     <tr>
-                      <td colSpan={payFilter === "to_pay" ? 11 : 10} className="text-center py-10 text-[var(--slate-500)]">
+                      <td colSpan={11} className="text-center py-10 text-[var(--slate-500)]">
                         No orders found.
                       </td>
                     </tr>
