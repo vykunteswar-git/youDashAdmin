@@ -93,9 +93,15 @@ function drawCompanyLetterhead(doc, y) {
   return y;
 }
 
-function paymentToLrType(paymentType) {
+function paymentToLrType(paymentType, paymentStatus) {
+  const ps = String(paymentStatus || "").toUpperCase();
+  if (ps === "TO_PAY" || ps === "TOPAY") return "To Pay";
+  if (ps === "PAID") return "Paid";
+  /* fallback: derive from paymentType for legacy orders */
   const pt = String(paymentType || "").toUpperCase();
-  return pt === "COD" ? "COD" : "Paid";
+  if (pt === "TO_PAY" || pt === "TOPAY") return "To Pay";
+  if (pt === "COD" || pt === "COD_CASH" || pt === "COD_QR") return "COD";
+  return "Paid";
 }
 
 export function normalizeWeightUnit(unit) {
@@ -165,6 +171,7 @@ export function buildLrPdfData({
   );
   const createdAt = order.createdAt || order.created_at || new Date().toISOString();
   const paymentType = order.paymentType || order.payment_mode || form.paymentType;
+  const paymentStatus = order.paymentStatus || order.payment_status || form.paymentStatus;
   const packageContents = (form.packageContents || order.packageContents || order.package_contents || "").trim();
   const categoryName = category?.name || order.categoryName || order.category || "Parcel";
   const weightLabel = formatWeightLabel(weight, weightUnit);
@@ -184,7 +191,7 @@ export function buildLrPdfData({
     lrNumber: order.displayOrderId || order.tracking_id || "",
     bookingDate: formatDateOnly(createdAt),
     bookingDateTime: formatDateTime(createdAt),
-    lrType: paymentToLrType(paymentType),
+    lrType: paymentToLrType(paymentType, paymentStatus),
     senderName: pickPartyField(order.senderName, form.senderName, order.sender?.name),
     senderPhone: pickPartyField(order.senderPhone, form.senderPhone, order.sender?.phone),
     receiverName: pickPartyField(order.receiverName, form.receiverName, order.receiver?.name),
@@ -334,13 +341,27 @@ function renderLrPdf(data) {
   y += 1;
 
   const bodyTop = y;
-  const col4 = CONTENT_W / 4;
+  const col5 = CONTENT_W / 5;
   const rowH = 11;
-  // ── Row 1: LR Number | From | To | Date ──
-  drawFieldCell(doc, MARGIN, y, col4, rowH, "LR Number", data.lrNumber, { large: true });
-  drawFieldCell(doc, MARGIN + col4, y, col4, rowH, "From", pdfSafe(data.pickupZoneName || data.originHub.city || "-"));
-  drawFieldCell(doc, MARGIN + col4 * 2, y, col4, rowH, "To", pdfSafe(data.dropZoneName || data.destinationHub.city || "-"));
-  drawFieldCell(doc, MARGIN + col4 * 3, y, col4, rowH, "Date", data.bookingDate);
+  // ── Row 1: LR Number | LR Type | From | To | Date ──
+  drawFieldCell(doc, MARGIN, y, col5 * 1.4, rowH, "LR Number", data.lrNumber, { large: true });
+  // Payment mode cell — highlighted if "To Pay"
+  const lrTypeX = MARGIN + col5 * 1.4;
+  const lrTypeW = col5 * 0.8;
+  strokeRect(doc, lrTypeX, y, lrTypeW, rowH);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6);
+  doc.setTextColor(0);
+  doc.text("LR Type", lrTypeX + 1.5, y + 3);
+  doc.setFontSize(8.5);
+  const lrTypeVal = pdfSafe(data.lrType || "Paid");
+  doc.text(lrTypeVal, lrTypeX + lrTypeW / 2, y + rowH - 1.8, { align: "center" });
+  doc.setTextColor(0);
+  const remainW = CONTENT_W - col5 * 1.4 - col5 * 0.8;
+  const col3 = remainW / 3;
+  drawFieldCell(doc, lrTypeX + lrTypeW, y, col3, rowH, "From", pdfSafe(data.pickupZoneName || data.originHub.city || "-"));
+  drawFieldCell(doc, lrTypeX + lrTypeW + col3, y, col3, rowH, "To", pdfSafe(data.dropZoneName || data.destinationHub.city || "-"));
+  drawFieldCell(doc, lrTypeX + lrTypeW + col3 * 2, y, col3, rowH, "Date", data.bookingDate);
   y += rowH;
 
   // ── Sender / Receiver (label | value | label | value per row) ──

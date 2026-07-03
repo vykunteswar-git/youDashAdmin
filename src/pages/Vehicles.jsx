@@ -4,7 +4,7 @@ import PageHeader from "@/components/PageHeader";
 import ImageUploadField from "@/components/ImageUploadField";
 import { uploadToCloudinary } from "@/lib/cloudinaryUpload";
 import { toast } from "sonner";
-import { Pencil } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 
 const EMPTY_FORM = {
   name: "",
@@ -25,6 +25,8 @@ export default function Vehicles() {
   const [imageFile, setImageFile] = useState(null);
   const [existingImageUrl, setExistingImageUrl] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deleteDialog, setDeleteDialog] = useState(null); // { id, name }
+  const [deleting, setDeleting] = useState(false);
 
   async function load() {
     const r = await api.get("/vehicles");
@@ -68,6 +70,22 @@ export default function Vehicles() {
     setForm(EMPTY_FORM);
     setImageFile(null);
     setExistingImageUrl("");
+  }
+
+  async function handleDelete() {
+    if (!deleteDialog) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/vehicles/${deleteDialog.id}`);
+      toast.success(`${deleteDialog.name} deleted`);
+      setDeleteDialog(null);
+      setExpandedId(null);
+      load();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || err?.message || "Failed to delete vehicle");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function toggle(v) {
@@ -199,6 +217,14 @@ export default function Vehicles() {
                       </button>
                       <button
                         type="button"
+                        onClick={() => setDeleteDialog({ id: v.id, name: v.name })}
+                        className="chip text-red-600 border-red-200 hover:bg-red-50"
+                        data-testid={`delete-vehicle-${v.id}`}
+                      >
+                        <Trash2 size={12} /> Delete
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => toggle(v)}
                         className={`min-w-28 h-9 rounded-full border px-2 text-xs font-semibold transition ${v.active ? "bg-emerald-50 text-emerald-800 border-emerald-300" : "bg-zinc-100 text-zinc-700 border-zinc-300"}`}
                         data-testid={`toggle-vehicle-${v.id}`}
@@ -221,6 +247,30 @@ export default function Vehicles() {
           <div className="empty surface">No vehicles found</div>
         )}
       </div>
+
+      {deleteDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="surface p-6 rounded-xl w-full max-w-sm shadow-xl">
+            <h3 className="text-sm font-semibold mb-1">Delete Vehicle</h3>
+            <p className="text-xs text-zinc-500 mb-4">
+              Are you sure you want to delete <span className="font-semibold text-zinc-800">{deleteDialog.name}</span>? This cannot be undone.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button type="button" onClick={() => setDeleteDialog(null)} className="btn-secondary" disabled={deleting}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={deleting}
+                className="h-9 px-4 rounded-full bg-red-600 text-white text-xs font-semibold hover:bg-red-700 disabled:opacity-60 transition"
+              >
+                {deleting ? "Deleting..." : "Yes, Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

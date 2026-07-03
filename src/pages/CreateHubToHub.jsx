@@ -23,6 +23,7 @@ const EMPTY = {
   qty: "1",
   categoryId: "",
   paymentType: "COD",
+  paymentStatus: "PAID",
   senderName: "",
   senderPhone: "",
   receiverName: "",
@@ -211,7 +212,8 @@ export default function CreateHubToHub() {
         weightUnit,
         quantity: parseInt(form.qty) || 1,
         categoryId: Number(form.categoryId),
-        paymentType: form.paymentType,
+        paymentType: form.paymentType,       // always "COD"
+        paymentStatus: form.paymentStatus,   // "PAID" or "TO_PAY"
         senderName: form.senderName.trim(),
         senderPhone: form.senderPhone.trim(),
         receiverName: form.receiverName.trim(),
@@ -384,11 +386,25 @@ export default function CreateHubToHub() {
                 {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </Field>
-            <Field label="Payment">
-              <select className="input w-full h-10" value={form.paymentType} onChange={(e) => set("paymentType", e.target.value)}>
-                <option value="COD">COD (collected at desk)</option>
-                <option value="ONLINE">Online / Prepaid</option>
-              </select>
+            <Field label="Payment Status">
+              <div className="flex gap-3 mt-1.5">
+                {[
+                  { value: "PAID", label: "Paid" },
+                  { value: "TO_PAY", label: "To Pay" },
+                ].map(({ value, label }) => (
+                  <label key={value} className={`flex items-center gap-2 flex-1 cursor-pointer border rounded-sm px-3 py-2 text-[13px] font-medium transition ${form.paymentStatus === value ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-300 hover:border-zinc-500"}`}>
+                    <input
+                      type="radio"
+                      name="paymentStatus"
+                      value={value}
+                      checked={form.paymentStatus === value}
+                      onChange={() => set("paymentStatus", value)}
+                      className="sr-only"
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -526,7 +542,8 @@ export default function CreateHubToHub() {
               <SummaryRow label="Category" value={category?.name ?? "—"} />
               <SummaryRow label="Weight" value={formatWeightLabel(form.weight, form.weightUnit) || "—"} />
               <SummaryRow label="Qty" value={form.qty || "1"} />
-              <SummaryRow label="Payment" value={form.paymentType} />
+              <SummaryRow label="Payment Type" value="COD" />
+              <SummaryRow label="Payment Status" value={form.paymentStatus === "TO_PAY" ? "To Pay" : "Paid"} />
               {form.packageContents && <SummaryRow label="Contents" value={form.packageContents} />}
               {parseFloat(form.valueOfGoods) > 0 && (
                 <SummaryRow label="Value of Goods" value={fmtInr(form.valueOfGoods)} mono />
