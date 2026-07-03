@@ -100,7 +100,7 @@ export default function Earnings() {
           <div className="grid grid-cols-3 gap-3 mb-4 xl:grid-cols-7">
             <div className="kpi">
               <div className="label">Total Revenue</div>
-              <div className="value mono">{fmt(data.totalRevenue)}</div>
+              <div className="value mono">{fmt(data.totalRevenue - toCollectTotal)}</div>
               <div className="sub">{data.orderCount} orders</div>
             </div>
             <div className="kpi">
