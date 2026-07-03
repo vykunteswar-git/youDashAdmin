@@ -67,7 +67,7 @@ export default function Earnings() {
     if (!collectDialog) return;
     setCollecting(true);
     try {
-      await api.patch(`/orders/${collectDialog.orderId}/collect`);
+      await api.patch(`/admin/orders/${collectDialog.orderId}/collect`);
       setCollectDialog(null);
       loadData();
     } catch (err) {
