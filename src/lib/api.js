@@ -328,7 +328,11 @@ function rewriteAdminRequest(config) {
   }
   if (url === "/earnings") {
     config.url = "/admin/earnings";
-    config.params = { range: rangeToBackend(config.params?.range) };
+    if (config.params?.from) {
+      config.params = { from: config.params.from, ...(config.params.to ? { to: config.params.to } : {}) };
+    } else {
+      config.params = { range: rangeToBackend(config.params?.range) };
+    }
     return config;
   }
 
