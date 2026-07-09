@@ -54,7 +54,7 @@ export default function Earnings() {
   }
 
   useEffect(() => {
-    fetchEarnings(range, fromDate, toDate);
+    if (range !== "custom") fetchEarnings(range, "", "");
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range]);
 
