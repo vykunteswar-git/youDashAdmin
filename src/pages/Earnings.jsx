@@ -43,9 +43,9 @@ export default function Earnings() {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
 
-  function loadData(r = range, fd = fromDate, td = toDate) {
+  function fetchEarnings(r, fd, td) {
     setLoading(true);
-    const params = r === "custom" && fd
+    const params = r === "custom"
       ? { from: fd, ...(td ? { to: td } : {}) }
       : { range: r };
     api.get("/earnings", { params })
@@ -54,15 +54,20 @@ export default function Earnings() {
   }
 
   useEffect(() => {
-    if (range !== "custom") loadData(range, "", "");
+    fetchEarnings(range, fromDate, toDate);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range]);
 
   function handleCustomApply() {
     if (!fromDate) return;
-    loadData("custom", fromDate, toDate);
+    fetchEarnings("custom", fromDate, toDate);
   }
 
   function handleRangeChange(r) {
+    if (r === "custom") {
+      setData(null);   // clear stale results — user must pick dates and apply
+      setLoading(false);
+    }
     setRange(r);
     if (r !== "custom") {
       setFromDate("");
@@ -89,7 +94,7 @@ export default function Earnings() {
     try {
       await api.patch(`/admin/orders/${collectDialog.orderId}/collect`);
       setCollectDialog(null);
-      loadData();
+      fetchEarnings(range, fromDate, toDate);
     } catch (err) {
       alert(err?.response?.data?.message || "Failed to mark as collected");
     } finally {
@@ -163,6 +168,13 @@ export default function Earnings() {
       </div>
 
       {loading && <AppLoadingScreen message="Loading earnings…" testId="earnings-loading" />}
+
+      {!loading && range === "custom" && !data && (
+        <div className="flex flex-col items-center justify-center py-20 text-zinc-400 gap-2">
+          <CalendarDays size={32} className="text-zinc-300" />
+          <p className="text-sm font-medium">Select a date range and click Apply</p>
+        </div>
+      )}
 
       {!loading && data && (
         <>
