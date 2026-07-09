@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
 import AppLoadingScreen from "@/components/AppLoadingScreen";
-import { X } from "lucide-react";
+import { X, CalendarDays } from "lucide-react";
 
-const RANGES = [["today", "Today"], ["week", "This Week"], ["month", "This Month"]];
+const RANGES = [["today", "Today"], ["week", "This Week"], ["month", "This Month"], ["custom", "Custom"]];
 const PAY_FILTERS = [["all", "All"], ["to_pay", "To Pay"], ["paid", "Paid"]];
 
 function fmt(v) {
@@ -40,15 +40,35 @@ export default function Earnings() {
   const [loading, setLoading] = useState(true);
   const [collectDialog, setCollectDialog] = useState(null); // { orderId, displayOrderId, amount }
   const [collecting, setCollecting] = useState(false);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
 
-  function loadData() {
+  function loadData(r = range, fd = fromDate, td = toDate) {
     setLoading(true);
-    api.get("/earnings", { params: { range } })
-      .then(r => setData(r.data))
+    const params = r === "custom" && fd
+      ? { from: fd, ...(td ? { to: td } : {}) }
+      : { range: r };
+    api.get("/earnings", { params })
+      .then(res => setData(res.data))
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { loadData(); }, [range]);
+  useEffect(() => {
+    if (range !== "custom") loadData(range, "", "");
+  }, [range]);
+
+  function handleCustomApply() {
+    if (!fromDate) return;
+    loadData("custom", fromDate, toDate);
+  }
+
+  function handleRangeChange(r) {
+    setRange(r);
+    if (r !== "custom") {
+      setFromDate("");
+      setToDate("");
+    }
+  }
 
   const allOrders = data?.orders ?? [];
 
@@ -84,12 +104,62 @@ export default function Earnings() {
         subtitle="Revenue, commission and rider payout breakdown"
       />
 
-      <div className="tabbar mb-4">
-        {RANGES.map(([k, l]) => (
-          <button key={k} className={range === k ? "active" : ""} onClick={() => setRange(k)} data-testid={`range-${k}`}>
-            {l}
-          </button>
-        ))}
+      {/* Range selector row */}
+      <div className="flex flex-wrap items-center gap-3 mb-5">
+        {/* Preset pills */}
+        <div className="flex bg-zinc-100 rounded-lg p-1 gap-0.5">
+          {RANGES.map(([k, l]) => (
+            <button
+              key={k}
+              onClick={() => handleRangeChange(k)}
+              data-testid={`range-${k}`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                range === k
+                  ? "bg-white shadow text-zinc-900"
+                  : "text-zinc-500 hover:text-zinc-700"
+              }`}
+            >
+              {k === "custom" && <CalendarDays size={12} />}
+              {l}
+            </button>
+          ))}
+        </div>
+
+        {/* Custom date inputs — slide in when Custom is active */}
+        {range === "custom" && (
+          <div className="flex items-center gap-2 bg-zinc-100 rounded-lg p-1">
+            <input
+              type="date"
+              value={fromDate}
+              onChange={e => setFromDate(e.target.value)}
+              className="bg-white border border-zinc-200 rounded-md text-xs px-2.5 py-1.5 text-zinc-800 outline-none focus:ring-2 focus:ring-zinc-300"
+              placeholder="From"
+            />
+            <span className="text-zinc-400 text-xs font-medium">→</span>
+            <input
+              type="date"
+              value={toDate}
+              min={fromDate || undefined}
+              onChange={e => setToDate(e.target.value)}
+              className="bg-white border border-zinc-200 rounded-md text-xs px-2.5 py-1.5 text-zinc-800 outline-none focus:ring-2 focus:ring-zinc-300"
+              placeholder="To"
+            />
+            <button
+              onClick={handleCustomApply}
+              disabled={!fromDate}
+              className="px-3 py-1.5 rounded-md bg-zinc-900 text-white text-xs font-semibold disabled:opacity-40 hover:bg-zinc-700 transition"
+            >
+              Apply
+            </button>
+          </div>
+        )}
+
+        {/* Active custom range label */}
+        {range === "custom" && data && fromDate && (
+          <span className="text-xs text-zinc-400">
+            {fromDate}{toDate ? ` – ${toDate}` : " onwards"} · {data.orderCount} orders
+          </span>
+        )}
       </div>
 
       {loading && <AppLoadingScreen message="Loading earnings…" testId="earnings-loading" />}
