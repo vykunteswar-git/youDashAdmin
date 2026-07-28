@@ -364,12 +364,12 @@ function normalizeAdminResponse(response) {
     const orders = Array.isArray(data?.orders) ? data.orders : Array.isArray(data) ? data : [];
     response.data = { orders };
   }
-  else if (originalUrl === "/vehicles") response.data = { vehicles: (data || []).map(normalizeVehicle) };
-  else if (originalUrl === "/zones") response.data = { zones: Array.isArray(data) ? data.map(normalizeZone) : [] };
-  else if (originalUrl === "/hubs") response.data = { hubs: Array.isArray(data) ? data.map(normalizeHubForUi) : [] };
-  else if (originalUrl === "/coupons") response.data = { coupons: (data || []).map(normalizeCoupon) };
-  else if (originalUrl === "/categories") response.data = { categories: (data || []).map(normalizeCategory) };
-  else if (originalUrl === "/banners") response.data = { banners: (data || []).map(normalizeBanner) };
+  else if (originalUrl === "/vehicles" && response.config?.method === "get") response.data = { vehicles: (data || []).map(normalizeVehicle) };
+  else if (originalUrl === "/zones" && response.config?.method === "get") response.data = { zones: Array.isArray(data) ? data.map(normalizeZone) : [] };
+  else if (originalUrl === "/hubs" && response.config?.method === "get") response.data = { hubs: Array.isArray(data) ? data.map(normalizeHubForUi) : [] };
+  else if (originalUrl === "/coupons" && response.config?.method === "get") response.data = { coupons: (data || []).map(normalizeCoupon) };
+  else if (originalUrl === "/categories" && response.config?.method === "get") response.data = { categories: (data || []).map(normalizeCategory) };
+  else if (originalUrl === "/banners" && response.config?.method === "get") response.data = { banners: (data || []).map(normalizeBanner) };
   else if (originalUrl === "/notifications/targets") response.data = normalizeNotificationTargets(data);
   else if (originalUrl === "/notifications") response.data = normalizeNotificationLogs(data);
   else if (originalUrl === "/transactions") response.data = normalizeTransactions(data);
@@ -377,12 +377,12 @@ function normalizeAdminResponse(response) {
   else if (originalUrl === "/config/payments") response.data = normalizePaymentConfig(data);
   else if (originalUrl === "/config/app") response.data = normalizeAppConfig(data);
   else if (originalUrl === "/config/app-version") response.data = normalizeAppVersion(data);
-  else if (originalUrl === "/withdrawals") response.data = { withdrawals: (data || []).map(normalizeWithdrawal) };
+  else if (originalUrl === "/withdrawals" && response.config?.method === "get") response.data = { withdrawals: (data || []).map(normalizeWithdrawal) };
   else if (originalUrl === "/incentives") {
     response.data = Array.isArray(data) ? { incentives: data.map(normalizeIncentive) } : normalizeIncentive(data);
   }
-  else if (originalUrl === "/zone-routes") response.data = { routes: (data || []).map(normalizeZoneRoute) };
-  else if (originalUrl === "/hub-routes") response.data = { routes: (data || []).map(normalizeHubRoute) };
+  else if (originalUrl === "/zone-routes" && response.config?.method === "get") response.data = { routes: (data || []).map(normalizeZoneRoute) };
+  else if (originalUrl === "/hub-routes" && response.config?.method === "get") response.data = { routes: (data || []).map(normalizeHubRoute) };
   else if (originalUrl === "/zone-route-sla" && response.config?.method === "get") response.data = { slas: Array.isArray(data) ? data : [] };
   else if (originalUrl === "/hub-corridor-sla" && response.config?.method === "get") response.data = { slas: Array.isArray(data) ? data : [] };
   else if (originalUrl === "/hub-route-sla" && response.config?.method === "get") response.data = { slas: Array.isArray(data) ? data : [] };
