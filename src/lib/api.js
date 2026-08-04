@@ -337,12 +337,7 @@ function rewriteAdminRequest(config) {
     return config;
   }
   if (url === "/earnings") {
-    config.url = "/admin/earnings";
-    if (config.params?.from) {
-      config.params = { from: config.params.from, ...(config.params.to ? { to: config.params.to } : {}) };
-    } else {
-      config.params = { range: rangeToBackend(config.params?.range) };
-    }
+    config.adapter = earningsAdapter;
     return config;
   }
 
@@ -1002,6 +997,83 @@ async function transactionsAdapter(config) {
     headers: {},
     request: null,
   };
+}
+
+async function earningsAdapter(config) {
+  const instance = axios.create({ baseURL: API, timeout: config.timeout });
+  const headers = adapterHeaders(config);
+
+  let params;
+  if (config.params?.from) {
+    params = {
+      from: config.params.from,
+      ...(config.params.to ? { to: config.params.to } : {}),
+      page: config.params.page,
+      size: config.params.size,
+    };
+  } else {
+    params = {
+      range: rangeToBackend(config.params?.range),
+      page: config.params.page,
+      size: config.params.size,
+    };
+  }
+
+  const res = await instance.get("/admin/earnings", { headers, params });
+  const earningsData = res.data?.data || res.data || {};
+
+  const orders = earningsData.orders || [];
+  if (orders.length > 0) {
+    try {
+      const fullOrders = await Promise.all(
+        orders.map(async (order) => {
+          try {
+            const orderRes = await instance.get(`/admin/orders/${order.orderId}`, { headers });
+            return orderRes.data?.data || orderRes.data || {};
+          } catch {
+            return null;
+          }
+        })
+      );
+
+      earningsData.orders = orders.map((order, idx) => {
+        const fullOrder = fullOrders[idx];
+        if (fullOrder) {
+          const destAddress =
+            fullOrder.dropAddress ||
+            fullOrder.receiver?.address ||
+            fullOrder.destinationHubCity ||
+            fullOrder.destination_city ||
+            "—";
+          return {
+            ...order,
+            destinationAddress: destAddress,
+            destinationHubCity: fullOrder.destinationHubCity,
+            destinationHubName: fullOrder.destinationHubName,
+            destination_city: fullOrder.destination_city,
+            originHubCity: fullOrder.originHubCity,
+            originHubName: fullOrder.originHubName,
+            origin_city: fullOrder.origin_city,
+            pickupAddress: fullOrder.pickupAddress,
+            dropAddress: fullOrder.dropAddress,
+            pickupTag: fullOrder.pickupTag,
+            dropTag: fullOrder.dropTag,
+            receiver: fullOrder.receiver,
+            sender: fullOrder.sender,
+          };
+        }
+        return order;
+      });
+    } catch (err) {
+      console.error("Failed to enrich earnings orders", err);
+    }
+  }
+
+  return normalizeAdminResponse({
+    ...res,
+    config,
+    data: { data: earningsData },
+  });
 }
 
 async function pricingResolveAdapter(config) {

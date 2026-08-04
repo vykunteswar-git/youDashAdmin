@@ -283,8 +283,8 @@ export default function Earnings() {
                     <tr key={row.orderId}>
                       <td className="font-medium mono">{row.displayOrderId}</td>
                       <td className="text-xs text-[var(--slate-500)]">{fmtDate(row.createdAt)}</td>
-                      <td className="text-xs text-[var(--slate-500)] max-w-[180px] truncate" title={row.destinationAddress || "—"}>
-                        {row.destinationAddress || "—"}
+                      <td className="text-xs text-[var(--slate-500)] max-w-[180px] truncate" title={row.destinationAddress || row.destination_city || row.destination_hub_name || "—"}>
+                        {row.destinationAddress || row.destination_city || row.destination_hub_name || "—"}
                       </td>
                       <td>
                         <span className="badge">{row.serviceMode ?? "—"}</span>
