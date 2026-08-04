@@ -68,8 +68,18 @@ function rewriteAdminRequest(config) {
     config.url = url.replace("/orders", "/admin/orders");
     return config;
   }
-  if (url === "/orders" || url === "/orders/grouped" || url === "/orders/routes") {
+  if (url === "/orders") {
     config.url = "/admin/orders";
+    return config;
+  }
+  if (url === "/orders/routes") {
+    config.url = "/admin/orders";
+    config.params = { ...config.params, page: 0, size: 100000 };
+    return config;
+  }
+  if (url === "/orders/grouped") {
+    config.url = "/admin/orders";
+    config.params = { ...config.params, page: 0, size: 100000 };
     return config;
   }
   if (url.match(/^\/orders\/\d+$/)) {
@@ -352,9 +362,24 @@ function normalizeAdminResponse(response) {
 
   if (originalUrl === "/dashboard/summary") response.data = normalizeDashboard(data);
   else if (originalUrl === "/reports") response.data = normalizeReport(data);
-  else if (originalUrl === "/orders") response.data = { orders: filterOrders((data || []).map(normalizeOrder), response.config?.params) };
-  else if (originalUrl === "/orders/grouped") response.data = { groups: groupOrders(filterOrders((data || []).map(normalizeOrder), response.config?.params)) };
-  else if (originalUrl === "/orders/routes") response.data = { routes: routesFromOrders((data || []).map(normalizeOrder)) };
+  else if (originalUrl === "/orders") {
+    const ordersList = Array.isArray(data) ? data : (data?.orders || []);
+    response.data = {
+      orders: filterOrders(ordersList.map(normalizeOrder), response.config?.params),
+      totalPages: data?.totalPages,
+      totalElements: data?.totalElements,
+      number: data?.number,
+      size: data?.size
+    };
+  }
+  else if (originalUrl === "/orders/grouped") {
+    const ordersList = Array.isArray(data) ? data : (data?.orders || []);
+    response.data = { groups: groupOrders(filterOrders(ordersList.map(normalizeOrder), response.config?.params)) };
+  }
+  else if (originalUrl === "/orders/routes") {
+    const ordersList = Array.isArray(data) ? data : (data?.orders || []);
+    response.data = { routes: routesFromOrders(ordersList.map(normalizeOrder)) };
+  }
   else if (originalUrl.match(/^\/orders\/\d+$/) || originalUrl === "/orders/by-ref") response.data = normalizeOrder(data);
   else if (originalUrl.match(/^\/orders\/\d+\/activity$/)) response.data = { activity: normalizeActivity(data) };
   else if (originalUrl === "/riders/eligible") response.data = { riders: (data || []).map(normalizeRiderUi) };
@@ -1697,5 +1722,9 @@ function normalizeEarnings(data = {}) {
     totalPlatformNet: data.totalPlatformNet ?? 0,
     totalRiderPayouts: data.totalRiderPayouts ?? 0,
     orders: Array.isArray(data.orders) ? data.orders.map(normalizeOrder) : [],
+    totalPages: data.totalPages,
+    totalElements: data.totalElements,
+    number: data.number,
+    size: data.size
   };
 }

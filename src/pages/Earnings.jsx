@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 import PageHeader from "@/components/PageHeader";
 import AppLoadingScreen from "@/components/AppLoadingScreen";
@@ -36,65 +37,47 @@ function isPaidRow(row) {
 export default function Earnings() {
   const [range, setRange] = useState("week");
   const [payFilter, setPayFilter] = useState("all");
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [collectDialog, setCollectDialog] = useState(null); // { orderId, displayOrderId, amount }
   const [collecting, setCollecting] = useState(false);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [appliedFromDate, setAppliedFromDate] = useState("");
+  const [appliedToDate, setAppliedToDate] = useState("");
 
-  function fetchEarnings(r, fd, td) {
-    setLoading(true);
-    const params = r === "custom"
-      ? { from: fd, ...(td ? { to: td } : {}) }
-      : { range: r };
-    Promise.all([
-      api.get("/earnings", { params }),
-      api.get("/orders")
-    ])
-      .then(([earningsRes, ordersRes]) => {
-        const earnings = earningsRes.data;
-        const ordersList = ordersRes.data?.orders ?? [];
+  const [page, setPage] = useState(0);
+  const [size] = useState(15);
 
-        const destMap = {};
-        ordersList.forEach(o => {
-          const addr = o.destination_hub_name || o.destinationHubName || o.receiver?.address || o.dropAddress || "—";
-          destMap[o.id] = addr;
-          destMap[o.orderId] = addr;
-          destMap[o.displayOrderId] = addr;
-          destMap[o.tracking_id] = addr;
-        });
+  const { data, isLoading: queryLoading, refetch: refetchEarningsData } = useQuery({
+    queryKey: ["earnings", range, range === "custom" ? appliedFromDate : "", range === "custom" ? appliedToDate : "", page, size],
+    queryFn: async () => {
+      const params = range === "custom"
+        ? { from: appliedFromDate, ...(appliedToDate ? { to: appliedToDate } : {}) }
+        : { range };
 
-        if (earnings && Array.isArray(earnings.orders)) {
-          earnings.orders = earnings.orders.map(order => ({
-            ...order,
-            destinationAddress: destMap[order.orderId] || destMap[order.id] || destMap[order.displayOrderId] || "—"
-          }));
-        }
-        setData(earnings);
-      })
-      .finally(() => setLoading(false));
-  }
+      params.page = page;
+      params.size = size;
 
-  useEffect(() => {
-    if (range !== "custom") fetchEarnings(range, "", "");
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [range]);
+      const res = await api.get("/earnings", { params });
+      return res.data;
+    },
+    enabled: range !== "custom" || Boolean(appliedFromDate),
+  });
+
+  const loading = queryLoading && !data;
 
   function handleCustomApply() {
     if (!fromDate) return;
-    fetchEarnings("custom", fromDate, toDate);
+    setAppliedFromDate(fromDate);
+    setAppliedToDate(toDate);
   }
 
   function handleRangeChange(r) {
-    if (r === "custom") {
-      setData(null);   // clear stale results — user must pick dates and apply
-      setLoading(false);
-    }
     setRange(r);
     if (r !== "custom") {
       setFromDate("");
       setToDate("");
+      setAppliedFromDate("");
+      setAppliedToDate("");
     }
   }
 
@@ -105,6 +88,27 @@ export default function Earnings() {
     if (payFilter === "paid")   return isPaidRow(row);
     return true;
   });
+
+  const isServerPaginated = data && (data.totalElements !== undefined || data.totalPages !== undefined);
+
+  const paginatedOrders = useMemo(() => {
+    if (isServerPaginated) {
+      return filteredOrders;
+    }
+    const start = page * size;
+    return filteredOrders.slice(start, start + size);
+  }, [filteredOrders, page, size, isServerPaginated]);
+
+  const totalPages = useMemo(() => {
+    if (isServerPaginated) {
+      return data.totalPages ?? 1;
+    }
+    return Math.ceil(filteredOrders.length / size);
+  }, [filteredOrders.length, size, isServerPaginated, data]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [range, payFilter, appliedFromDate, appliedToDate]);
 
   /* Sum of all To Pay orders in current range */
   const toCollectTotal = allOrders
@@ -117,7 +121,7 @@ export default function Earnings() {
     try {
       await api.patch(`/admin/orders/${collectDialog.orderId}/collect`);
       setCollectDialog(null);
-      fetchEarnings(range, fromDate, toDate);
+      refetchEarningsData();
     } catch (err) {
       alert(err?.response?.data?.message || "Failed to mark as collected");
     } finally {
@@ -275,7 +279,7 @@ export default function Earnings() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredOrders.map(row => (
+                  {paginatedOrders.map(row => (
                     <tr key={row.orderId}>
                       <td className="font-medium mono">{row.displayOrderId}</td>
                       <td className="text-xs text-[var(--slate-500)]">{fmtDate(row.createdAt)}</td>
@@ -317,6 +321,38 @@ export default function Earnings() {
                   )}
                 </tbody>
               </table>
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between border-t border-[var(--border-default)] px-4 py-3 bg-white text-xs">
+                  <div className="text-zinc-500">
+                    Showing <span className="font-medium text-zinc-700">{page * size + 1}</span> to{" "}
+                    <span className="font-medium text-zinc-700">
+                      {Math.min((page + 1) * size, filteredOrders.length)}
+                    </span>{" "}
+                    of <span className="font-medium text-zinc-700">{filteredOrders.length}</span> orders
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={() => setPage(prev => Math.max(0, prev - 1))}
+                      disabled={page === 0}
+                      className="px-3 py-1 text-xs border border-zinc-300 rounded hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                      data-testid="pagination-prev"
+                    >
+                      Previous
+                    </button>
+                    <span className="text-zinc-600 font-medium">
+                      Page {page + 1} of {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setPage(prev => Math.min(totalPages - 1, prev + 1))}
+                      disabled={page === totalPages - 1}
+                      className="px-3 py-1 text-xs border border-zinc-300 rounded hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                      data-testid="pagination-next"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </>
