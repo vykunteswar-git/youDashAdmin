@@ -48,8 +48,31 @@ export default function Earnings() {
     const params = r === "custom"
       ? { from: fd, ...(td ? { to: td } : {}) }
       : { range: r };
-    api.get("/earnings", { params })
-      .then(res => setData(res.data))
+    Promise.all([
+      api.get("/earnings", { params }),
+      api.get("/orders")
+    ])
+      .then(([earningsRes, ordersRes]) => {
+        const earnings = earningsRes.data;
+        const ordersList = ordersRes.data?.orders ?? [];
+
+        const destMap = {};
+        ordersList.forEach(o => {
+          const addr = o.destination_hub_name || o.destinationHubName || o.receiver?.address || o.dropAddress || "—";
+          destMap[o.id] = addr;
+          destMap[o.orderId] = addr;
+          destMap[o.displayOrderId] = addr;
+          destMap[o.tracking_id] = addr;
+        });
+
+        if (earnings && Array.isArray(earnings.orders)) {
+          earnings.orders = earnings.orders.map(order => ({
+            ...order,
+            destinationAddress: destMap[order.orderId] || destMap[order.id] || destMap[order.displayOrderId] || "—"
+          }));
+        }
+        setData(earnings);
+      })
       .finally(() => setLoading(false));
   }
 
@@ -239,6 +262,7 @@ export default function Earnings() {
                   <tr>
                     <th>Order</th>
                     <th>Date</th>
+                    <th>Destination</th>
                     <th>Mode</th>
                     <th>Payment</th>
                     <th className="text-right">Total</th>
@@ -255,6 +279,9 @@ export default function Earnings() {
                     <tr key={row.orderId}>
                       <td className="font-medium mono">{row.displayOrderId}</td>
                       <td className="text-xs text-[var(--slate-500)]">{fmtDate(row.createdAt)}</td>
+                      <td className="text-xs text-[var(--slate-500)] max-w-[180px] truncate" title={row.destinationAddress || "—"}>
+                        {row.destinationAddress || "—"}
+                      </td>
                       <td>
                         <span className="badge">{row.serviceMode ?? "—"}</span>
                       </td>
@@ -283,7 +310,7 @@ export default function Earnings() {
                   ))}
                   {filteredOrders.length === 0 && (
                     <tr>
-                      <td colSpan={11} className="text-center py-10 text-[var(--slate-500)]">
+                      <td colSpan={12} className="text-center py-10 text-[var(--slate-500)]">
                         No orders found.
                       </td>
                     </tr>

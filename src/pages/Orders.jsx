@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import { adminSocketService } from "@/lib/adminSocketService";
@@ -50,6 +51,9 @@ export default function Orders() {
   const knownOutstationIdsRef = useRef(new Set());
   const alertInitializedRef = useRef(false);
 
+  const [page, setPage] = useState(0);
+  const [size] = useState(15);
+
   function filterParams() {
     const params = { service_mode: serviceMode };
     if (status !== "ALL") params.status = status;
@@ -57,6 +61,8 @@ export default function Orders() {
     if (payment !== "ALL") params.payment = payment;
     if (assigned !== "ALL") params.assigned = assigned === "ASSIGNED" ? "yes" : "no";
     if (q) params.q = q;
+    params.page = page;
+    params.size = size;
     return params;
   }
 
@@ -90,20 +96,52 @@ export default function Orders() {
     }
   }, []);
 
-  async function loadList() {
-    const r = await api.get("/orders", { params: filterParams() });
-    setOrders(r.data.orders);
-    if (serviceMode === "OUTSTATION") detectNewOutstation(r.data.orders);
-  }
-  async function loadGroups() {
-    const r = await api.get("/orders/grouped", { params: filterParams() });
-    setGroups(r.data.groups);
-  }
+  const { data: listData, refetch: refetchList } = useQuery({
+    queryKey: ["orders", serviceMode, status, route, payment, assigned, q, page, size],
+    queryFn: () => api.get("/orders", { params: filterParams() }).then(r => r.data),
+    enabled: view === "list",
+  });
+
+  const { data: groupedData, refetch: refetchGroups } = useQuery({
+    queryKey: ["ordersGrouped", serviceMode, status, route, payment, assigned, q],
+    queryFn: () => api.get("/orders/grouped", { params: filterParams() }).then(r => r.data),
+    enabled: view === "grouped",
+  });
+
+  useEffect(() => {
+    if (listData?.orders) {
+      setOrders(listData.orders);
+      if (serviceMode === "OUTSTATION") detectNewOutstation(listData.orders);
+    }
+  }, [listData, serviceMode]);
+
+  useEffect(() => {
+    if (groupedData?.groups) {
+      setGroups(groupedData.groups);
+    }
+  }, [groupedData]);
+
+  const isServerPaginated = listData && (listData.totalElements !== undefined || listData.totalPages !== undefined);
 
   const visibleOrders = useMemo(
     () => orders.filter((o) => orderMatchesDateFilter(o, dateFilter, customDate)),
     [orders, dateFilter, customDate],
   );
+
+  const paginatedOrders = useMemo(() => {
+    if (isServerPaginated) {
+      return visibleOrders;
+    }
+    const start = page * size;
+    return visibleOrders.slice(start, start + size);
+  }, [visibleOrders, page, size, isServerPaginated]);
+
+  const totalPages = useMemo(() => {
+    if (isServerPaginated) {
+      return listData.totalPages ?? 1;
+    }
+    return Math.ceil(visibleOrders.length / size);
+  }, [visibleOrders.length, size, isServerPaginated, listData]);
 
   const filteredGroups = useMemo(() => {
     return groups
@@ -154,11 +192,10 @@ export default function Orders() {
   }
 
   useEffect(() => { api.get("/orders/routes").then(r => setRoutes(r.data.routes)); }, []);
+
   useEffect(() => {
-    if (view === "list") loadList();
-    else loadGroups();
-    // eslint-disable-next-line
-  }, [serviceMode, status, route, payment, assigned, q, view]);
+    setPage(0);
+  }, [serviceMode, status, route, payment, assigned, q, dateFilter, customDate, view]);
 
   useEffect(() => {
     setSelected(new Set());
@@ -190,8 +227,8 @@ export default function Orders() {
     const now = Date.now();
     if (now - lastReloadRef.current < 1000) return; // throttle bursty pushes
     lastReloadRef.current = now;
-    if (view === "list") loadList();
-    else loadGroups();
+    if (view === "list") refetchList();
+    else refetchGroups();
   };
 
   // Subscribe once to live admin order updates (STOMP over /topic/admin/orders).
@@ -207,7 +244,7 @@ export default function Orders() {
     // eslint-disable-next-line
   }, []);
 
-  const visibleIds = visibleOrders.map((o) => o.id);
+  const visibleIds = paginatedOrders.map((o) => o.id);
   const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
 
   function toggleIds(ids, allCurrentlySelected) {
@@ -241,7 +278,7 @@ export default function Orders() {
     if (skipped) toast.warning(`Updated ${updated} · skipped ${skipped}`);
     else toast.success(`Updated ${updated} orders → ${formatStatusLabel(newStatus)}`);
     setSelected(new Set());
-    if (view === "list") loadList(); else loadGroups();
+    if (view === "list") refetchList(); else refetchGroups();
   }
 
   async function runBulkStatusUpdate() {
@@ -343,7 +380,7 @@ export default function Orders() {
               {visibleOrders.length === 0 && (
                 <tr><td colSpan={10} className="empty">No orders matching filters.</td></tr>
               )}
-              {visibleOrders.map(o => (
+              {paginatedOrders.map(o => (
                 <tr key={o.id} className="row-link" data-testid={`order-row-${o.tracking_id}`}>
                   <td onClick={(e) => e.stopPropagation()}>
                     <input type="checkbox" checked={selected.has(o.id)} onChange={() => toggleRow(o.id)}
@@ -372,6 +409,38 @@ export default function Orders() {
               ))}
             </tbody>
           </table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between border-t border-[var(--border-default)] px-4 py-3 bg-white text-xs">
+              <div className="text-zinc-500">
+                Showing <span className="font-medium text-zinc-700">{page * size + 1}</span> to{" "}
+                <span className="font-medium text-zinc-700">
+                  {Math.min((page + 1) * size, visibleOrders.length)}
+                </span>{" "}
+                of <span className="font-medium text-zinc-700">{visibleOrders.length}</span> orders
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => setPage(prev => Math.max(0, prev - 1))}
+                  disabled={page === 0}
+                  className="px-3 py-1 text-xs border border-zinc-300 rounded hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                  data-testid="pagination-prev"
+                >
+                  Previous
+                </button>
+                <span className="text-zinc-600 font-medium">
+                  Page {page + 1} of {totalPages}
+                </span>
+                <button
+                  onClick={() => setPage(prev => Math.min(totalPages - 1, prev + 1))}
+                  disabled={page === totalPages - 1}
+                  className="px-3 py-1 text-xs border border-zinc-300 rounded hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                  data-testid="pagination-next"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-3" data-testid="grouped-view">

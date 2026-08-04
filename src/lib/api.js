@@ -1696,6 +1696,6 @@ function normalizeEarnings(data = {}) {
     totalPlatformFee: data.totalPlatformFee ?? 0,
     totalPlatformNet: data.totalPlatformNet ?? 0,
     totalRiderPayouts: data.totalRiderPayouts ?? 0,
-    orders: Array.isArray(data.orders) ? data.orders : [],
+    orders: Array.isArray(data.orders) ? data.orders.map(normalizeOrder) : [],
   };
 }
